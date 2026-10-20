@@ -1,11 +1,10 @@
-// S1x debug overlay - version 0.8 (draws from inside the game's own drawing step)
+// S1x debug overlay - version 0.9 (draws with Direct3D just before the picture is shown)
 //
-// Draws a box around every trigger in the campaign. Because this could not be tested
-// before shipping, a few keys let you try different drawing settings:
-//   F8 = overlay on/off (starts OFF)         F6 = coordinate style (2 choices)
-//   F7 = how far away to draw    F5 = field-of-view style (3 choices)
-//   F4 = text labels on/off      F9 = save the data files (as before)
-// Small squares in the top-left corner show the current F6 / F7 / F5 settings.
+// Draws a box around every trigger in the campaign. Keys:
+//   F8 = overlay on/off (starts OFF)     F7 = how far away to draw
+//   F6 = line thickness                  F5 = field-of-view style
+//   F9 = save the data files (as before)
+// Small squares in the top-left corner show the current F7 / F5 / F6 settings.
 
 #include "core.hpp"
 
@@ -14,6 +13,10 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+
+#include <d3d11.h>
+#include <dxgi1_2.h>
+#include <d3dcompiler.h>
 
 #include "MinHook.h"
 
@@ -372,14 +375,10 @@ namespace
 	}
 
 	// ------------------------------------------------------------------------------
-	// Drawing
+	// Drawing: we paint our own lines on top of the finished picture, using the graphics
+	// system (Direct3D 11) directly, just before the picture is shown on screen.
 	// ------------------------------------------------------------------------------
-	constexpr uintptr_t SP_COM_FRAME = 0x1402F7E10;
 	constexpr uintptr_t SP_DVAR_FIND_VAR = 0x140370860;
-	constexpr uintptr_t SP_MATERIAL_REGISTER = 0x1404919D0;
-	constexpr uintptr_t SP_DRAW_STRETCH_PIC = 0x1404A2580;
-	constexpr uintptr_t SP_DRAW_TEXT = 0x1404A2BF0;
-	constexpr uintptr_t SP_REGISTER_FONT = 0x140481F90;
 
 	constexpr size_t OFF_CAM_ORIGIN = 0x80;  // 3 floats, found in your snapshots
 	constexpr size_t OFF_CAM_PITCH = 0x10C;  // degrees, positive = looking down
@@ -387,15 +386,10 @@ namespace
 	constexpr size_t DVAR_CURRENT_OFFSET = 0x18;
 
 	constexpr float EYE_HEIGHT = 60.0f;
-	constexpr int MAX_QUADS = 9000;
 	constexpr int MAX_BOXES = 64;
-	constexpr int MAX_LABELS = 10;
+	constexpr int MAX_VERTS = 60000;
 
-	using com_frame_t = void (*)();
 	using find_var_t = void* (*)(const char*);
-	using register_t = void* (*)(const char*);
-	using draw_stretch_t = void (*)(float, float, float, float, float, float, float, float, float*, void*);
-	using draw_text_t = void (*)(const char*, int, void*, float, float, float, float, float, float*, int);
 
 	struct vec3
 	{
@@ -413,35 +407,32 @@ namespace
 		vec3 half;
 	};
 
-	com_frame_t g_original_frame = nullptr;
-	draw_stretch_t g_original_stretch = nullptr;
-	volatile LONG g_drawn_this_frame = 0;
-	volatile bool g_log_settings = false;
+	struct vertex
+	{
+		float x, y;
+		float r, g, b, a;
+	};
 
 	volatile bool g_overlay_on = false;   // starts OFF; press F8 in a mission to turn it on
-	volatile bool g_text_on = false;
-	volatile int g_mode = 0;       // 0 = real pixel coordinates, 1 = 640x480 coordinates
 	volatile int g_dist_level = 1;
 	volatile int g_fov_style = 1;
+	volatile int g_thick_level = 1;
+	volatile bool g_log_settings = false;
 	const float kDistances[4] = {1500.0f, 4000.0f, 12000.0f, 1.0e9f};
-
-	void* g_white = nullptr;
-	void* g_font = nullptr;
-	float g_font_height = 0.0f;
-	void* g_last_white = nullptr;
-	bool g_in_game = false;
-	unsigned short g_player_class_id = 0;
+	const float kThickness[3] = {1.5f, 2.5f, 4.0f};
 
 	float g_fov = 65.0f;
-	float g_fov_scale = 1.0f;
 	int g_frame_counter = 0;
 	int g_failures = 0;
-	int g_quads = 0;
-	int g_screen_w = 1920;
-	int g_screen_h = 1080;
-	HWND g_game_window = nullptr;
+	bool g_in_game = false;
+	unsigned short g_player_class_id = 0;
+	bool g_in_present = false;
 
-	// Camera for the current frame.
+	vertex g_verts[MAX_VERTS];
+	int g_vert_count = 0;
+	float g_w = 1920.0f;
+	float g_h = 1080.0f;
+
 	vec3 g_eye;
 	vec3 g_fwd;
 	vec3 g_right;
@@ -449,50 +440,16 @@ namespace
 	float g_tan_x = 1.0f;
 	float g_tan_y = 1.0f;
 
-	// What kind of thing each script-string id is (0 = unknown, 1 = ignore, 2.. = trigger kinds).
 	unsigned char g_class_kind[65536];
 
 	float kColors[6][4] = {
-		{0.1f, 1.0f, 0.2f, 1.0f},   // 2: trigger_multiple (green)
-		{1.0f, 0.2f, 0.2f, 1.0f},   // 3: hurt / damage (red)
-		{1.0f, 0.9f, 0.1f, 1.0f},   // 4: use (yellow)
-		{1.0f, 0.55f, 0.1f, 1.0f},  // 5: radius (orange)
-		{0.2f, 0.8f, 1.0f, 1.0f},   // 6: everything else (cyan)
-		{1.0f, 1.0f, 1.0f, 1.0f},   // inside this one (white)
+		{0.1f, 1.0f, 0.2f, 1.0f},   // trigger_multiple (green)
+		{1.0f, 0.2f, 0.2f, 1.0f},   // hurt / damage (red)
+		{1.0f, 0.9f, 0.1f, 1.0f},   // use (yellow)
+		{1.0f, 0.55f, 0.1f, 1.0f},  // radius (orange)
+		{0.2f, 0.8f, 1.0f, 1.0f},   // everything else (blue)
+		{1.0f, 1.0f, 1.0f, 1.0f},   // you are inside this one (white)
 	};
-
-	BOOL CALLBACK find_window(HWND window, LPARAM parameter)
-	{
-		DWORD pid = 0;
-		GetWindowThreadProcessId(window, &pid);
-		if (pid == GetCurrentProcessId() && IsWindowVisible(window) && GetWindow(window, GW_OWNER) == nullptr)
-		{
-			RECT r;
-			if (GetClientRect(window, &r) && r.right > 320 && r.bottom > 240)
-			{
-				*reinterpret_cast<HWND*>(parameter) = window;
-				return FALSE;
-			}
-		}
-
-		return TRUE;
-	}
-
-	void update_screen_size()
-	{
-		if (!g_game_window || !IsWindow(g_game_window))
-		{
-			g_game_window = nullptr;
-			EnumWindows(find_window, reinterpret_cast<LPARAM>(&g_game_window));
-		}
-
-		RECT r;
-		if (g_game_window && GetClientRect(g_game_window, &r) && r.right > 0 && r.bottom > 0)
-		{
-			g_screen_w = r.right;
-			g_screen_h = r.bottom;
-		}
-	}
 
 	bool read_dvar_float(const char* name, float* out)
 	{
@@ -532,64 +489,46 @@ namespace
 		return true;
 	}
 
-	void* try_register(const uintptr_t function, const char* name)
+	// ---- building the picture (all in screen pixels) --------------------------------
+
+	void push_vertex(const float px, const float py, const float* color)
 	{
-		__try
-		{
-			return reinterpret_cast<register_t>(function)(name);
-		}
-		__except (EXCEPTION_EXECUTE_HANDLER)
-		{
-			return nullptr;
-		}
+		vertex& v = g_verts[g_vert_count++];
+		v.x = px / g_w * 2.0f - 1.0f;
+		v.y = 1.0f - py / g_h * 2.0f;
+		v.r = color[0];
+		v.g = color[1];
+		v.b = color[2];
+		v.a = color[3];
 	}
 
-	void* make_font(float* height_out)
+	void add_quad(const float x0, const float y0, const float x1, const float y1, const float x2, const float y2,
+	              const float x3, const float y3, const float* color)
 	{
-		void* font = try_register(SP_REGISTER_FONT, "fonts/consolefont");
-		if (!font)
-		{
-			return nullptr;
-		}
-
-		int height = 0;
-		if (!read_bytes(reinterpret_cast<uintptr_t>(font) + 8, &height, sizeof(height)) || height < 4 || height > 400)
-		{
-			return nullptr;
-		}
-
-		*height_out = static_cast<float>(height);
-		return font;
-	}
-
-	void rect(float x, float y, float w, float h, float* color)
-	{
-		if (g_quads >= MAX_QUADS || w <= 0.0f || h <= 0.0f)
+		if (g_vert_count + 6 > MAX_VERTS)
 		{
 			return;
 		}
 
-		++g_quads;
+		push_vertex(x0, y0, color);
+		push_vertex(x1, y1, color);
+		push_vertex(x2, y2, color);
+		push_vertex(x0, y0, color);
+		push_vertex(x2, y2, color);
+		push_vertex(x3, y3, color);
+	}
 
-		float sx = 1.0f;
-		float sy = 1.0f;
-		if ((g_mode & 1) != 0)
-		{
-			sx = 640.0f / static_cast<float>(g_screen_w);
-			sy = 480.0f / static_cast<float>(g_screen_h);
-		}
-
-		// Call the game's own function directly (not through our hook) so we never loop.
-		const draw_stretch_t draw = g_original_stretch ? g_original_stretch : reinterpret_cast<draw_stretch_t>(SP_DRAW_STRETCH_PIC);
-		draw(x * sx, y * sy, w * sx, h * sy, 0.0f, 0.0f, 1.0f, 1.0f, color, g_white);
+	void add_rect(const float x, const float y, const float w, const float h, const float* color)
+	{
+		add_quad(x, y, x + w, y, x + w, y + h, x, y + h, color);
 	}
 
 	// Trims a line so it only covers the screen (Liang-Barsky).
 	bool clip_line(float& x0, float& y0, float& x1, float& y1)
 	{
-		const float xmin = -30.0f, ymin = -30.0f;
-		const float xmax = static_cast<float>(g_screen_w) + 30.0f;
-		const float ymax = static_cast<float>(g_screen_h) + 30.0f;
+		const float xmin = -40.0f, ymin = -40.0f;
+		const float xmax = g_w + 40.0f;
+		const float ymax = g_h + 40.0f;
 
 		const float dx = x1 - x0;
 		const float dy = y1 - y0;
@@ -634,8 +573,7 @@ namespace
 		return true;
 	}
 
-	// A thin line made of a few flat rectangles (the only shape the game's draw call offers).
-	void line(float x0, float y0, float x1, float y1, float* color, const float thick)
+	void add_line(float x0, float y0, float x1, float y1, const float* color, const float thick)
 	{
 		if (!clip_line(x0, y0, x1, y1))
 		{
@@ -644,34 +582,15 @@ namespace
 
 		const float dx = x1 - x0;
 		const float dy = y1 - y0;
-		if (std::fabs(dx) >= std::fabs(dy))
+		const float length = std::sqrt(dx * dx + dy * dy);
+		if (length < 0.01f)
 		{
-			int n = static_cast<int>(std::fabs(dy)) + 1;
-			if (n > 1500) n = 1500;
-			for (int i = 0; i < n; ++i)
-			{
-				const float t0 = static_cast<float>(i) / static_cast<float>(n);
-				const float t1 = static_cast<float>(i + 1) / static_cast<float>(n);
-				const float xa = x0 + dx * t0;
-				const float xb = x0 + dx * t1;
-				const float ym = y0 + dy * (t0 + t1) * 0.5f;
-				rect((xa < xb ? xa : xb), ym - thick * 0.5f, std::fabs(xb - xa) + 1.0f, thick, color);
-			}
+			return;
 		}
-		else
-		{
-			int n = static_cast<int>(std::fabs(dx)) + 1;
-			if (n > 1500) n = 1500;
-			for (int i = 0; i < n; ++i)
-			{
-				const float t0 = static_cast<float>(i) / static_cast<float>(n);
-				const float t1 = static_cast<float>(i + 1) / static_cast<float>(n);
-				const float ya = y0 + dy * t0;
-				const float yb = y0 + dy * t1;
-				const float xm = x0 + dx * (t0 + t1) * 0.5f;
-				rect(xm - thick * 0.5f, (ya < yb ? ya : yb), thick, std::fabs(yb - ya) + 1.0f, color);
-			}
-		}
+
+		const float nx = -dy / length * thick * 0.5f;
+		const float ny = dx / length * thick * 0.5f;
+		add_quad(x0 + nx, y0 + ny, x0 - nx, y0 - ny, x1 - nx, y1 - ny, x1 + nx, y1 + ny, color);
 	}
 
 	vec3 to_camera(const vec3& p)
@@ -686,13 +605,11 @@ namespace
 
 	void to_screen(const vec3& c, float* sx, float* sy)
 	{
-		const float w = static_cast<float>(g_screen_w);
-		const float h = static_cast<float>(g_screen_h);
-		*sx = w * 0.5f + (c.x / c.z) / g_tan_x * w * 0.5f;
-		*sy = h * 0.5f - (c.y / c.z) / g_tan_y * h * 0.5f;
+		*sx = g_w * 0.5f + (c.x / c.z) / g_tan_x * g_w * 0.5f;
+		*sy = g_h * 0.5f - (c.y / c.z) / g_tan_y * g_h * 0.5f;
 	}
 
-	void edge(const vec3& a, const vec3& b, float* color)
+	void edge(const vec3& a, const vec3& b, const float* color)
 	{
 		vec3 ca = to_camera(a);
 		vec3 cb = to_camera(b);
@@ -717,12 +634,12 @@ namespace
 		float x0, y0, x1, y1;
 		to_screen(ca, &x0, &y0);
 		to_screen(cb, &x1, &y1);
-		line(x0, y0, x1, y1, color, 2.0f);
+		add_line(x0, y0, x1, y1, color, kThickness[g_thick_level]);
 	}
 
 	void draw_box(const hit& h)
 	{
-		float* color = h.inside ? kColors[5] : kColors[h.kind > 1 && h.kind < 7 ? h.kind - 2 : 4];
+		const float* color = h.inside ? kColors[5] : kColors[h.kind > 1 && h.kind < 7 ? h.kind - 2 : 4];
 
 		vec3 c[8];
 		for (int i = 0; i < 8; ++i)
@@ -742,46 +659,6 @@ namespace
 				}
 			}
 		}
-	}
-
-	void draw_label(const hit& h)
-	{
-		if (!g_font)
-		{
-			return;
-		}
-
-		const vec3 c = to_camera(h.mid);
-		if (c.z < 8.0f)
-		{
-			return;
-		}
-
-		float sx, sy;
-		to_screen(c, &sx, &sy);
-		if (sx < 0.0f || sy < 0.0f || sx > static_cast<float>(g_screen_w) || sy > static_cast<float>(g_screen_h))
-		{
-			return;
-		}
-
-		char name[48] = "?";
-		class_name(h.class_id, name, sizeof(name));
-
-		char text[96];
-		sprintf_s(text, sizeof(text), "%s #%d (%.0f)", name, h.slot, h.dist);
-
-		float scale = 16.0f / g_font_height;
-		float x = sx;
-		float y = sy;
-		if ((g_mode & 1) != 0)
-		{
-			x *= 640.0f / static_cast<float>(g_screen_w);
-			y *= 480.0f / static_cast<float>(g_screen_h);
-			scale *= 480.0f / static_cast<float>(g_screen_h);
-		}
-
-		float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-		reinterpret_cast<draw_text_t>(SP_DRAW_TEXT)(text, 0x7FFFFFFF, g_font, x, y, scale, scale, 0.0f, white, 0);
 	}
 
 	// 1 = ignore, 2.. = a kind of trigger. Looked up once and remembered for a while.
@@ -917,12 +794,25 @@ namespace
 		return pressed;
 	}
 
-	void draw_indicator(const int row, const int count, float* color)
+	// Reads the F-keys. Runs once per picture, whether or not anything is being drawn.
+	void poll_keys()
 	{
-		for (int i = 0; i <= count; ++i)
+		static bool was_f5, was_f6, was_f7, was_f8;
+		const bool f5 = key_pressed(VK_F5, &was_f5);
+		const bool f6 = key_pressed(VK_F6, &was_f6);
+		const bool f7 = key_pressed(VK_F7, &was_f7);
+		const bool f8 = key_pressed(VK_F8, &was_f8);
+
+		if (f8)
 		{
-			rect(10.0f + static_cast<float>(i) * 18.0f, 10.0f + static_cast<float>(row) * 18.0f, 12.0f, 12.0f, color);
+			g_overlay_on = !g_overlay_on;
+			log_line("F8: overlay %s", g_overlay_on ? "ON" : "OFF");
 		}
+
+		if (f5) g_fov_style = (g_fov_style + 1) % 3;
+		if (f6) g_thick_level = (g_thick_level + 1) % 3;
+		if (f7) g_dist_level = (g_dist_level + 1) % 4;
+		if (f5 || f6 || f7) g_log_settings = true;
 	}
 
 	// True only while a mission is running (slot 0 of the entity list is the player).
@@ -945,48 +835,18 @@ namespace
 		return g_in_game;
 	}
 
-	// Reads the F-keys. Runs once per game frame, whether or not anything is being drawn.
-	void poll_keys()
+	// Fills g_verts with everything to draw this picture. Returns false if there is nothing to draw.
+	bool build_picture(const float width, const float height)
 	{
-		static bool was_f4, was_f5, was_f6, was_f7, was_f8;
-		const bool f4 = key_pressed(VK_F4, &was_f4);
-		const bool f5 = key_pressed(VK_F5, &was_f5);
-		const bool f6 = key_pressed(VK_F6, &was_f6);
-		const bool f7 = key_pressed(VK_F7, &was_f7);
-		const bool f8 = key_pressed(VK_F8, &was_f8);
+		g_w = width;
+		g_h = height;
+		g_vert_count = 0;
 
-		if (f8)
-		{
-			g_overlay_on = !g_overlay_on;
-			log_line("F8: overlay %s", g_overlay_on ? "ON" : "OFF");
-		}
-
-		if (f4) g_text_on = !g_text_on;
-		if (f5) g_fov_style = (g_fov_style + 1) % 3;
-		if (f6) g_mode = (g_mode + 1) % 2;
-		if (f7) g_dist_level = (g_dist_level + 1) % 4;
-		if (f4 || f5 || f6 || f7) g_log_settings = true;
-	}
-
-	void frame_draw()
-	{
-		++g_frame_counter;
-		if (g_frame_counter == 1)
-		{
-			log_line("drawing hook is running (first frame)");
-		}
-
-		if (!g_overlay_on || !in_mission())
-		{
-			return;
-		}
-
-		// Where am I and where am I looking?
 		unsigned long long pointer = 0;
 		if (!read_bytes(SP_G_ENTITIES + OFF_CLIENT, &pointer, sizeof(pointer)) || pointer < 0x140000000ull ||
 			pointer > 0x7FFFFFFE0000ull)
 		{
-			return;
+			return false;
 		}
 
 		float origin[3];
@@ -996,40 +856,19 @@ namespace
 			!read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_PITCH, &pitch, sizeof(pitch)) ||
 			!read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_YAW, &yaw, sizeof(yaw)))
 		{
-			return;
+			return false;
 		}
 
 		if (!(std::fabs(origin[0]) < 500000.0f && std::fabs(origin[1]) < 500000.0f && std::fabs(origin[2]) < 500000.0f &&
 			std::fabs(pitch) <= 91.0f && std::fabs(yaw) <= 720.0f))
 		{
-			return;
-		}
-
-		// The game moves and replaces its pictures and fonts when a mission loads, so a
-		// remembered pointer goes stale (that is what crashed 0.6). Ask again every frame.
-		g_white = try_register(SP_MATERIAL_REGISTER, "white");
-		if (g_white != g_last_white)
-		{
-			log_line("white material is now %p (was %p)", g_white, g_last_white);
-			g_last_white = g_white;
-		}
-
-		if (!g_white)
-		{
-			return;
-		}
-
-		g_font = nullptr;
-		if (g_text_on)
-		{
-			g_font = make_font(&g_font_height);
+			return false;
 		}
 
 		if (g_frame_counter % 120 == 1)
 		{
 			read_dvar_float("cg_fov", &g_fov);
 			if (!(g_fov >= 20.0f && g_fov <= 160.0f)) g_fov = 65.0f;
-			update_screen_size();
 		}
 
 		if (g_frame_counter % 600 == 0)
@@ -1048,8 +887,8 @@ namespace
 		g_right = {sy, -cy, 0.0f};
 		g_up = {sp * cy, sp * sy, cp};
 
-		const float aspect = static_cast<float>(g_screen_w) / static_cast<float>(g_screen_h);
-		const float half_fov = g_fov * g_fov_scale * 0.5f * rad;
+		const float aspect = g_w / g_h;
+		const float half_fov = g_fov * 0.5f * rad;
 		if (g_fov_style == 0)
 		{
 			g_tan_y = std::tan(half_fov) * 0.75f;
@@ -1066,10 +905,17 @@ namespace
 			g_tan_x = g_tan_y * aspect;
 		}
 
-		g_quads = 0;
-		draw_indicator(0, g_mode, kColors[4]);
-		draw_indicator(1, g_dist_level, kColors[2]);
-		draw_indicator(2, g_fov_style, kColors[3]);
+		// Little squares in the corner show the F7 / F5 / F6 settings.
+		for (int row = 0; row < 3; ++row)
+		{
+			const int count = row == 0 ? g_dist_level : (row == 1 ? g_fov_style : g_thick_level);
+			const float* color = row == 0 ? kColors[0] : (row == 1 ? kColors[3] : kColors[4]);
+			for (int i = 0; i <= count; ++i)
+			{
+				add_rect(10.0f + static_cast<float>(i) * 18.0f, 10.0f + static_cast<float>(row) * 18.0f, 12.0f, 12.0f,
+				         color);
+			}
+		}
 
 		hit hits[MAX_BOXES];
 		const int count = find_triggers({origin[0], origin[1], origin[2] + 30.0f}, kDistances[g_dist_level], hits, MAX_BOXES);
@@ -1079,70 +925,494 @@ namespace
 			draw_box(hits[i]);
 		}
 
-		if (g_text_on && g_font)
-		{
-			for (int i = 0; i < count && i < MAX_LABELS; ++i)
-			{
-				draw_label(hits[i]);
-			}
-		}
-
 		if (g_log_settings)
 		{
 			g_log_settings = false;
-			log_line("settings: mode=%d dist=%d fovstyle=%d text=%d | screen %dx%d fov %.1f (scale %.2f) | eye %.0f %.0f %.0f pitch %.1f yaw %.1f | %d triggers near, %d rects",
-			         static_cast<int>(g_mode), static_cast<int>(g_dist_level), static_cast<int>(g_fov_style),
-			         g_text_on ? 1 : 0, g_screen_w, g_screen_h, g_fov, g_fov_scale, g_eye.x, g_eye.y, g_eye.z, pitch,
-			         yaw, count, g_quads);
+			log_line("settings: dist=%d fovstyle=%d thickness=%d | picture %.0fx%.0f fov %.1f | eye %.0f %.0f %.0f pitch %.1f yaw %.1f | %d triggers near, %d vertices",
+			         static_cast<int>(g_dist_level), static_cast<int>(g_fov_style), static_cast<int>(g_thick_level),
+			         g_w, g_h, g_fov, g_eye.x, g_eye.y, g_eye.z, pitch, yaw, count, g_vert_count);
+		}
+
+		return g_vert_count > 0;
+	}
+
+	// ---- Direct3D 11 -----------------------------------------------------------------
+
+	const char* kShaderText =
+		"struct VSIn { float2 p : POSITION; float4 c : COLOR; };\n"
+		"struct VSOut { float4 p : SV_POSITION; float4 c : COLOR; };\n"
+		"VSOut vs_main(VSIn i) { VSOut o; o.p = float4(i.p, 0.0, 1.0); o.c = i.c; return o; }\n"
+		"float4 ps_main(VSOut i) : SV_Target { return i.c; }\n";
+
+	ID3D11Device* g_device = nullptr;
+	ID3D11VertexShader* g_vs = nullptr;
+	ID3D11PixelShader* g_ps = nullptr;
+	ID3D11InputLayout* g_layout = nullptr;
+	ID3D11Buffer* g_buffer = nullptr;
+	ID3D11BlendState* g_blend = nullptr;
+	ID3D11RasterizerState* g_raster = nullptr;
+	ID3D11DepthStencilState* g_depth = nullptr;
+	bool g_first_draw_logged = false;
+	bool g_init_failed_logged = false;
+
+	template <typename T>
+	void release(T*& pointer)
+	{
+		if (pointer)
+		{
+			pointer->Release();
+			pointer = nullptr;
 		}
 	}
 
-	void safe_frame_draw()
+	void release_resources()
+	{
+		release(g_vs);
+		release(g_ps);
+		release(g_layout);
+		release(g_buffer);
+		release(g_blend);
+		release(g_raster);
+		release(g_depth);
+		release(g_device);
+	}
+
+	bool create_resources(ID3D11Device* device)
+	{
+		const HMODULE compiler_dll = LoadLibraryA("d3dcompiler_47.dll");
+		if (!compiler_dll)
+		{
+			log_line("d3d: d3dcompiler_47.dll not found");
+			return false;
+		}
+
+		const auto compile = reinterpret_cast<pD3DCompile>(GetProcAddress(compiler_dll, "D3DCompile"));
+		if (!compile)
+		{
+			log_line("d3d: D3DCompile not found");
+			return false;
+		}
+
+		ID3DBlob* vs_blob = nullptr;
+		ID3DBlob* ps_blob = nullptr;
+		ID3DBlob* errors = nullptr;
+
+		const size_t text_size = strlen(kShaderText);
+		HRESULT hr = compile(kShaderText, text_size, nullptr, nullptr, nullptr, "vs_main", "vs_4_0", 0, 0, &vs_blob, &errors);
+		if (FAILED(hr) || !vs_blob)
+		{
+			log_line("d3d: vertex shader failed to compile (0x%08lX) %s", static_cast<unsigned long>(hr),
+			         errors ? static_cast<const char*>(errors->GetBufferPointer()) : "");
+			release(errors);
+			return false;
+		}
+
+		hr = compile(kShaderText, text_size, nullptr, nullptr, nullptr, "ps_main", "ps_4_0", 0, 0, &ps_blob, &errors);
+		if (FAILED(hr) || !ps_blob)
+		{
+			log_line("d3d: pixel shader failed to compile (0x%08lX) %s", static_cast<unsigned long>(hr),
+			         errors ? static_cast<const char*>(errors->GetBufferPointer()) : "");
+			release(errors);
+			release(vs_blob);
+			return false;
+		}
+
+		bool ok = SUCCEEDED(device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr, &g_vs)) &&
+			SUCCEEDED(device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, &g_ps));
+
+		if (ok)
+		{
+			const D3D11_INPUT_ELEMENT_DESC elements[2] = {
+				{"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 8, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			};
+			ok = SUCCEEDED(device->CreateInputLayout(elements, 2, vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), &g_layout));
+		}
+
+		release(vs_blob);
+		release(ps_blob);
+		release(errors);
+
+		if (ok)
+		{
+			D3D11_BUFFER_DESC bd = {};
+			bd.ByteWidth = sizeof(vertex) * MAX_VERTS;
+			bd.Usage = D3D11_USAGE_DYNAMIC;
+			bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+			bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+			ok = SUCCEEDED(device->CreateBuffer(&bd, nullptr, &g_buffer));
+		}
+
+		if (ok)
+		{
+			D3D11_BLEND_DESC blend = {};
+			blend.RenderTarget[0].BlendEnable = TRUE;
+			blend.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+			blend.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+			blend.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+			blend.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+			blend.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+			blend.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+			blend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+			ok = SUCCEEDED(device->CreateBlendState(&blend, &g_blend));
+		}
+
+		if (ok)
+		{
+			D3D11_RASTERIZER_DESC raster = {};
+			raster.FillMode = D3D11_FILL_SOLID;
+			raster.CullMode = D3D11_CULL_NONE;
+			raster.DepthClipEnable = TRUE;
+			ok = SUCCEEDED(device->CreateRasterizerState(&raster, &g_raster));
+		}
+
+		if (ok)
+		{
+			D3D11_DEPTH_STENCIL_DESC depth = {};
+			depth.DepthEnable = FALSE;
+			depth.StencilEnable = FALSE;
+			ok = SUCCEEDED(device->CreateDepthStencilState(&depth, &g_depth));
+		}
+
+		if (!ok)
+		{
+			log_line("d3d: could not create drawing resources");
+		}
+
+		return ok;
+	}
+
+	// Everything the game had set up on the graphics card, so we can put it back afterwards.
+	struct saved_state
+	{
+		UINT viewport_count;
+		D3D11_VIEWPORT viewports[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+		UINT scissor_count;
+		D3D11_RECT scissors[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+		ID3D11RasterizerState* raster;
+		ID3D11BlendState* blend;
+		FLOAT blend_factor[4];
+		UINT sample_mask;
+		ID3D11DepthStencilState* depth;
+		UINT stencil_ref;
+		ID3D11RenderTargetView* targets[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT];
+		ID3D11DepthStencilView* depth_view;
+		D3D11_PRIMITIVE_TOPOLOGY topology;
+		ID3D11InputLayout* layout;
+		ID3D11Buffer* vertex_buffer;
+		UINT stride;
+		UINT offset;
+		ID3D11VertexShader* vs;
+		ID3D11PixelShader* ps;
+		ID3D11GeometryShader* gs;
+		ID3D11HullShader* hs;
+		ID3D11DomainShader* ds;
+	};
+
+	void save_state(ID3D11DeviceContext* context, saved_state& s)
+	{
+		memset(&s, 0, sizeof(s));
+		s.viewport_count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+		s.scissor_count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+		context->RSGetViewports(&s.viewport_count, s.viewports);
+		context->RSGetScissorRects(&s.scissor_count, s.scissors);
+		context->RSGetState(&s.raster);
+		context->OMGetBlendState(&s.blend, s.blend_factor, &s.sample_mask);
+		context->OMGetDepthStencilState(&s.depth, &s.stencil_ref);
+		context->OMGetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, s.targets, &s.depth_view);
+		context->IAGetPrimitiveTopology(&s.topology);
+		context->IAGetInputLayout(&s.layout);
+		context->IAGetVertexBuffers(0, 1, &s.vertex_buffer, &s.stride, &s.offset);
+		context->VSGetShader(&s.vs, nullptr, nullptr);
+		context->PSGetShader(&s.ps, nullptr, nullptr);
+		context->GSGetShader(&s.gs, nullptr, nullptr);
+		context->HSGetShader(&s.hs, nullptr, nullptr);
+		context->DSGetShader(&s.ds, nullptr, nullptr);
+	}
+
+	void restore_state(ID3D11DeviceContext* context, saved_state& s)
+	{
+		context->RSSetViewports(s.viewport_count, s.viewports);
+		context->RSSetScissorRects(s.scissor_count, s.scissors);
+		context->RSSetState(s.raster);
+		context->OMSetBlendState(s.blend, s.blend_factor, s.sample_mask);
+		context->OMSetDepthStencilState(s.depth, s.stencil_ref);
+		context->OMSetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, s.targets, s.depth_view);
+		context->IASetPrimitiveTopology(s.topology);
+		context->IASetInputLayout(s.layout);
+		context->IASetVertexBuffers(0, 1, &s.vertex_buffer, &s.stride, &s.offset);
+		context->VSSetShader(s.vs, nullptr, 0);
+		context->PSSetShader(s.ps, nullptr, 0);
+		context->GSSetShader(s.gs, nullptr, 0);
+		context->HSSetShader(s.hs, nullptr, 0);
+		context->DSSetShader(s.ds, nullptr, 0);
+
+		release(s.raster);
+		release(s.blend);
+		release(s.depth);
+		for (auto& target : s.targets)
+		{
+			release(target);
+		}
+
+		release(s.depth_view);
+		release(s.layout);
+		release(s.vertex_buffer);
+		release(s.vs);
+		release(s.ps);
+		release(s.gs);
+		release(s.hs);
+		release(s.ds);
+	}
+
+	void draw_overlay(IDXGISwapChain* swap_chain)
+	{
+		poll_keys();
+		++g_frame_counter;
+
+		if (!g_overlay_on || !in_mission())
+		{
+			return;
+		}
+
+		ID3D11Device* device = nullptr;
+		if (FAILED(swap_chain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(&device))) || !device)
+		{
+			return;
+		}
+
+		if (device != g_device)
+		{
+			release_resources();
+			if (!create_resources(device))
+			{
+				if (!g_init_failed_logged)
+				{
+					g_init_failed_logged = true;
+					log_line("overlay: could not set up drawing, giving up");
+				}
+
+				g_overlay_on = false;
+				release_resources();
+				release(device);
+				return;
+			}
+
+			g_device = device;
+			g_device->AddRef();
+		}
+
+		ID3D11Texture2D* back_buffer = nullptr;
+		if (FAILED(swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&back_buffer))) || !back_buffer)
+		{
+			release(device);
+			return;
+		}
+
+		D3D11_TEXTURE2D_DESC texture_desc;
+		back_buffer->GetDesc(&texture_desc);
+
+		if (build_picture(static_cast<float>(texture_desc.Width), static_cast<float>(texture_desc.Height)))
+		{
+			ID3D11RenderTargetView* target = nullptr;
+			if (SUCCEEDED(device->CreateRenderTargetView(back_buffer, nullptr, &target)) && target)
+			{
+				ID3D11DeviceContext* context = nullptr;
+				device->GetImmediateContext(&context);
+
+				D3D11_MAPPED_SUBRESOURCE mapped;
+				if (context && SUCCEEDED(context->Map(g_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+				{
+					memcpy(mapped.pData, g_verts, sizeof(vertex) * static_cast<size_t>(g_vert_count));
+					context->Unmap(g_buffer, 0);
+
+					saved_state saved;
+					save_state(context, saved);
+
+					D3D11_VIEWPORT viewport = {};
+					viewport.Width = static_cast<float>(texture_desc.Width);
+					viewport.Height = static_cast<float>(texture_desc.Height);
+					viewport.MaxDepth = 1.0f;
+
+					const FLOAT blend_factor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+					const UINT stride = sizeof(vertex);
+					const UINT offset = 0;
+
+					context->RSSetViewports(1, &viewport);
+					context->RSSetState(g_raster);
+					context->OMSetBlendState(g_blend, blend_factor, 0xFFFFFFFF);
+					context->OMSetDepthStencilState(g_depth, 0);
+					context->OMSetRenderTargets(1, &target, nullptr);
+					context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context->IASetInputLayout(g_layout);
+					context->IASetVertexBuffers(0, 1, &g_buffer, &stride, &offset);
+					context->VSSetShader(g_vs, nullptr, 0);
+					context->PSSetShader(g_ps, nullptr, 0);
+					context->GSSetShader(nullptr, nullptr, 0);
+					context->HSSetShader(nullptr, nullptr, 0);
+					context->DSSetShader(nullptr, nullptr, 0);
+					context->Draw(static_cast<UINT>(g_vert_count), 0);
+
+					restore_state(context, saved);
+
+					if (!g_first_draw_logged)
+					{
+						g_first_draw_logged = true;
+						log_line("overlay: first picture drawn (%u x %u, format %d, %d vertices)", texture_desc.Width,
+						         texture_desc.Height, static_cast<int>(texture_desc.Format), g_vert_count);
+					}
+				}
+
+				release(context);
+			}
+
+			release(target);
+		}
+
+		release(back_buffer);
+		release(device);
+	}
+
+	void safe_draw_overlay(IDXGISwapChain* swap_chain)
 	{
 		__try
 		{
-			frame_draw();
+			draw_overlay(swap_chain);
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
 		{
 			++g_failures;
-			log_line("drawing hit an error (%d of 5)", g_failures);
+			log_line("overlay: drawing hit an error (%d of 5)", g_failures);
 			if (g_failures >= 5)
 			{
 				g_overlay_on = false;
-				log_line("too many errors: overlay switched itself off");
+				log_line("overlay: too many errors, switched itself off");
 			}
 		}
 	}
 
-	// Runs once per game frame, before the game does its work.
-	void hooked_frame()
-	{
-		poll_keys();
-		InterlockedExchange(&g_drawn_this_frame, 0);
-		g_original_frame();
-	}
+	// ---- hooking the moment the picture is shown ---------------------------------------
 
-	// The game calls this to draw every rectangle of its own screen. It only does so at the
-	// moment when drawing is actually collected for the picture, so we ride along: the first
-	// time it is called in a frame, we add our own boxes first.
-	void hooked_stretch(float x, float y, float w, float h, float s0, float t0, float s1, float t1, float* color,
-	                    void* material)
+	using present_t = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain*, UINT, UINT);
+	using present1_t = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain1*, UINT, UINT, const DXGI_PRESENT_PARAMETERS*);
+
+	present_t g_original_present = nullptr;
+	present1_t g_original_present1 = nullptr;
+
+	HRESULT STDMETHODCALLTYPE hooked_present(IDXGISwapChain* swap_chain, UINT sync_interval, UINT flags)
 	{
-		if (g_overlay_on && InterlockedExchange(&g_drawn_this_frame, 1) == 0)
+		if (!g_in_present && (flags & DXGI_PRESENT_TEST) == 0)
 		{
-			safe_frame_draw();
+			g_in_present = true;
+			safe_draw_overlay(swap_chain);
+			g_in_present = false;
 		}
 
-		g_original_stretch(x, y, w, h, s0, t0, s1, t1, color, material);
+		return g_original_present(swap_chain, sync_interval, flags);
+	}
+
+	HRESULT STDMETHODCALLTYPE hooked_present1(IDXGISwapChain1* swap_chain, UINT sync_interval, UINT flags,
+	                                          const DXGI_PRESENT_PARAMETERS* parameters)
+	{
+		if (!g_in_present && (flags & DXGI_PRESENT_TEST) == 0)
+		{
+			g_in_present = true;
+			safe_draw_overlay(swap_chain);
+			g_in_present = false;
+		}
+
+		return g_original_present1(swap_chain, sync_interval, flags, parameters);
+	}
+
+	// Makes a throw-away window and swap chain just to learn where the game's "show the picture"
+	// function lives in memory.
+	bool find_present_functions(void** present, void** present1)
+	{
+		const HMODULE d3d11_dll = LoadLibraryA("d3d11.dll");
+		if (!d3d11_dll)
+		{
+			log_line("hook: d3d11.dll not found");
+			return false;
+		}
+
+		const auto create = reinterpret_cast<PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN>(
+			GetProcAddress(d3d11_dll, "D3D11CreateDeviceAndSwapChain"));
+		if (!create)
+		{
+			log_line("hook: D3D11CreateDeviceAndSwapChain not found");
+			return false;
+		}
+
+		WNDCLASSEXA wc = {};
+		wc.cbSize = sizeof(wc);
+		wc.lpfnWndProc = DefWindowProcA;
+		wc.hInstance = GetModuleHandleA(nullptr);
+		wc.lpszClassName = "s1x_overlay_probe";
+		RegisterClassExA(&wc);
+
+		const HWND window = CreateWindowExA(0, wc.lpszClassName, "", WS_OVERLAPPED, 0, 0, 100, 100, nullptr, nullptr,
+		                                    wc.hInstance, nullptr);
+		if (!window)
+		{
+			log_line("hook: could not create probe window");
+			return false;
+		}
+
+		DXGI_SWAP_CHAIN_DESC desc = {};
+		desc.BufferCount = 1;
+		desc.BufferDesc.Width = 100;
+		desc.BufferDesc.Height = 100;
+		desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+		desc.OutputWindow = window;
+		desc.SampleDesc.Count = 1;
+		desc.Windowed = TRUE;
+		desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+
+		const D3D_FEATURE_LEVEL levels[3] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0};
+		D3D_FEATURE_LEVEL level;
+		IDXGISwapChain* swap_chain = nullptr;
+		ID3D11Device* device = nullptr;
+		ID3D11DeviceContext* context = nullptr;
+
+		const HRESULT hr = create(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, levels, 3, D3D11_SDK_VERSION, &desc,
+		                          &swap_chain, &device, &level, &context);
+		bool ok = false;
+		if (SUCCEEDED(hr) && swap_chain)
+		{
+			void** table = *reinterpret_cast<void***>(swap_chain);
+			*present = table[8];
+
+			IDXGISwapChain1* swap_chain1 = nullptr;
+			if (SUCCEEDED(swap_chain->QueryInterface(__uuidof(IDXGISwapChain1), reinterpret_cast<void**>(&swap_chain1))) &&
+				swap_chain1)
+			{
+				void** table1 = *reinterpret_cast<void***>(swap_chain1);
+				*present1 = table1[22];
+				swap_chain1->Release();
+			}
+
+			ok = true;
+		}
+		else
+		{
+			log_line("hook: could not create probe swap chain (0x%08lX)", static_cast<unsigned long>(hr));
+		}
+
+		release(swap_chain);
+		release(context);
+		release(device);
+		DestroyWindow(window);
+		UnregisterClassA(wc.lpszClassName, wc.hInstance);
+		return ok;
 	}
 
 	bool install_hook()
 	{
-		unsigned char probe[16];
-		if (!read_bytes(SP_COM_FRAME, probe, sizeof(probe)))
+		void* present = nullptr;
+		void* present1 = nullptr;
+		if (!find_present_functions(&present, &present1))
 		{
-			log_line("hook: game function is not where expected, not installing");
 			return false;
 		}
 
@@ -1152,32 +1422,35 @@ namespace
 			return false;
 		}
 
-		if (MH_CreateHook(reinterpret_cast<LPVOID>(SP_COM_FRAME), reinterpret_cast<LPVOID>(&hooked_frame),
-		                  reinterpret_cast<LPVOID*>(&g_original_frame)) != MH_OK)
+		bool any = false;
+		if (MH_CreateHook(present, reinterpret_cast<LPVOID>(&hooked_present), reinterpret_cast<LPVOID*>(&g_original_present)) ==
+				MH_OK &&
+			MH_EnableHook(present) == MH_OK)
 		{
-			log_line("hook: could not create hook");
-			return false;
+			log_line("hook: Present installed");
+			any = true;
+		}
+		else
+		{
+			log_line("hook: could not hook Present");
 		}
 
-		if (MH_EnableHook(reinterpret_cast<LPVOID>(SP_COM_FRAME)) != MH_OK)
+		if (present1 && present1 != present)
 		{
-			log_line("hook: could not enable hook");
-			return false;
+			if (MH_CreateHook(present1, reinterpret_cast<LPVOID>(&hooked_present1),
+			                  reinterpret_cast<LPVOID*>(&g_original_present1)) == MH_OK &&
+				MH_EnableHook(present1) == MH_OK)
+			{
+				log_line("hook: Present1 installed");
+				any = true;
+			}
+			else
+			{
+				log_line("hook: could not hook Present1");
+			}
 		}
 
-		log_line("frame hook installed");
-
-		if (MH_CreateHook(reinterpret_cast<LPVOID>(SP_DRAW_STRETCH_PIC), reinterpret_cast<LPVOID>(&hooked_stretch),
-		                  reinterpret_cast<LPVOID*>(&g_original_stretch)) != MH_OK ||
-			MH_EnableHook(reinterpret_cast<LPVOID>(SP_DRAW_STRETCH_PIC)) != MH_OK)
-		{
-			g_original_stretch = nullptr;
-			log_line("hook: could not hook the game's rectangle drawing; nothing will be visible");
-			return false;
-		}
-
-		log_line("drawing hook installed");
-		return true;
+		return any;
 	}
 
 	bool is_campaign_exe()
@@ -1192,15 +1465,14 @@ namespace
 		return strstr(exe, "s1_sp64_ship") != nullptr;
 	}
 
-
 	DWORD WINAPI worker(LPVOID)
 	{
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.8, draws inside the game's own drawing step) ----");
+		log_line("---- add-on loaded (version 0.9, draws with Direct3D just before the picture is shown) ----");
 		log_line("host program: %s", exe);
-		log_line("F9 = save entity table | F8 on/off | F6 mode | F7 distance | F5 fov style | F4 text");
+		log_line("F9 = save entity table | F8 on/off | F7 distance | F6 thickness | F5 fov style");
 
 		bool hook_done = false;
 
