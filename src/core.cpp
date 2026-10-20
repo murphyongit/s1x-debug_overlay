@@ -1,8 +1,8 @@
-// S1x debug overlay - version 0.7 (first build that DRAWS; 0.6 crashed on a stale material pointer)
+// S1x debug overlay - version 0.8 (draws from inside the game's own drawing step)
 //
 // Draws a box around every trigger in the campaign. Because this could not be tested
 // before shipping, a few keys let you try different drawing settings:
-//   F8 = overlay on/off (starts OFF)         F6 = drawing mode (4 choices)
+//   F8 = overlay on/off (starts OFF)         F6 = coordinate style (2 choices)
 //   F7 = how far away to draw    F5 = field-of-view style (3 choices)
 //   F4 = text labels on/off      F9 = save the data files (as before)
 // Small squares in the top-left corner show the current F6 / F7 / F5 settings.
@@ -414,10 +414,13 @@ namespace
 	};
 
 	com_frame_t g_original_frame = nullptr;
+	draw_stretch_t g_original_stretch = nullptr;
+	volatile LONG g_drawn_this_frame = 0;
+	volatile bool g_log_settings = false;
 
 	volatile bool g_overlay_on = false;   // starts OFF; press F8 in a mission to turn it on
 	volatile bool g_text_on = false;
-	volatile int g_mode = 0;       // bit 0: draw before the game's frame; bit 1: 640x480 coordinates
+	volatile int g_mode = 0;       // 0 = real pixel coordinates, 1 = 640x480 coordinates
 	volatile int g_dist_level = 1;
 	volatile int g_fov_style = 1;
 	const float kDistances[4] = {1500.0f, 4000.0f, 12000.0f, 1.0e9f};
@@ -508,6 +511,17 @@ namespace
 			return false;
 		}
 
+		// Make sure this really is the dvar we asked for (its name is the first field).
+		unsigned long long name_pointer = 0;
+		char found_name[40] = {};
+		if (!read_bytes(reinterpret_cast<uintptr_t>(var), &name_pointer, sizeof(name_pointer)) ||
+			!safe_copy_string(reinterpret_cast<const char*>(name_pointer), found_name, sizeof(found_name)) ||
+			_stricmp(found_name, name) != 0)
+		{
+			log_line("dvar %s: layout does not look right (name field reads '%s'), using default", name, found_name);
+			return false;
+		}
+
 		float value = 0.0f;
 		if (!read_bytes(reinterpret_cast<uintptr_t>(var) + DVAR_CURRENT_OFFSET, &value, sizeof(value)))
 		{
@@ -559,14 +573,15 @@ namespace
 
 		float sx = 1.0f;
 		float sy = 1.0f;
-		if ((g_mode & 2) != 0)
+		if ((g_mode & 1) != 0)
 		{
 			sx = 640.0f / static_cast<float>(g_screen_w);
 			sy = 480.0f / static_cast<float>(g_screen_h);
 		}
 
-		reinterpret_cast<draw_stretch_t>(SP_DRAW_STRETCH_PIC)(x * sx, y * sy, w * sx, h * sy, 0.0f, 0.0f, 1.0f, 1.0f,
-		                                                       color, g_white);
+		// Call the game's own function directly (not through our hook) so we never loop.
+		const draw_stretch_t draw = g_original_stretch ? g_original_stretch : reinterpret_cast<draw_stretch_t>(SP_DRAW_STRETCH_PIC);
+		draw(x * sx, y * sy, w * sx, h * sy, 0.0f, 0.0f, 1.0f, 1.0f, color, g_white);
 	}
 
 	// Trims a line so it only covers the screen (Liang-Barsky).
@@ -758,7 +773,7 @@ namespace
 		float scale = 16.0f / g_font_height;
 		float x = sx;
 		float y = sy;
-		if ((g_mode & 2) != 0)
+		if ((g_mode & 1) != 0)
 		{
 			x *= 640.0f / static_cast<float>(g_screen_w);
 			y *= 480.0f / static_cast<float>(g_screen_h);
@@ -930,7 +945,8 @@ namespace
 		return g_in_game;
 	}
 
-	void frame_draw()
+	// Reads the F-keys. Runs once per game frame, whether or not anything is being drawn.
+	void poll_keys()
 	{
 		static bool was_f4, was_f5, was_f6, was_f7, was_f8;
 		const bool f4 = key_pressed(VK_F4, &was_f4);
@@ -947,9 +963,13 @@ namespace
 
 		if (f4) g_text_on = !g_text_on;
 		if (f5) g_fov_style = (g_fov_style + 1) % 3;
-		if (f6) g_mode = (g_mode + 1) % 4;
+		if (f6) g_mode = (g_mode + 1) % 2;
 		if (f7) g_dist_level = (g_dist_level + 1) % 4;
+		if (f4 || f5 || f6 || f7) g_log_settings = true;
+	}
 
+	void frame_draw()
+	{
 		++g_frame_counter;
 		if (g_frame_counter == 1)
 		{
@@ -1008,9 +1028,7 @@ namespace
 		if (g_frame_counter % 120 == 1)
 		{
 			read_dvar_float("cg_fov", &g_fov);
-			read_dvar_float("cg_fovScale", &g_fov_scale);
 			if (!(g_fov >= 20.0f && g_fov <= 160.0f)) g_fov = 65.0f;
-			if (!(g_fov_scale >= 0.2f && g_fov_scale <= 3.0f)) g_fov_scale = 1.0f;
 			update_screen_size();
 		}
 
@@ -1069,9 +1087,10 @@ namespace
 			}
 		}
 
-		if (f4 || f5 || f6 || f7)
+		if (g_log_settings)
 		{
-			log_line("settings: mode=%d dist=%d fovstyle=%d text=%d | screen %dx%d fov %.1f x %.2f | eye %.0f %.0f %.0f pitch %.1f yaw %.1f | %d triggers near, %d rects",
+			g_log_settings = false;
+			log_line("settings: mode=%d dist=%d fovstyle=%d text=%d | screen %dx%d fov %.1f (scale %.2f) | eye %.0f %.0f %.0f pitch %.1f yaw %.1f | %d triggers near, %d rects",
 			         static_cast<int>(g_mode), static_cast<int>(g_dist_level), static_cast<int>(g_fov_style),
 			         g_text_on ? 1 : 0, g_screen_w, g_screen_h, g_fov, g_fov_scale, g_eye.x, g_eye.y, g_eye.z, pitch,
 			         yaw, count, g_quads);
@@ -1096,20 +1115,26 @@ namespace
 		}
 	}
 
+	// Runs once per game frame, before the game does its work.
 	void hooked_frame()
 	{
-		const bool before = (g_mode & 1) != 0;
-		if (before)
-		{
-			safe_frame_draw();
-		}
-
+		poll_keys();
+		InterlockedExchange(&g_drawn_this_frame, 0);
 		g_original_frame();
+	}
 
-		if (!before)
+	// The game calls this to draw every rectangle of its own screen. It only does so at the
+	// moment when drawing is actually collected for the picture, so we ride along: the first
+	// time it is called in a frame, we add our own boxes first.
+	void hooked_stretch(float x, float y, float w, float h, float s0, float t0, float s1, float t1, float* color,
+	                    void* material)
+	{
+		if (g_overlay_on && InterlockedExchange(&g_drawn_this_frame, 1) == 0)
 		{
 			safe_frame_draw();
 		}
+
+		g_original_stretch(x, y, w, h, s0, t0, s1, t1, color, material);
 	}
 
 	bool install_hook()
@@ -1140,7 +1165,18 @@ namespace
 			return false;
 		}
 
-		log_line("hook installed");
+		log_line("frame hook installed");
+
+		if (MH_CreateHook(reinterpret_cast<LPVOID>(SP_DRAW_STRETCH_PIC), reinterpret_cast<LPVOID>(&hooked_stretch),
+		                  reinterpret_cast<LPVOID*>(&g_original_stretch)) != MH_OK ||
+			MH_EnableHook(reinterpret_cast<LPVOID>(SP_DRAW_STRETCH_PIC)) != MH_OK)
+		{
+			g_original_stretch = nullptr;
+			log_line("hook: could not hook the game's rectangle drawing; nothing will be visible");
+			return false;
+		}
+
+		log_line("drawing hook installed");
 		return true;
 	}
 
@@ -1162,7 +1198,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.7, first drawing build, fix 1) ----");
+		log_line("---- add-on loaded (version 0.8, draws inside the game's own drawing step) ----");
 		log_line("host program: %s", exe);
 		log_line("F9 = save entity table | F8 on/off | F6 mode | F7 distance | F5 fov style | F4 text");
 
