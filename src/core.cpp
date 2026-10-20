@@ -661,6 +661,110 @@ namespace
 		}
 	}
 
+	// ---- tiny built-in text (5x7 letters drawn as little rectangles) ------------------------
+	volatile bool g_labels_on = true;   // F2
+
+	const unsigned char* glyph_for(const char c)
+	{
+		static const unsigned char kLetters[26][7] = {
+			{0x0E,0x11,0x11,0x1F,0x11,0x11,0x11},{0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E},{0x0E,0x11,0x10,0x10,0x10,0x11,0x0E},
+			{0x1E,0x11,0x11,0x11,0x11,0x11,0x1E},{0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F},{0x1F,0x10,0x10,0x1E,0x10,0x10,0x10},
+			{0x0E,0x11,0x10,0x17,0x11,0x11,0x0F},{0x11,0x11,0x11,0x1F,0x11,0x11,0x11},{0x0E,0x04,0x04,0x04,0x04,0x04,0x0E},
+			{0x07,0x02,0x02,0x02,0x02,0x12,0x0C},{0x11,0x12,0x14,0x18,0x14,0x12,0x11},{0x10,0x10,0x10,0x10,0x10,0x10,0x1F},
+			{0x11,0x1B,0x15,0x15,0x11,0x11,0x11},{0x11,0x19,0x15,0x13,0x11,0x11,0x11},{0x0E,0x11,0x11,0x11,0x11,0x11,0x0E},
+			{0x1E,0x11,0x11,0x1E,0x10,0x10,0x10},{0x0E,0x11,0x11,0x11,0x15,0x12,0x0D},{0x1E,0x11,0x11,0x1E,0x14,0x12,0x11},
+			{0x0F,0x10,0x10,0x0E,0x01,0x01,0x1E},{0x1F,0x04,0x04,0x04,0x04,0x04,0x04},{0x11,0x11,0x11,0x11,0x11,0x11,0x0E},
+			{0x11,0x11,0x11,0x11,0x11,0x0A,0x04},{0x11,0x11,0x11,0x15,0x15,0x1B,0x11},{0x11,0x11,0x0A,0x04,0x0A,0x11,0x11},
+			{0x11,0x11,0x0A,0x04,0x04,0x04,0x04},{0x1F,0x01,0x02,0x04,0x08,0x10,0x1F}};
+		static const unsigned char kDigits[10][7] = {
+			{0x0E,0x11,0x13,0x15,0x19,0x11,0x0E},{0x04,0x0C,0x04,0x04,0x04,0x04,0x0E},{0x0E,0x11,0x01,0x02,0x04,0x08,0x1F},
+			{0x1E,0x01,0x01,0x0E,0x01,0x01,0x1E},{0x02,0x06,0x0A,0x12,0x1F,0x02,0x02},{0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E},
+			{0x06,0x08,0x10,0x1E,0x11,0x11,0x0E},{0x1F,0x01,0x02,0x04,0x08,0x08,0x08},{0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E},
+			{0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C}};
+		static const unsigned char kUnderscore[7] = {0,0,0,0,0,0,0x1F};
+		static const unsigned char kHash[7] = {0x0A,0x0A,0x1F,0x0A,0x1F,0x0A,0x0A};
+		static const unsigned char kDash[7] = {0,0,0,0x1F,0,0,0};
+		static const unsigned char kDot[7] = {0,0,0,0,0,0x0C,0x0C};
+		static const unsigned char kBlank[7] = {0,0,0,0,0,0,0};
+
+		if (c >= 'a' && c <= 'z') return kLetters[c - 'a'];
+		if (c >= 'A' && c <= 'Z') return kLetters[c - 'A'];
+		if (c >= '0' && c <= '9') return kDigits[c - '0'];
+		if (c == '_') return kUnderscore;
+		if (c == '#') return kHash;
+		if (c == '-') return kDash;
+		if (c == '.') return kDot;
+		return kBlank;
+	}
+
+	// Draws text with its top-left corner at x,y. Each letter is 5x7 dots, each dot is `scale` pixels.
+	void draw_text(float x, const float y, const char* text, const float scale, const float* color)
+	{
+		for (const char* p = text; *p; ++p)
+		{
+			const unsigned char* g = glyph_for(*p);
+			for (int row = 0; row < 7; ++row)
+			{
+				int col = 0;
+				while (col < 5)
+				{
+					if (!(g[row] & (0x10 >> col)))
+					{
+						++col;
+						continue;
+					}
+
+					int end = col;
+					while (end < 5 && (g[row] & (0x10 >> end)))
+					{
+						++end;
+					}
+
+					add_rect(x + static_cast<float>(col) * scale, y + static_cast<float>(row) * scale,
+					         static_cast<float>(end - col) * scale, scale, color);
+					col = end;
+				}
+			}
+
+			x += 6.0f * scale;
+		}
+	}
+
+	void draw_label(const hit& h, const float* color)
+	{
+		const vec3 c = to_camera(h.mid);
+		if (c.z < 8.0f)
+		{
+			return;
+		}
+
+		float sx, sy;
+		to_screen(c, &sx, &sy);
+		if (sx < 0.0f || sy < 0.0f || sx > g_w || sy > g_h)
+		{
+			return;
+		}
+
+		char name[48];
+		if (!class_name(h.class_id, name, sizeof(name)))
+		{
+			return;
+		}
+
+		const char* shown = strncmp(name, "trigger_", 8) == 0 ? name + 8 : name;
+		char text[96];
+		snprintf(text, sizeof(text), "%s #%d %dm", shown, h.slot, static_cast<int>(h.dist / 39.37f));
+
+		const float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
+		const float width = static_cast<float>(strlen(text)) * 6.0f * scale;
+		const float height = 7.0f * scale;
+		const float x = sx - width * 0.5f;
+		const float y = sy - height * 0.5f;
+		const float back[4] = {0.0f, 0.0f, 0.0f, 0.65f};
+		add_rect(x - 3.0f, y - 3.0f, width + 5.0f, height + 6.0f, back);
+		draw_text(x, y, text, scale, color);
+	}
+
 	// 1 = ignore, 2.. = a kind of trigger. Looked up once and remembered for a while.
 	unsigned char classify(const unsigned short id)
 	{
@@ -943,7 +1047,8 @@ namespace
 
 	void poll_keys()
 	{
-		static bool was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		static bool was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		const bool f2 = key_pressed(VK_F2, &was_f2);
 		const bool f3 = key_pressed(VK_F3, &was_f3);
 		const bool f4 = key_pressed(VK_F4, &was_f4);
 		const bool f5 = key_pressed(VK_F5, &was_f5);
@@ -955,6 +1060,12 @@ namespace
 		{
 			g_overlay_on = !g_overlay_on;
 			log_line("F8: overlay %s", g_overlay_on ? "ON" : "OFF");
+		}
+
+		if (f2)
+		{
+			g_labels_on = !g_labels_on;
+			log_line("F2: labels %s", g_labels_on ? "ON" : "OFF");
 		}
 
 		if (f3)
@@ -1185,6 +1296,15 @@ namespace
 		for (int i = count - 1; i >= 0; --i)
 		{
 			draw_box(hits[i]);
+		}
+
+		if (g_labels_on)
+		{
+			const int label_count = count < 20 ? count : 20;
+			for (int i = label_count - 1; i >= 0; --i)
+			{
+				draw_label(hits[i], hits[i].inside ? kColors[5] : kColors[hits[i].kind > 1 && hits[i].kind < 7 ? hits[i].kind - 2 : 4]);
+			}
 		}
 
 		if (g_log_settings)
@@ -1733,9 +1853,9 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.14, smooth camera (source 2 by default)) ----");
+		log_line("---- add-on loaded (version 0.15, text labels) ----");
 		log_line("host program: %s", exe);
-		log_line("F8 on/off | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
+		log_line("F8 on/off | F2 labels | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
 
 		bool hook_done = false;
 
