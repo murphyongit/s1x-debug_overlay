@@ -810,6 +810,17 @@ namespace
 			}
 		}
 
+		// Hidden when the name contains any of these anywhere (animations, idles, button presses).
+		static const char* const kContains[] = {"anim", "idle", "pressed", "released", "_loop", "look_at", "lookat",
+		                                        "step", "footstep", "stance", "crouch", "prone", "stand"};
+		for (const char* part : kContains)
+		{
+			if (strstr(name, part))
+			{
+				return true;
+			}
+		}
+
 		return false;
 	}
 
