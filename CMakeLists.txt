@@ -7,6 +7,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Bake the C++ runtime into the DLL so nothing extra needs installing.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 
+# MinHook: a small, well-known library that lets the add-on run a bit of code every frame.
+# CMake downloads it automatically during the build; nothing for you to install.
+set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+include(FetchContent)
+FetchContent_Declare(minhook
+  GIT_REPOSITORY https://github.com/TsudaKageyu/minhook.git
+  GIT_TAG v1.3.4)
+FetchContent_MakeAvailable(minhook)
+
 # Same add-on code, two possible "doors" into the game.
 # The player only ever uses ONE of these at a time.
 add_library(overlay_version SHARED src/core.cpp src/proxy_version.cpp)
@@ -16,6 +26,9 @@ target_compile_definitions(overlay_version PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 add_library(overlay_dinput8 SHARED src/core.cpp src/proxy_dinput8.cpp)
 set_target_properties(overlay_dinput8 PROPERTIES OUTPUT_NAME "dinput8" PREFIX "")
 target_compile_definitions(overlay_dinput8 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+
+target_link_libraries(overlay_version PRIVATE minhook)
+target_link_libraries(overlay_dinput8 PRIVATE minhook)
 
 install(TARGETS overlay_version RUNTIME DESTINATION "try_this_first")
 install(TARGETS overlay_dinput8 RUNTIME DESTINATION "try_this_if_first_does_nothing")
