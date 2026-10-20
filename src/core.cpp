@@ -1408,6 +1408,28 @@ namespace
 
 	char g_slot_flags[MAX_ENTITIES][96];
 
+	// Flags confirmed (by playing) to start a mission ending. Add new ones here as they are found.
+	//   mission: fission - multiple_flag_set, stepping in starts the ~48 second ending
+	const char* const kKnownEndFlags[] = {"ct_final_retreat"};
+
+	bool is_known_end_flag(const int slot)
+	{
+		if (slot < 0 || slot >= MAX_ENTITIES || !g_slot_flags[slot][0])
+		{
+			return false;
+		}
+
+		for (const char* known : kKnownEndFlags)
+		{
+			if (strstr(g_slot_flags[slot], known))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	bool learned_flags(const int slot, char* out, const size_t capacity)
 	{
 		if (slot < 0 || slot >= MAX_ENTITIES || g_slot_flags[slot][0] == '\0')
@@ -1503,6 +1525,12 @@ namespace
 				snprintf(line, sizeof(line), "IN %s #%d", given[0] ? given : (type_text[0] ? type_text + (strncmp(type_text, "trigger_", 8) == 0 ? 8 : 0) : "?"), h.slot);
 				post_event_text(line);
 			}
+		}
+
+		if (is_known_end_flag(h.slot))
+		{
+			log_line("KNOWN MISSION-END TRIGGER ENTERED: #%d %s (the ending should start now)", h.slot, g_slot_flags[h.slot]);
+			post_event_text("MISSION END TRIGGER!");
 		}
 
 		entry_note& n = g_entries[g_entry_next % 300];
@@ -1914,7 +1942,7 @@ namespace
 			const float dist = std::sqrt(ex * ex + ey * ey + ez * ez);
 			unsigned int name_id_value = 0;
 			memcpy(&name_id_value, buffer + 0x160, sizeof(name_id_value));
-			const bool end_candidate = kind != 7 && name_flag(name_id_value) == 2;
+			const bool end_candidate = kind != 7 && (name_flag(name_id_value) == 2 || is_known_end_flag(index));
 			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f))
 			{
 				continue;
@@ -4119,7 +4147,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.37, level-end list fixed) ----");
+		log_line("---- add-on loaded (version 0.38, known end triggers list) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 

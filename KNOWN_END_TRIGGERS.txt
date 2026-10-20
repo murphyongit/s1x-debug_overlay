@@ -1,0 +1,5 @@
+Confirmed mission-end triggers (the list is also built into the add-on)
+
+fission : trigger_multiple_flag_set, flag "ct_final_retreat"
+          Stepping in starts the scripted ending (about 48 seconds until the mission-end screen).
+          Seen as slot #1854 in one run; slot numbers can change, the flag name is what counts.
