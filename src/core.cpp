@@ -623,6 +623,8 @@ namespace
 		*sy = g_h * 0.5f - (c.y / c.z) / g_tan_y * g_h * 0.5f;
 	}
 
+	bool g_thin_lines = false;
+
 	void edge(const vec3& a, const vec3& b, const float* color)
 	{
 		vec3 ca = to_camera(a);
@@ -648,7 +650,7 @@ namespace
 		float x0, y0, x1, y1;
 		to_screen(ca, &x0, &y0);
 		to_screen(cb, &x1, &y1);
-		add_line(x0, y0, x1, y1, color, kThickness[g_thick_level]);
+		add_line(x0, y0, x1, y1, color, g_thin_lines ? 1.0f : kThickness[g_thick_level]);
 	}
 
 	// 1 = ordinary, 2 = sets/clears a level flag, 3 = checkpoint. Looked up once per name.
@@ -1225,6 +1227,8 @@ namespace
 	volatile int g_block_count = 0;
 	volatile bool g_collision_on = false;   // Delete
 	volatile bool g_collision_refresh = false;
+	volatile int g_collision_range = 0;   // PageDown
+	const float kCollisionRanges[3] = {600.0f, 1400.0f, 2600.0f};
 
 	void draw_collision_blocks(const vec3& player)
 	{
@@ -1235,11 +1239,11 @@ namespace
 			return;
 		}
 
-		constexpr int KEEP = 220;
+		constexpr int KEEP = 160;
 		float best_dist[KEEP];
 		int best_index[KEEP];
 		int kept = 0;
-		const float max_distance = 2200.0f;
+		const float max_distance = kCollisionRanges[g_collision_range];
 
 		for (int i = 0; i < count; ++i)
 		{
@@ -1278,6 +1282,7 @@ namespace
 			best_index[position] = i;
 		}
 
+		g_thin_lines = true;
 		for (int n = kept - 1; n >= 0; --n)
 		{
 			const block& b = blocks[best_index[n]];
@@ -1287,6 +1292,8 @@ namespace
 			h.half = {b.half[0], b.half[1], b.half[2]};
 			draw_box(h);
 		}
+
+		g_thin_lines = false;
 	}
 
 	// 1 = ignore, 2.. = a kind of trigger. Looked up once and remembered for a while.
@@ -1569,7 +1576,8 @@ namespace
 
 	void poll_keys()
 	{
-		static bool was_delete, was_end, was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		static bool was_pagedown, was_delete, was_end, was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		const bool pagedown = key_pressed(VK_NEXT, &was_pagedown);
 		const bool delete_key = key_pressed(VK_DELETE, &was_delete);
 		const bool end_key = key_pressed(VK_END, &was_end);
 		const bool home = key_pressed(VK_HOME, &was_home);
@@ -1597,6 +1605,12 @@ namespace
 			g_help_requested = false;
 			const double now = now_seconds();
 			g_help_until = g_help_until > now ? 0.0 : 1.0e15;
+		}
+
+		if (pagedown)
+		{
+			g_collision_range = (g_collision_range + 1) % 3;
+			log_line("PageDown: collision blocks range %d", static_cast<int>(g_collision_range));
 		}
 
 		if (delete_key)
@@ -1870,7 +1884,7 @@ namespace
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
 				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "F9 save data files",
-				"Delete level collision blocks", "PageUp save collision data", "End this help (or console: overlay_help)"};
+				"Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
 			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));

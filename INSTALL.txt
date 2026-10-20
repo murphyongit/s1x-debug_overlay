@@ -1,4 +1,4 @@
-Version 0.25 - level collision blocks (Delete key)
+Version 0.26 - collision blocks: Delete on/off, PageDown range
 
 Download: https://github.com/murphyongit/s1x-debug_overlay/releases/latest/download/version.dll
 Put version.dll in D:\GAMES\AW (replace the old one), start the game, load a mission.
