@@ -1,9 +1,9 @@
-S1x DEBUG OVERLAY - TEST BUILD 0.3 (entity table)
-=================================================
+S1x DEBUG OVERLAY - TEST BUILD 0.4 (entity table, unfiltered)
+=============================================================
 
-What this does: NOTHING visible. It reads the game's memory and writes text
-files into your game folder so we can finish working out how the campaign
-stores triggers and where it keeps the camera. It changes nothing in the game.
+What this does: NOTHING visible. It reads the game's entity list and writes
+text files into your game folder. It changes nothing in the game.
+This build has NO memory scan and does NOT use F10. Don't press F10.
 
 HOW TO INSTALL
 1. Close the game completely.
@@ -12,19 +12,13 @@ HOW TO INSTALL
 3. Start the game and load a campaign mission.
 4. When you can move around, wait about 15 seconds. The add-on saves the
    entity table by itself.
-5. IMPORTANT - the camera scan: stand COMPLETELY still, do not touch the
-   mouse or keyboard, then press F10 once. The game may freeze for a few
-   seconds while it scans. That is normal. Wait until it unfreezes.
-6. Optional: walk somewhere else in the mission and press F9 for a second table.
-7. Quit the game. New files in the game folder to send to Claude:
+5. Optional: walk somewhere else in the mission and press F9 once for a
+   second table.
+6. Quit the game. New files in the game folder to send to Claude:
       s1x_debug_overlay.log
       entities_1.txt
-      trigger_raw_1.txt
-      origin_hits.txt
-   (and entities_2.txt / trigger_raw_2.txt if you pressed F9)
-   You can delete the old entity_dump_*.txt and script_strings.txt files.
-
-If the game crashes at any point, tell Claude which step it happened at.
+      other_raw_1.txt
+   (and entities_2.txt / other_raw_2.txt if you pressed F9)
 
 TO UNINSTALL
 Delete version.dll from the game folder.

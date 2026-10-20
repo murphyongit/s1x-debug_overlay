@@ -1,10 +1,8 @@
-// S1x debug overlay - version 0.3 ("entity table" build)
+// S1x debug overlay - version 0.4 ("entity table, unfiltered" build)
 //
-// Still invisible: this build only READS memory and writes text files next to the DLL.
-//   F9   -> writes entities_N.txt  (every entity in the level: type, name, position, size)
-//           and trigger_raw_N.txt  (raw bytes of every trigger, so we can find their sizes)
-//   F10  -> writes origin_hits.txt (finds where the game keeps your camera position;
-//           stand completely still before pressing it)
+// Still invisible: this build only READS the entity list and writes text files next to the DLL.
+//   F9 -> writes entities_N.txt  (every non-empty entity slot, nothing filtered out)
+//         and other_raw_N.txt    (raw bytes of entities that are not the player or "scriptable")
 // F9 also fires automatically ~10 seconds after a mission has loaded.
 
 #include "core.hpp"
@@ -19,7 +17,6 @@ namespace
 	// Addresses for the campaign (single-player), from the S1x source files.
 	constexpr uintptr_t SP_G_ENTITIES = 0x143C26DC0;
 	constexpr uintptr_t SP_SL_CONVERT_TO_STRING = 0x140314850;
-	constexpr uintptr_t GAME_IMAGE_BASE = 0x140000000;
 
 	// Entity layout worked out from your dump files.
 	constexpr size_t ENTITY_SIZE = 0x2F8;
@@ -154,17 +151,18 @@ namespace
 		return text && safe_copy_string(text, out, capacity);
 	}
 
-	bool is_trigger_like(const char* name)
+	struct census_entry
 	{
-		return strncmp(name, "trigger", 7) == 0 || strncmp(name, "script_brushmodel", 17) == 0;
-	}
+		char name[48];
+		int count;
+	};
 
 	void write_table(const int number)
 	{
 		char entities_name[64];
 		char raw_name[64];
 		sprintf_s(entities_name, sizeof(entities_name), "entities_%d.txt", number);
-		sprintf_s(raw_name, sizeof(raw_name), "trigger_raw_%d.txt", number);
+		sprintf_s(raw_name, sizeof(raw_name), "other_raw_%d.txt", number);
 
 		char entities_path[MAX_PATH];
 		char raw_path[MAX_PATH];
@@ -186,10 +184,14 @@ namespace
 			return;
 		}
 
-		fprintf(table, "index\tclassid\tclassname\torigin_xyz\tbounds_mid_xyz\tbounds_half_xyz\n");
+		fprintf(table, "slot\tnumber\ttypebyte\tclassid\tclassname\torigin_xyz\tbounds_mid_xyz\tbounds_half_xyz\tnonzero_bytes\n");
 
+		census_entry census[64] = {};
+		int census_used = 0;
 		int listed = 0;
-		int triggers = 0;
+		int empty = 0;
+		int unreadable = 0;
+		int raw_written = 0;
 		unsigned char entity[ENTITY_SIZE];
 
 		for (int index = 0; index < MAX_ENTITIES; ++index)
@@ -197,6 +199,22 @@ namespace
 			const uintptr_t address = SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE;
 			if (!read_bytes(address, entity, sizeof(entity)))
 			{
+				++unreadable;
+				continue;
+			}
+
+			int nonzero = 0;
+			for (const unsigned char byte : entity)
+			{
+				if (byte != 0)
+				{
+					++nonzero;
+				}
+			}
+
+			if (nonzero == 0)
+			{
+				++empty;
 				continue;
 			}
 
@@ -209,25 +227,46 @@ namespace
 			memcpy(origin, entity + OFF_ORIGIN, sizeof(origin));
 			memcpy(bounds, entity + OFF_BOUNDS, sizeof(bounds));
 
-			if (number != index || class_id == 0)
+			char name[48] = "-";
+			if (class_id != 0)
 			{
-				continue;
+				strcpy_s(name, sizeof(name), "?");
+				class_name(class_id, name, sizeof(name));
 			}
 
-			char name[64] = "?";
-			class_name(class_id, name, sizeof(name));
-
-			fprintf(table, "%d\t%u\t%s\t%.1f %.1f %.1f\t%.1f %.1f %.1f\t%.1f %.1f %.1f\n",
-			        index, class_id, name,
+			fprintf(table, "%d\t%u\t%u\t%u\t%s\t%.1f %.1f %.1f\t%.1f %.1f %.1f\t%.1f %.1f %.1f\t%d\n",
+			        index, number, entity[0], class_id, name,
 			        origin[0], origin[1], origin[2],
 			        bounds[0], bounds[1], bounds[2],
-			        bounds[3], bounds[4], bounds[5]);
+			        bounds[3], bounds[4], bounds[5], nonzero);
 			++listed;
 
-			if (is_trigger_like(name))
+			int found = -1;
+			for (int i = 0; i < census_used; ++i)
 			{
-				++triggers;
-				fprintf(raw, "== entity %d (%s)\n", index, name);
+				if (strcmp(census[i].name, name) == 0)
+				{
+					found = i;
+					break;
+				}
+			}
+
+			if (found < 0 && census_used < 64)
+			{
+				found = census_used++;
+				strcpy_s(census[found].name, sizeof(census[found].name), name);
+			}
+
+			if (found >= 0)
+			{
+				++census[found].count;
+			}
+
+			const bool ordinary = strcmp(name, "player") == 0 || strcmp(name, "scriptable") == 0;
+			if (!ordinary && raw_written < 60)
+			{
+				++raw_written;
+				fprintf(raw, "== slot %d (%s)\n", index, name);
 				for (size_t offset = 0; offset < ENTITY_SIZE; offset += 16)
 				{
 					fprintf(raw, "%03zX:", offset);
@@ -243,100 +282,13 @@ namespace
 
 		fclose(table);
 		fclose(raw);
-		log_line("wrote %s (%d entities) and %s (%d triggers)", entities_name, listed, raw_name, triggers);
-	}
 
-	// Finds every place in the game's memory that holds a copy of the player's X and Y.
-	void scan_for_origin()
-	{
-		float player[3];
-		if (!read_bytes(SP_G_ENTITIES + OFF_ORIGIN, player, sizeof(player)))
+		log_line("wrote %s: %d non-empty slots, %d empty, %d unreadable; %d raw entities in %s",
+		         entities_name, listed, empty, unreadable, raw_written, raw_name);
+		for (int i = 0; i < census_used; ++i)
 		{
-			log_line("scan: could not read player position");
-			return;
+			log_line("  kind '%s': %d", census[i].name, census[i].count);
 		}
-
-		log_line("scan: looking for player position %.2f %.2f %.2f", player[0], player[1], player[2]);
-
-		char path[MAX_PATH];
-		make_path(path, "origin_hits.txt");
-
-		FILE* f = nullptr;
-		if (fopen_s(&f, path, "w") != 0 || !f)
-		{
-			log_line("could not create origin_hits.txt");
-			return;
-		}
-
-		fprintf(f, "player position: %.4f %.4f %.4f\n", player[0], player[1], player[2]);
-
-		uint32_t want_x, want_y;
-		memcpy(&want_x, &player[0], 4);
-		memcpy(&want_y, &player[1], 4);
-
-		int hits = 0;
-		uintptr_t cursor = 0x10000;
-		MEMORY_BASIC_INFORMATION mbi;
-
-		while (cursor < 0x7FFFFFFE0000ull && VirtualQuery(reinterpret_cast<const void*>(cursor), &mbi, sizeof(mbi)) != 0)
-		{
-			const auto base = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
-			const size_t size = mbi.RegionSize;
-			cursor = base + size;
-
-			// Skip "mapped" memory (graphics card windows can be extremely slow to read).
-			const bool readable = mbi.State == MEM_COMMIT && mbi.Type != MEM_MAPPED &&
-				(mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) == 0;
-			if (!readable || size < 16 || hits >= 150)
-			{
-				continue;
-			}
-
-			__try
-			{
-				const auto* words = reinterpret_cast<const uint32_t*>(base);
-				const size_t count = size / 4;
-				for (size_t i = 0; i + 1 < count && hits < 150; ++i)
-				{
-					if (words[i] == want_x && words[i + 1] == want_y)
-					{
-						const uintptr_t hit = base + i * 4;
-						++hits;
-
-						fprintf(f, "\nHIT %d at 0x%llX (region 0x%llX size 0x%llX)", hits,
-						        static_cast<unsigned long long>(hit),
-						        static_cast<unsigned long long>(base),
-						        static_cast<unsigned long long>(size));
-						if (hit >= GAME_IMAGE_BASE && hit < GAME_IMAGE_BASE + 0x20000000)
-						{
-							fprintf(f, " [game exe +0x%llX]", static_cast<unsigned long long>(hit - GAME_IMAGE_BASE));
-						}
-
-						fputc('\n', f);
-
-						// 192 bytes starting 64 bytes before the hit.
-						const uintptr_t from = hit >= base + 64 ? hit - 64 : base;
-						for (uintptr_t row = from; row < from + 192 && row + 16 <= base + size; row += 16)
-						{
-							fprintf(f, "%llX:", static_cast<unsigned long long>(row));
-							for (int b = 0; b < 16; ++b)
-							{
-								fprintf(f, " %02X", *reinterpret_cast<const unsigned char*>(row + b));
-							}
-
-							fputc('\n', f);
-						}
-					}
-				}
-			}
-			__except (EXCEPTION_EXECUTE_HANDLER)
-			{
-				// Region vanished while we were reading it; carry on.
-			}
-		}
-
-		fclose(f);
-		log_line("scan: finished, %d hits written to origin_hits.txt", hits);
 	}
 
 	bool entity_list_has_data()
@@ -363,16 +315,14 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.3, entity table) ----");
+		log_line("---- add-on loaded (version 0.4, entity table, unfiltered) ----");
 		log_line("host program: %s", exe);
-		log_line("F9 = save entity table, F10 = scan for camera position");
+		log_line("F9 = save entity table");
 
 		int tables = 0;
 		int seconds_with_data = 0;
 		bool auto_done = false;
 		bool f9_was_down = false;
-		bool f10_was_down = false;
-		int scans = 0;
 
 		// 100 ms per tick; stop after about 30 minutes.
 		for (int tick = 1; tick <= 18000; ++tick)
@@ -385,11 +335,8 @@ namespace
 			}
 
 			const bool f9_down = (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
-			const bool f10_down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
 			const bool f9_pressed = f9_down && !f9_was_down;
-			const bool f10_pressed = f10_down && !f10_was_down;
 			f9_was_down = f9_down;
-			f10_was_down = f10_down;
 
 			const bool auto_table = !auto_done && seconds_with_data >= 10;
 			if ((auto_table || f9_pressed) && tables < MAX_TABLES)
@@ -406,13 +353,6 @@ namespace
 
 				++tables;
 				write_table(tables);
-			}
-
-			if (f10_pressed && scans < 3)
-			{
-				log_line("F10 pressed");
-				++scans;
-				scan_for_origin();
 			}
 		}
 
