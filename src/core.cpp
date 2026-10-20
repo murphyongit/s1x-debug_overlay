@@ -1477,6 +1477,30 @@ namespace
 			class_name(h.name_id, given, sizeof(given));
 		}
 
+		// Show the interesting ones in the top-right list too.
+		{
+			const unsigned char special = type_special(h.type_id);
+			bool boring = false;
+			static const char* const kBoring[] = {"tonemap", "exposure", "lighting", "dof_", "seoul_", "_vol", "visionset",
+			                                     "lightgrid", "shadow", "flicker", "lensflare"};
+			for (const char* word : kBoring)
+			{
+				if (given[0] && strstr(given, word))
+				{
+					boring = true;
+				}
+			}
+
+			const bool worth = h.flag == 1 || special == 2 || special == 3 || h.kind == 3 || h.kind == 4 || h.kind == 5 ||
+				(h.kind == 2 && given[0] && !boring);
+			if (worth && h.kind != 7)
+			{
+				char line[44];
+				snprintf(line, sizeof(line), "IN %s #%d", given[0] ? given : (type_text[0] ? type_text + (strncmp(type_text, "trigger_", 8) == 0 ? 8 : 0) : "?"), h.slot);
+				post_event_text(line);
+			}
+		}
+
 		entry_note& n = g_entries[g_entry_next % 24];
 		snprintf(n.text, sizeof(n.text), "%s #%d %s", type_text[0] ? type_text : "?", h.slot, given[0] ? given : "(no name)");
 		n.time = now;
@@ -3376,7 +3400,44 @@ namespace
 			}
 		}
 
-		log_line("map entities: could not find the entity text in the asset");
+		log_line("map entities: could not find the entity text in the asset; header looks like:");
+		const uintptr_t diag_base = reinterpret_cast<uintptr_t>(g_found_assets[0]);
+		for (size_t offset = 0; offset < 0x60; offset += 16)
+		{
+			unsigned char row[16];
+			if (!read_bytes(diag_base + offset, row, sizeof(row)))
+			{
+				continue;
+			}
+
+			char hex[80] = {};
+			for (int i = 0; i < 16; ++i)
+			{
+				sprintf_s(hex + i * 3, sizeof(hex) - i * 3, "%02X ", row[i]);
+			}
+
+			log_line("   +%02zX: %s", offset, hex);
+		}
+
+		for (size_t offset = 0; offset < 0x60; offset += 8)
+		{
+			unsigned long long value = 0;
+			if (!read_bytes(diag_base + offset, &value, sizeof(value)) || value < 0x10000ull || value > 0x7FFFFFFE0000ull)
+			{
+				continue;
+			}
+
+			char text[49] = {};
+			if (read_bytes(static_cast<uintptr_t>(value), text, 48))
+			{
+				for (char& c : text)
+				{
+					if (c != 0 && (c < 32 || c > 126)) c = '.';
+				}
+
+				log_line("   +%02zX -> 0x%llX : %s", offset, value, text);
+			}
+		}
 	}
 
 	// Finds the collision tree and keeps its small boxes. Also works out which of the three numbers in
@@ -3607,8 +3668,38 @@ namespace
 	bool g_notify_hooked = false;
 
 	// Tries to hook the script "notify" function. Can be called again and again until it works.
+	// MinHook needs a free spot within 1 GB of the function it patches. Once the game is running those
+	// spots can all be taken, so we reserve a few early and give them back right before hooking.
+	void* g_reserved[8];
+	int g_reserved_count = 0;
+
+	void reserve_hook_memory()
+	{
+		for (uintptr_t address = 0x13F000000ull; address > 0x110000000ull && g_reserved_count < 8; address -= 0x400000ull)
+		{
+			void* block = VirtualAlloc(reinterpret_cast<void*>(address), 0x10000, MEM_RESERVE, PAGE_NOACCESS);
+			if (block)
+			{
+				g_reserved[g_reserved_count++] = block;
+			}
+		}
+
+		log_line("reserved %d memory blocks near the game program for hooking", g_reserved_count);
+	}
+
+	void release_hook_memory()
+	{
+		for (int i = 0; i < g_reserved_count; ++i)
+		{
+			VirtualFree(g_reserved[i], 0, MEM_RELEASE);
+		}
+
+		g_reserved_count = 0;
+	}
+
 	void try_hook_notify(const int attempt)
 	{
+		release_hook_memory();
 		void* notify = reinterpret_cast<void*>(SP_SCR_NOTIFY_ID);
 		unsigned char probe[16];
 		if (!read_bytes(SP_SCR_NOTIFY_ID, probe, sizeof(probe)))
@@ -3654,11 +3745,12 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.30, map entity dump, mission end report) ----");
+		log_line("---- add-on loaded (version 0.31, reliable event hook, entry list) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
 		bool hook_done = false;
+		reserve_hook_memory();
 		int notify_tries = 0;
 
 		int tables = 0;
