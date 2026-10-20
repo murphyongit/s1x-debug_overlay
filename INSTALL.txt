@@ -1,10 +1,9 @@
-S1x DEBUG OVERLAY - TEST BUILD 0.6 (first build that draws)
-===========================================================
+S1x DEBUG OVERLAY - TEST BUILD 0.10 (smoother boxes)
+========================================================
 
 What this does: draws coloured boxes around the invisible trigger zones in
-campaign missions. It has never been tested in a real game before, so a few
-keys let you try different settings. Campaign only. It does nothing in
-multiplayer, but remove it before playing online to be safe.
+campaign missions. Campaign only. It does nothing in multiplayer, but remove
+it before playing online to be safe.
 
 HOW TO INSTALL
 1. Close the game completely.
@@ -12,21 +11,17 @@ HOW TO INSTALL
    into your game folder (D:\GAMES\AW). Say YES to replace the old one.
 
 HOW TO TEST
-1. Start the game, load a campaign mission, and wait about 20 seconds after
-   you can move (the add-on starts itself after about 15 seconds).
-2. You should see small squares in the top-left corner of the screen.
-   - If you see them: drawing works. Walk around and look for boxes.
-   - If you see nothing, press F6 once, look, press F6 again, and so on
-     (4 choices). Stop as soon as the squares appear.
-3. Boxes: GREEN = trigger_multiple, RED = hurt, YELLOW = use, ORANGE =
-   radius, BLUE = other. A WHITE box means you are standing inside it.
+1. Start the game, load a campaign mission, and wait until you can move.
+2. Press F8 once. The overlay starts OFF so that loading is never disturbed.
+3. You should see small squares in the top-left corner and coloured boxes.
+   GREEN = trigger_multiple, RED = hurt, YELLOW = use, ORANGE = radius,
+   BLUE = other. A WHITE box means you are standing inside it.
 
 KEYS
    F8  overlay on/off
-   F6  drawing mode (4 choices). Row 1 of squares shows which one.
-   F7  how far away to draw (4 choices). Row 2 of squares.
-   F5  field-of-view style (3 choices). Row 3 of squares.
-   F4  text labels on/off (try this last)
+   F7  how far away to draw (4 choices). Row 1 of squares.
+   F5  field-of-view style (3 choices). Row 2 of squares.
+   F6  line thickness (3 choices). Row 3 of squares.
    F9  save data files like before (not needed now)
 
 IF THE GAME CRASHES or acts strangely: delete version.dll from the game
