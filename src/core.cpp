@@ -1391,28 +1391,17 @@ namespace
 	double g_entry_time[MAX_ENTITIES];
 	double g_consumed[MAX_ENTITIES];
 
+	char g_slot_flags[MAX_ENTITIES][96];
+
 	bool learned_flags(const int slot, char* out, const size_t capacity)
 	{
-		return false;   // the guesses from script messages turned out to be unrelated; disabled
-		if (slot < 0 || slot >= MAX_ENTITIES || g_learned[slot].used == 0)
+		if (slot < 0 || slot >= MAX_ENTITIES || g_slot_flags[slot][0] == '\0')
 		{
 			return false;
 		}
 
-		out[0] = '\0';
-		const flag_learning& l = g_learned[slot];
-		for (int i = 0; i < l.used; ++i)
-		{
-			const size_t used = strlen(out);
-			if (used + 4 >= capacity)
-			{
-				break;
-			}
-
-			snprintf(out + used, capacity - used, "%s%s?", i ? ", " : "", l.names[i]);
-		}
-
-		return out[0] != '\0';
+		snprintf(out, capacity, "%s", g_slot_flags[slot]);
+		return true;
 	}
 
 	void learn_from_entry(const int slot, const double now)
@@ -3319,6 +3308,219 @@ namespace
 	}
 
 	// Saves the level's raw entity text (every trigger's script keys, such as which flag it sets).
+
+	struct map_rec
+	{
+		char type[40];
+		char target[40];
+		char flags[96];
+	};
+
+	map_rec g_recs[1500];
+	int g_rec_count = 0;
+	bool g_flag_mismatch_logged[64];
+
+	// The map entity text is lines of  <key id> "value".  Known ids: 171 classname, 1191 targetname, 31182 and 31188 flag names.
+	void parse_map_ents(const char* text, const int length)
+	{
+		g_rec_count = 0;
+		int index = 0;
+		map_rec cur = {};
+		bool inside = false;
+		while (index < length)
+		{
+			int end = index;
+			while (end < length && text[end] != '\n' && text[end] != '\0')
+			{
+				++end;
+			}
+
+			char line[300];
+			const int n = end - index < 299 ? end - index : 299;
+			memcpy(line, text + index, static_cast<size_t>(n));
+			line[n] = '\0';
+			index = end + 1;
+
+			if (line[0] == '{')
+			{
+				inside = true;
+				cur = {};
+				continue;
+			}
+
+			if (line[0] == '}')
+			{
+				if (inside && strncmp(cur.type, "trigger_", 8) == 0 && strstr(cur.type, "flag") && g_rec_count < 1500)
+				{
+					g_recs[g_rec_count++] = cur;
+				}
+
+				inside = false;
+				continue;
+			}
+
+			if (!inside)
+			{
+				continue;
+			}
+
+			unsigned int key = 0;
+			char value[160] = {};
+			const char* q = strchr(line, '"');
+			if (!q || line[0] < '0' || line[0] > '9')
+			{
+				continue;
+			}
+
+			for (const char* d = line; *d >= '0' && *d <= '9'; ++d)
+			{
+				key = key * 10 + static_cast<unsigned int>(*d - '0');
+			}
+
+			const char* e = strrchr(line, '"');
+			if (e > q)
+			{
+				const size_t len = static_cast<size_t>(e - q - 1) < 159 ? static_cast<size_t>(e - q - 1) : 159;
+				memcpy(value, q + 1, len);
+				value[len] = '\0';
+			}
+
+			if (key == 171)
+			{
+				snprintf(cur.type, sizeof(cur.type), "%s", value);
+			}
+			else if (key == 1191)
+			{
+				snprintf(cur.target, sizeof(cur.target), "%s", value);
+			}
+			else if (key == 31182 || key == 31188)
+			{
+				const size_t used = strlen(cur.flags);
+				snprintf(cur.flags + used, sizeof(cur.flags) - used, "%s%s", used ? " + " : "", value);
+			}
+		}
+	}
+
+	// Pairs each live flag trigger with its entry in the map text: first by targetname, otherwise by order within its type.
+	void rebuild_slot_flags()
+	{
+		if (g_rec_count == 0)
+		{
+			return;
+		}
+
+		static char types[MAX_ENTITIES][40];
+		static unsigned int names[MAX_ENTITIES];
+		for (int i = 0; i < MAX_ENTITIES; ++i)
+		{
+			types[i][0] = '\0';
+			names[i] = 0;
+			unsigned char buffer[0x170];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(i) * ENTITY_SIZE, buffer, sizeof(buffer)))
+			{
+				continue;
+			}
+
+			unsigned int type_id = 0;
+			memcpy(&type_id, buffer + 0x150, sizeof(type_id));
+			memcpy(&names[i], buffer + 0x160, sizeof(unsigned int));
+			if (type_id > 1 && type_id < 0x10000)
+			{
+				class_name(type_id, types[i], sizeof(types[i]));
+			}
+		}
+
+		memset(g_slot_flags, 0, sizeof(g_slot_flags));
+		int matched = 0;
+		for (int t = 0; t < g_rec_count; ++t)
+		{
+			// handled per type below
+		}
+
+		bool done[1500] = {};
+		for (int i = 0; i < MAX_ENTITIES; ++i)
+		{
+			if (strncmp(types[i], "trigger_", 8) != 0 || !strstr(types[i], "flag"))
+			{
+				continue;
+			}
+
+			int live_total = 0, file_total = 0, ordinal = 0;
+			for (int j = 0; j < MAX_ENTITIES; ++j)
+			{
+				if (strcmp(types[j], types[i]) == 0)
+				{
+					if (j < i) ++ordinal;
+					++live_total;
+				}
+			}
+
+			int pick = -1;
+			int seen = 0;
+			for (int r = 0; r < g_rec_count; ++r)
+			{
+				if (strcmp(g_recs[r].type, types[i]) == 0)
+				{
+					if (seen == ordinal) pick = r;
+					++seen;
+					++file_total;
+				}
+			}
+
+			if (live_total != file_total)
+			{
+				unsigned int h = 0;
+				for (const char* c = types[i]; *c; ++c) h = h * 31 + static_cast<unsigned char>(*c);
+				if (!g_flag_mismatch_logged[h % 64])
+				{
+					g_flag_mismatch_logged[h % 64] = true;
+					log_line("flag match: %s has %d live but %d in the map text, order matching skipped", types[i], live_total, file_total);
+				}
+
+				pick = -1;
+			}
+
+			// a targetname that agrees makes the pairing much safer
+			char given[48] = {};
+			if (names[i] > 1 && names[i] < 0x10000)
+			{
+				class_name(names[i], given, sizeof(given));
+			}
+
+			if (given[0])
+			{
+				for (int r = 0; r < g_rec_count; ++r)
+				{
+					if (strcmp(g_recs[r].type, types[i]) == 0 && strcmp(g_recs[r].target, given) == 0 && !done[r])
+					{
+						pick = r;
+						break;
+					}
+				}
+			}
+
+			if (pick >= 0 && g_recs[pick].flags[0])
+			{
+				snprintf(g_slot_flags[i], sizeof(g_slot_flags[i]), "%s", g_recs[pick].flags);
+				++matched;
+			}
+		}
+
+		static int last_logged = -1;
+		if (matched != last_logged)
+		{
+			last_logged = matched;
+			log_line("flag match: %d live flag triggers now have flag names (map text has %d flag entries)", matched, g_rec_count);
+			for (int i = 0; i < MAX_ENTITIES; ++i)
+			{
+				if (g_slot_flags[i][0])
+				{
+					log_line("   flags #%d %s: %s", i, types[i], g_slot_flags[i]);
+				}
+			}
+		}
+	}
+
 	void dump_map_ents()
 	{
 		g_found_count = 0;
@@ -3416,7 +3618,7 @@ namespace
 					}
 
 					char key[64] = {};
-					if (digits > 0 && cursor < end && text[cursor] == ' ' && class_name(number, key, sizeof(key)))
+					if (digits > 0 && cursor < end && text[cursor] == ' ' && false)
 					{
 						fprintf(f, "%s", key);
 					}
@@ -3432,6 +3634,8 @@ namespace
 				}
 
 				fclose(f);
+				parse_map_ents(text, length);
+				rebuild_slot_flags();
 				free(text);
 				log_line("map entities: wrote %s (%d bytes, %d lines)", name, length, lines);
 				return;
@@ -3783,7 +3987,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.32, decoded map entity text) ----");
+		log_line("---- add-on loaded (version 0.33, flag names on flag triggers) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
@@ -3838,6 +4042,11 @@ namespace
 			if (g_overlay_on && tick % 3 == 0)
 			{
 				entity_watch();
+			}
+
+			if (g_rec_count > 0 && tick % 100 == 0)
+			{
+				rebuild_slot_flags();
 			}
 
 			if (g_collision_on && (g_collision_refresh || tick % 150 == 0))
