@@ -1,4 +1,4 @@
-Version 0.27 - mission-end triggers highlighted at any range, wall changes shown in the event list
+Version 0.28 - rainbow mission-end triggers, full wall-change watch
 
 Download: https://github.com/murphyongit/s1x-debug_overlay/releases/latest/download/version.dll
 Put version.dll in D:\GAMES\AW (replace the old one), start the game, load a mission.

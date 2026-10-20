@@ -688,9 +688,23 @@ namespace
 	{
 		if (h.flag == 1)
 		{
-			static const float flash_red[4] = {1.0f, 0.0f, 0.0f, 1.0f};
-			static const float flash_white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-			return (g_frame_counter / 8) % 2 ? flash_red : flash_white;
+			// Slowly drifting rainbow so these stand out from everything else.
+			static float rainbow[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+			const float hue = static_cast<float>(std::fmod(now_seconds() * 0.08, 1.0)) * 6.0f;
+			const int sector = static_cast<int>(hue);
+			const float f = hue - static_cast<float>(sector);
+			const float q = 1.0f - f;
+			switch (sector % 6)
+			{
+			case 0: rainbow[0] = 1.0f; rainbow[1] = f; rainbow[2] = 0.0f; break;
+			case 1: rainbow[0] = q; rainbow[1] = 1.0f; rainbow[2] = 0.0f; break;
+			case 2: rainbow[0] = 0.0f; rainbow[1] = 1.0f; rainbow[2] = f; break;
+			case 3: rainbow[0] = 0.0f; rainbow[1] = q; rainbow[2] = 1.0f; break;
+			case 4: rainbow[0] = f; rainbow[1] = 0.0f; rainbow[2] = 1.0f; break;
+			default: rainbow[0] = 1.0f; rainbow[1] = 0.0f; rainbow[2] = q; break;
+			}
+
+			return rainbow;
 		}
 
 		if (h.inside) return kColors[5];
@@ -814,28 +828,7 @@ namespace
 
 		if (!on_screen)
 		{
-			if (h.flag != 1)
-			{
-				return;
-			}
-
-			// Off screen: park the label at the screen edge, pointing the way.
-			float dx = c.x;
-			float dy = -c.y;
-			const float length = std::sqrt(dx * dx + dy * dy);
-			if (length < 0.001f)
-			{
-				dx = 0.0f;
-				dy = 1.0f;
-			}
-			else
-			{
-				dx /= length;
-				dy /= length;
-			}
-
-			sx = g_w * 0.5f + dx * g_w * 0.40f;
-			sy = g_h * 0.5f + dy * g_h * 0.40f;
+			return;
 		}
 
 		char name[48];
@@ -874,12 +867,7 @@ namespace
 			}
 		}
 
-		if (h.flag == 1)
-		{
-			snprintf(text, sizeof(text), "!! MAY END MISSION: %s #%d %dm %s", given[0] ? given : shown, h.slot,
-			         static_cast<int>(h.dist / 39.37f), on_screen ? "" : (c.z < 0.0f ? "(behind you)" : "(off screen)"));
-		}
-		else if (h.kind == 7)
+		if (h.kind == 7)
 		{
 			snprintf(text, sizeof(text), "%s - %s #%d %dm c=%X", given[0] ? given : "-", shown, h.slot,
 			         static_cast<int>(h.dist / 39.37f), h.state);
@@ -893,11 +881,7 @@ namespace
 			snprintf(text, sizeof(text), "%s #%d %dm", shown, h.slot, static_cast<int>(h.dist / 39.37f));
 		}
 
-		float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
-		if (h.flag == 1)
-		{
-			scale *= 1.5f;
-		}
+		const float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
 
 		const float width = static_cast<float>(strlen(text)) * 6.0f * scale;
 		const float height = 7.0f * scale;
@@ -1187,72 +1171,97 @@ namespace
 	}
 
 	// Looks at the level's trigger / wall entities a few times a second and reports when one appears,
-	// disappears (for example a used-up trigger) or changes its "contents" word (a wall turning solid
-	// or not solid).
-	unsigned int g_watch_state[MAX_ENTITIES];
+	// disappears (for example a used-up trigger) or changes anything about itself other than its
+	// position (a wall turning solid or not solid should show up as a changed number).
+	unsigned char g_watch_bytes[MAX_ENTITIES][ENTITY_SIZE];
 	unsigned short g_watch_class[MAX_ENTITIES];
+	double g_watch_last[MAX_ENTITIES];
+	int g_watch_offset_changes[ENTITY_SIZE / 4];
 	bool g_watch_primed = false;
+
+	bool watch_skips_offset(const size_t offset)
+	{
+		return (offset >= 0x10 && offset < 0x50) || (offset >= 0xC0 && offset < 0x110) || offset >= 0x2F0;
+	}
 
 	void entity_watch()
 	{
 		int posted = 0;
+		const double now = now_seconds();
 		for (int index = 0; index < MAX_ENTITIES; ++index)
 		{
-			unsigned char buffer[0x170];
-			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE, buffer, sizeof(buffer)))
+			unsigned char current[ENTITY_SIZE];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE, current, sizeof(current)))
 			{
 				break;
 			}
 
 			unsigned short class_id = 0;
-			memcpy(&class_id, buffer + OFF_CLASSNAME, sizeof(class_id));
-			unsigned int state = 0;
-			memcpy(&state, buffer + 0xD8, sizeof(state));
+			memcpy(&class_id, current + OFF_CLASSNAME, sizeof(class_id));
 			const unsigned short before_class = g_watch_class[index];
-			const unsigned int before_state = g_watch_state[index];
-			g_watch_class[index] = class_id;
-			g_watch_state[index] = state;
-			if (!g_watch_primed || posted >= 6)
-			{
-				continue;
-			}
-
+			unsigned char* before = g_watch_bytes[index];
 			const unsigned short relevant = class_id ? class_id : before_class;
-			if (relevant == 0 || classify(relevant) < 2)
+			const bool interesting = relevant != 0 && classify(relevant) >= 2;
+
+			if (g_watch_primed && interesting && posted < 6)
 			{
-				continue;
+				char name[48] = {};
+				char kind[48] = {};
+				unsigned int name_id = 0;
+				memcpy(&name_id, current + 0x160, sizeof(name_id));
+				if (name_id > 1 && name_id < 0x10000)
+				{
+					class_name(name_id, name, sizeof(name));
+				}
+
+				class_name(relevant, kind, sizeof(kind));
+				char text[44] = {};
+				if (before_class != 0 && class_id == 0)
+				{
+					snprintf(text, sizeof(text), "GONE %s #%d", name[0] ? name : kind, index);
+				}
+				else if (before_class == 0 && class_id != 0)
+				{
+					snprintf(text, sizeof(text), "NEW %s #%d", name[0] ? name : kind, index);
+				}
+				else if (class_id != 0 && now - g_watch_last[index] > 1.5)
+				{
+					for (size_t offset = 0; offset < ENTITY_SIZE; offset += 4)
+					{
+						if (watch_skips_offset(offset) || memcmp(current + offset, before + offset, 4) == 0)
+						{
+							continue;
+						}
+
+						unsigned int old_value, new_value;
+						memcpy(&old_value, before + offset, 4);
+						memcpy(&new_value, current + offset, 4);
+						const int counter = ++g_watch_offset_changes[offset / 4];
+						if (counter <= 400)
+						{
+							log_line("watch detail: %s #%d (%s) +0x%zX %X -> %X", name[0] ? name : "-", index, kind, offset,
+							         old_value, new_value);
+						}
+
+						// Fields that change all the time everywhere are not interesting on screen.
+						if (counter <= 25 && text[0] == '\0')
+						{
+							snprintf(text, sizeof(text), "%s #%d +%zX %X>%X", name[0] ? name : kind, index, offset, old_value,
+							         new_value);
+						}
+					}
+				}
+
+				if (text[0])
+				{
+					++posted;
+					g_watch_last[index] = now;
+					post_event_text(text);
+				}
 			}
 
-			char name[48] = {};
-			unsigned int name_id = 0;
-			memcpy(&name_id, buffer + 0x160, sizeof(name_id));
-			if (name_id > 1 && name_id < 0x10000)
-			{
-				class_name(name_id, name, sizeof(name));
-			}
-
-			char kind[48] = {};
-			class_name(relevant, kind, sizeof(kind));
-			char text[44];
-			if (before_class != 0 && class_id == 0)
-			{
-				snprintf(text, sizeof(text), "GONE %s #%d", name[0] ? name : kind, index);
-			}
-			else if (before_class == 0 && class_id != 0)
-			{
-				snprintf(text, sizeof(text), "NEW %s #%d", name[0] ? name : kind, index);
-			}
-			else if (class_id != 0 && state != before_state)
-			{
-				snprintf(text, sizeof(text), "%X>%X %s #%d", before_state, state, name[0] ? name : kind, index);
-			}
-			else
-			{
-				continue;
-			}
-
-			++posted;
-			post_event_text(text);
+			g_watch_class[index] = class_id;
+			memcpy(before, current, ENTITY_SIZE);
 		}
 
 		g_watch_primed = true;
@@ -2119,6 +2128,11 @@ namespace
 			const int label_count = count < 20 ? count : 20;
 			for (int i = label_count - 1; i >= 0; --i)
 			{
+				if (hits[i].dist > kDistances[g_dist_level])
+				{
+					continue;
+				}
+
 				draw_label(hits[i], color_for(hits[i]));
 			}
 		}
@@ -3275,7 +3289,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.20, script events (player animations hidden)) ----");
+		log_line("---- add-on loaded (version 0.28, rainbow end triggers, full wall watch) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
