@@ -1278,9 +1278,24 @@ namespace
 		}
 
 		g_watch_primed = true;
-		if (gone_count >= 20)
 		{
-			log_recent_entries("LEVEL UNLOADING (many entities vanished at once)");
+			// the level empties a few entities per scan, so count over a short window instead of one scan
+			static double window_start = 0.0;
+			static int window_gone = 0;
+			static double last_report = -1000.0;
+			const double t = now_seconds();
+			if (t - window_start > 4.0)
+			{
+				window_start = t;
+				window_gone = 0;
+			}
+
+			window_gone += gone_count;
+			if ((gone_count >= 20 || window_gone >= 12) && t - last_report > 60.0)
+			{
+				last_report = t;
+				log_recent_entries("LEVEL UNLOADING (many entities vanished)");
+			}
 		}
 	}
 
@@ -4104,7 +4119,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.36, longer entry history with flag names) ----");
+		log_line("---- add-on loaded (version 0.37, level-end list fixed) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
