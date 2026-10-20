@@ -828,7 +828,7 @@ namespace
 		{0x1411738D8, 1, 12},     // 9: eye + angles
 	};
 
-	volatile int g_source = 0;
+	volatile int g_source = 2; // 2 = updated every picture (found by the rate test)
 
 	// Reads eye position and the two view angles (or axes turned back into angles) from a source.
 	bool read_source(const int index, float* eye, float* pitch, float* yaw)
@@ -1080,7 +1080,7 @@ namespace
 		float origin[3];
 		float pitch = 0.0f;
 		float yaw = 0.0f;
-		const int source_index = g_source;
+		int source_index = g_source;
 		bool have_camera = false;
 		float eye_height = EYE_HEIGHT;
 
@@ -1095,6 +1095,15 @@ namespace
 			// These already include the eye height.
 			have_camera = read_source(source_index, origin, &pitch, &yaw);
 			eye_height = 0.0f;
+			if (!have_camera || !(std::fabs(origin[0]) < 500000.0f && std::fabs(origin[1]) < 500000.0f && std::fabs(origin[2]) < 500000.0f && std::fabs(pitch) <= 91.0f))
+			{
+				// Not valid right now (loading screen, other mission): use the player data instead.
+				source_index = 0;
+				eye_height = EYE_HEIGHT;
+				have_camera = read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_ORIGIN, origin, sizeof(origin)) &&
+					read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_PITCH, &pitch, sizeof(pitch)) &&
+					read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_YAW, &yaw, sizeof(yaw));
+			}
 		}
 
 		if (!have_camera)
@@ -1724,7 +1733,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.13, camera source test) ----");
+		log_line("---- add-on loaded (version 0.14, smooth camera (source 2 by default)) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
 
