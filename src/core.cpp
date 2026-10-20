@@ -800,7 +800,8 @@ namespace
 		static const char* const kNoise[] = {"goal", "touch", "reached_end_node", "turret_", "entitydeleted", "deathanim",
 		                                     "damage", "bulletwhizby", "weapon_fired", "sprint_begin", "sprint_end",
 		                                     "path_blocked", "node_", "enemy", "ai_event", "animscript", "anim_",
-		                                     "starting_", "stop_", "move_", "cover_", "bad_path", "got_path"};
+		                                     "starting_", "stop_", "move_", "cover_", "bad_path", "got_path",
+		                                     "a_pressed", "a_released", "idle", "stance", "jump", "reload", "weapon_"};
 		for (const char* prefix : kNoise)
 		{
 			if (strncmp(name, prefix, strlen(prefix)) == 0)
@@ -2116,7 +2117,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.19, script events (stronger noise filter)) ----");
+		log_line("---- add-on loaded (version 0.20, script events (player animations hidden)) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
 
