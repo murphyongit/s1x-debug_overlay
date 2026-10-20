@@ -794,6 +794,83 @@ namespace
 	using notify_t = void (*)(unsigned int, unsigned int, unsigned int);
 	notify_t g_original_notify = nullptr;
 
+	// Messages that fire constantly for every character/vehicle and drown out everything else.
+	bool is_always_noise(const char* name)
+	{
+		static const char* const kNoise[] = {"goal", "touch", "reached_end_node", "turret_", "entitydeleted", "deathanim",
+		                                     "damage", "bulletwhizby", "weapon_fired", "sprint_begin", "sprint_end",
+		                                     "path_blocked", "node_", "enemy", "ai_event", "animscript", "anim_",
+		                                     "starting_", "stop_", "move_", "cover_", "bad_path", "got_path"};
+		for (const char* prefix : kNoise)
+		{
+			if (strncmp(name, prefix, strlen(prefix)) == 0)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	// Anything that is sent more than 6 times in one second also gets hidden automatically.
+	struct rate_entry
+	{
+		char name[44];
+		double window_start;
+		int window_count;
+		bool muted;
+	};
+
+	rate_entry g_rates[256];
+	int g_rate_entries = 0;
+
+	bool is_too_frequent(const char* name, const double now)
+	{
+		rate_entry* entry = nullptr;
+		for (int i = 0; i < g_rate_entries; ++i)
+		{
+			if (strcmp(g_rates[i].name, name) == 0)
+			{
+				entry = &g_rates[i];
+				break;
+			}
+		}
+
+		if (!entry)
+		{
+			if (g_rate_entries >= 256)
+			{
+				return false;
+			}
+
+			entry = &g_rates[g_rate_entries++];
+			strcpy_s(entry->name, sizeof(entry->name), name);
+			entry->window_start = now;
+			entry->window_count = 0;
+			entry->muted = false;
+		}
+
+		if (entry->muted)
+		{
+			return true;
+		}
+
+		if (now - entry->window_start > 1.0)
+		{
+			entry->window_start = now;
+			entry->window_count = 0;
+		}
+
+		if (++entry->window_count > 6)
+		{
+			entry->muted = true;
+			log_line("event: '%s' is sent too often, hiding it", name);
+			return true;
+		}
+
+		return false;
+	}
+
 	void record_event(const unsigned int entity, const unsigned int string_id)
 	{
 		char name[44];
@@ -803,10 +880,15 @@ namespace
 		}
 
 		const double now = now_seconds();
+		if (is_always_noise(name) || is_too_frequent(name, now))
+		{
+			return;
+		}
+
 		for (int i = 0; i < EVENT_SLOTS; ++i)
 		{
 			script_event& e = g_events[i];
-			if (e.time > 0.0 && now - e.time < 3.0 && e.entity == entity && strcmp(e.name, name) == 0)
+			if (e.time > 0.0 && now - e.time < 3.0 && strcmp(e.name, name) == 0)
 			{
 				++e.count;
 				e.time = now;
@@ -1991,7 +2073,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.16, text labels + script events) ----");
+		log_line("---- add-on loaded (version 0.17, text labels + script events (noise filter)) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
 

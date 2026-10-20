@@ -1,4 +1,4 @@
-Version 0.16 - script events (F11) + labels (F2)
+Version 0.17 - script events (F11) + labels (F2)
 
 Download: https://github.com/murphyongit/s1x-debug_overlay/releases/latest/download/version.dll
 Put version.dll in D:\GAMES\AW (replace the old one), start the game, load a mission.
