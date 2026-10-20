@@ -1,34 +1,36 @@
-S1x DEBUG OVERLAY - TEST BUILD 0.5 (camera hunt)
-================================================
+S1x DEBUG OVERLAY - TEST BUILD 0.6 (first build that draws)
+===========================================================
 
-What this does: NOTHING visible. It reads the game's memory and writes text
-files into your game folder. It changes nothing in the game.
-No memory scan, no F10. Don't press F10.
+What this does: draws coloured boxes around the invisible trigger zones in
+campaign missions. It has never been tested in a real game before, so a few
+keys let you try different settings. Campaign only. It does nothing in
+multiplayer, but remove it before playing online to be safe.
 
 HOW TO INSTALL
 1. Close the game completely.
 2. Open the folder "try_this_first". Copy the file inside it (version.dll)
    into your game folder (D:\GAMES\AW). Say YES to replace the old one.
 
-HOW TO COLLECT THE DATA (stand somewhere safe, no enemies near)
-1. Start the game, load a campaign mission, and wait ~15 seconds after you can
-   move. The add-on saves a first snapshot by itself. (Ignore this one.)
-2. Your position and view angles should be written on screen in small text
-   (the game setting cg_drawViewpos). If you can't see them, open the console
-   with ~ and type:   cg_drawViewpos 1   then press Enter, and close it.
-3. Now stand STILL (don't walk) and take these 4 snapshots. Each time, press
-   F9 once, wait 3 seconds, then take a screenshot with Windows key + PrtScn
-   (or just write down the numbers shown on screen):
-      A. Look straight ahead, level.
-      B. Turn right about 90 degrees (a quarter turn), keep level.
-      C. Look as far UP as the game lets you.
-      D. Look as far DOWN as the game lets you.
-4. Quit the game. Send Claude these files from D:\GAMES\AW:
-      s1x_debug_overlay.log
-      client_2.txt   client_3.txt   client_4.txt   client_5.txt
-   and your 4 screenshots (or the numbers you wrote down), in the order A-D.
-   The screenshots from Windows+PrtScn are in Pictures > Screenshots.
+HOW TO TEST
+1. Start the game, load a campaign mission, and wait about 20 seconds after
+   you can move (the add-on starts itself after about 15 seconds).
+2. You should see small squares in the top-left corner of the screen.
+   - If you see them: drawing works. Walk around and look for boxes.
+   - If you see nothing, press F6 once, look, press F6 again, and so on
+     (4 choices). Stop as soon as the squares appear.
+3. Boxes: GREEN = trigger_multiple, RED = hurt, YELLOW = use, ORANGE =
+   radius, BLUE = other. A WHITE box means you are standing inside it.
+
+KEYS
+   F8  overlay on/off
+   F6  drawing mode (4 choices). Row 1 of squares shows which one.
+   F7  how far away to draw (4 choices). Row 2 of squares.
+   F5  field-of-view style (3 choices). Row 3 of squares.
+   F4  text labels on/off (try this last)
+   F9  save data files like before (not needed now)
+
+IF THE GAME CRASHES or acts strangely: delete version.dll from the game
+folder, and send Claude s1x_debug_overlay.log from the same folder.
 
 TO UNINSTALL
 Delete version.dll from the game folder.
-Remove it before playing online, to be safe.
