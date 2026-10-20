@@ -818,6 +818,9 @@ namespace
 		char name[44];
 		double window_start;
 		int window_count;
+		double slow_start;
+		int slow_count;
+		double last_seen;
 		bool muted;
 	};
 
@@ -847,12 +850,33 @@ namespace
 			strcpy_s(entry->name, sizeof(entry->name), name);
 			entry->window_start = now;
 			entry->window_count = 0;
+			entry->slow_start = now;
+			entry->slow_count = 0;
+			entry->last_seen = now;
 			entry->muted = false;
 		}
 
+		// Hidden until it has been quiet for 15 seconds.
 		if (entry->muted)
 		{
-			return true;
+			if (now - entry->last_seen > 15.0)
+			{
+				entry->muted = false;
+				entry->window_start = entry->slow_start = now;
+				entry->window_count = entry->slow_count = 0;
+			}
+			else
+			{
+				entry->last_seen = now;
+				return true;
+			}
+		}
+
+		entry->last_seen = now;
+		if (now - entry->slow_start > 10.0)
+		{
+			entry->slow_start = now;
+			entry->slow_count = 0;
 		}
 
 		if (now - entry->window_start > 1.0)
@@ -861,7 +885,8 @@ namespace
 			entry->window_count = 0;
 		}
 
-		if (++entry->window_count > 6)
+		++entry->slow_count;
+		if (++entry->window_count > 6 || entry->slow_count > 4)
 		{
 			entry->muted = true;
 			log_line("event: '%s' is sent too often, hiding it", name);
@@ -2091,7 +2116,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.18, script events (retrying hook)) ----");
+		log_line("---- add-on loaded (version 0.19, script events (stronger noise filter)) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
 
