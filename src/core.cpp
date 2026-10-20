@@ -3314,6 +3314,8 @@ namespace
 		char type[40];
 		char target[40];
 		char flags[96];
+		float origin[3];
+		bool has_origin;
 	};
 
 	map_rec g_recs[1500];
@@ -3366,8 +3368,9 @@ namespace
 
 			unsigned int key = 0;
 			char value[160] = {};
+			const bool origin_line = strncmp(line, "flankkills ", 11) == 0;
 			const char* q = strchr(line, '"');
-			if (!q || line[0] < '0' || line[0] > '9')
+			if (!q || ((line[0] < '0' || line[0] > '9') && !origin_line))
 			{
 				continue;
 			}
@@ -3385,7 +3388,27 @@ namespace
 				value[len] = '\0';
 			}
 
-			if (key == 171)
+			if (origin_line)
+			{
+				float o[3] = {};
+				const char* c = value;
+				int got = 0;
+				for (int k = 0; k < 3; ++k)
+				{
+					char* endp = nullptr;
+					o[k] = strtof(c, &endp);
+					if (endp == c) break;
+					c = endp;
+					++got;
+				}
+
+				if (got == 3)
+				{
+					memcpy(cur.origin, o, sizeof(o));
+					cur.has_origin = true;
+				}
+			}
+			else if (key == 171)
 			{
 				snprintf(cur.type, sizeof(cur.type), "%s", value);
 			}
@@ -3411,6 +3434,7 @@ namespace
 
 		static char types[MAX_ENTITIES][40];
 		static unsigned int names[MAX_ENTITIES];
+		static float origins[MAX_ENTITIES][6];
 		for (int i = 0; i < MAX_ENTITIES; ++i)
 		{
 			types[i][0] = '\0';
@@ -3423,6 +3447,8 @@ namespace
 
 			unsigned int type_id = 0;
 			memcpy(&type_id, buffer + 0x150, sizeof(type_id));
+			memcpy(origins[i], buffer + 0x1C, 12);
+			memcpy(origins[i] + 3, buffer + 0xDC, 12);
 			memcpy(&names[i], buffer + 0x160, sizeof(unsigned int));
 			if (type_id > 1 && type_id < 0x10000)
 			{
@@ -3432,6 +3458,7 @@ namespace
 
 		memset(g_slot_flags, 0, sizeof(g_slot_flags));
 		int matched = 0;
+		int origin_matches = 0;
 		for (int t = 0; t < g_rec_count; ++t)
 		{
 			// handled per type below
@@ -3467,7 +3494,8 @@ namespace
 				}
 			}
 
-			if (live_total != file_total)
+			const bool order_ok = live_total == file_total;
+			if (!order_ok)
 			{
 				unsigned int h = 0;
 				for (const char* c = types[i]; *c; ++c) h = h * 31 + static_cast<unsigned char>(*c);
@@ -3477,6 +3505,38 @@ namespace
 					log_line("flag match: %s has %d live but %d in the map text, order matching skipped", types[i], live_total, file_total);
 				}
 
+				pick = -1;
+			}
+
+			// the position is the best key: the map text has each trigger's origin
+			int by_origin = -1;
+			float best = 6.0f;
+			for (int r = 0; r < g_rec_count; ++r)
+			{
+				if (!g_recs[r].has_origin || strcmp(g_recs[r].type, types[i]) != 0)
+				{
+					continue;
+				}
+
+				for (int k = 0; k < 2; ++k)
+				{
+					const float* o = origins[i] + k * 3;
+					const float d = std::fabs(o[0] - g_recs[r].origin[0]) + std::fabs(o[1] - g_recs[r].origin[1]) + std::fabs(o[2] - g_recs[r].origin[2]);
+					if (d < best)
+					{
+						best = d;
+						by_origin = r;
+					}
+				}
+			}
+
+			if (by_origin >= 0)
+			{
+				pick = by_origin;
+				++origin_matches;
+			}
+			else if (!order_ok)
+			{
 				pick = -1;
 			}
 
@@ -3510,7 +3570,25 @@ namespace
 		if (matched != last_logged)
 		{
 			last_logged = matched;
-			log_line("flag match: %d live flag triggers now have flag names (map text has %d flag entries)", matched, g_rec_count);
+			int shown = 0;
+			for (int i = 0; i < MAX_ENTITIES && shown < 6; ++i)
+			{
+				if (strncmp(types[i], "trigger_", 8) == 0 && strstr(types[i], "flag") && !g_slot_flags[i][0])
+				{
+					log_line("   unmatched #%d %s origin %.0f %.0f %.0f mid %.0f %.0f %.0f", i, types[i],
+						origins[i][0], origins[i][1], origins[i][2], origins[i][3], origins[i][4], origins[i][5]);
+					++shown;
+				}
+			}
+
+			shown = 0;
+			for (int r = 0; r < g_rec_count && shown < 6; ++r)
+			{
+				log_line("   map entry %s origin %.0f %.0f %.0f", g_recs[r].type, g_recs[r].origin[0], g_recs[r].origin[1], g_recs[r].origin[2]);
+				++shown;
+			}
+
+			log_line("flag match: %d live flag triggers now have flag names, %d by position (map text has %d flag entries)", matched, origin_matches, g_rec_count);
 			for (int i = 0; i < MAX_ENTITIES; ++i)
 			{
 				if (g_slot_flags[i][0])
@@ -3987,7 +4065,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.33, flag names on flag triggers) ----");
+		log_line("---- add-on loaded (version 0.34, flag names matched by position) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 

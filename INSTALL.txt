@@ -7,3 +7,5 @@ Keys: F8 on/off | F3 next camera source | F4 update-rate test | F5 fov style | F
 Row of small squares (4th row, top-left) = which camera source is in use.
 
 v0.33: flag triggers (multiple_flag_set etc.) now show the real flag name(s) from the map data, e.g. "flag_set #1854 -> reactor_room_end_combat", in the box label and the IN: panel. The names appear about 10-20 seconds after a mission starts (after the map data file is written).
+
+v0.34: flag triggers are matched to the map data by position, so more of them show flag names.
