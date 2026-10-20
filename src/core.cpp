@@ -411,6 +411,9 @@ namespace
 		unsigned short class_id;
 		unsigned int name_id;
 		unsigned int type_id;
+		unsigned int state;      // the entity's "contents" word (changes when walls turn solid / not solid)
+		float key;               // sort order (end-of-mission candidates sort first)
+		unsigned char flag;      // 0 = normal, 1 = might end the mission / leave the area
 		unsigned char kind;
 		bool inside;
 		vec3 mid;
@@ -624,6 +627,7 @@ namespace
 	}
 
 	bool g_thin_lines = false;
+	float g_line_override = 0.0f;
 
 	void edge(const vec3& a, const vec3& b, const float* color)
 	{
@@ -650,7 +654,7 @@ namespace
 		float x0, y0, x1, y1;
 		to_screen(ca, &x0, &y0);
 		to_screen(cb, &x1, &y1);
-		add_line(x0, y0, x1, y1, color, g_thin_lines ? 1.0f : kThickness[g_thick_level]);
+		add_line(x0, y0, x1, y1, color, g_thin_lines ? 1.0f : (g_line_override > 0.0f ? g_line_override : kThickness[g_thick_level]));
 	}
 
 	// 1 = ordinary, 2 = sets/clears a level flag, 3 = checkpoint. Looked up once per name.
@@ -682,6 +686,13 @@ namespace
 
 	const float* color_for(const hit& h)
 	{
+		if (h.flag == 1)
+		{
+			static const float flash_red[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+			static const float flash_white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+			return (g_frame_counter / 8) % 2 ? flash_red : flash_white;
+		}
+
 		if (h.inside) return kColors[5];
 		if (h.kind == 7) return kColors[8];
 		if (h.kind == 9) return kColors[9];
@@ -694,6 +705,7 @@ namespace
 	void draw_box(const hit& h)
 	{
 		const float* color = color_for(h);
+		g_line_override = h.flag == 1 ? 6.0f : 0.0f;
 
 		vec3 c[8];
 		for (int i = 0; i < 8; ++i)
@@ -713,6 +725,8 @@ namespace
 				}
 			}
 		}
+
+		g_line_override = 0.0f;
 	}
 
 	// ---- tiny built-in text (5x7 letters drawn as little rectangles) ------------------------
@@ -790,16 +804,38 @@ namespace
 	void draw_label(const hit& h, const float* color)
 	{
 		const vec3 c = to_camera(h.mid);
-		if (c.z < 8.0f)
+		float sx, sy;
+		bool on_screen = c.z >= 8.0f;
+		if (on_screen)
 		{
-			return;
+			to_screen(c, &sx, &sy);
+			on_screen = sx >= 0.0f && sy >= 0.0f && sx <= g_w && sy <= g_h;
 		}
 
-		float sx, sy;
-		to_screen(c, &sx, &sy);
-		if (sx < 0.0f || sy < 0.0f || sx > g_w || sy > g_h)
+		if (!on_screen)
 		{
-			return;
+			if (h.flag != 1)
+			{
+				return;
+			}
+
+			// Off screen: park the label at the screen edge, pointing the way.
+			float dx = c.x;
+			float dy = -c.y;
+			const float length = std::sqrt(dx * dx + dy * dy);
+			if (length < 0.001f)
+			{
+				dx = 0.0f;
+				dy = 1.0f;
+			}
+			else
+			{
+				dx /= length;
+				dy /= length;
+			}
+
+			sx = g_w * 0.5f + dx * g_w * 0.40f;
+			sy = g_h * 0.5f + dy * g_h * 0.40f;
 		}
 
 		char name[48];
@@ -838,7 +874,17 @@ namespace
 			}
 		}
 
-		if (given[0])
+		if (h.flag == 1)
+		{
+			snprintf(text, sizeof(text), "!! MAY END MISSION: %s #%d %dm %s", given[0] ? given : shown, h.slot,
+			         static_cast<int>(h.dist / 39.37f), on_screen ? "" : (c.z < 0.0f ? "(behind you)" : "(off screen)"));
+		}
+		else if (h.kind == 7)
+		{
+			snprintf(text, sizeof(text), "%s - %s #%d %dm c=%X", given[0] ? given : "-", shown, h.slot,
+			         static_cast<int>(h.dist / 39.37f), h.state);
+		}
+		else if (given[0])
 		{
 			snprintf(text, sizeof(text), "%s - %s #%d %dm", given, shown, h.slot, static_cast<int>(h.dist / 39.37f));
 		}
@@ -847,11 +893,20 @@ namespace
 			snprintf(text, sizeof(text), "%s #%d %dm", shown, h.slot, static_cast<int>(h.dist / 39.37f));
 		}
 
-		const float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
+		float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
+		if (h.flag == 1)
+		{
+			scale *= 1.5f;
+		}
+
 		const float width = static_cast<float>(strlen(text)) * 6.0f * scale;
 		const float height = 7.0f * scale;
-		const float x = sx - width * 0.5f;
-		const float y = sy - height * 0.5f;
+		float x = sx - width * 0.5f;
+		float y = sy - height * 0.5f;
+		if (x < 4.0f) x = 4.0f;
+		if (x + width > g_w - 4.0f) x = g_w - 4.0f - width;
+		if (y < 4.0f) y = 4.0f;
+		if (y + height > g_h - 4.0f) y = g_h - 4.0f - height;
 		const float back[4] = {0.0f, 0.0f, 0.0f, 0.65f};
 		add_rect(x - 3.0f, y - 3.0f, width + 5.0f, height + 6.0f, back);
 		draw_text(x, y, text, scale, color);
@@ -1118,6 +1173,91 @@ namespace
 		log_line("wrote events_summary.txt (%d different messages)", g_stat_count);
 	}
 
+	void post_event_text(const char* text)
+	{
+		const double now = now_seconds();
+		const int slot = g_event_next % EVENT_SLOTS;
+		script_event& e = g_events[slot];
+		strcpy_s(e.name, sizeof(e.name), text);
+		e.entity = 0;
+		e.count = 1;
+		e.time = now;
+		g_event_next = g_event_next + 1;
+		log_line("watch: %s", text);
+	}
+
+	// Looks at the level's trigger / wall entities a few times a second and reports when one appears,
+	// disappears (for example a used-up trigger) or changes its "contents" word (a wall turning solid
+	// or not solid).
+	unsigned int g_watch_state[MAX_ENTITIES];
+	unsigned short g_watch_class[MAX_ENTITIES];
+	bool g_watch_primed = false;
+
+	void entity_watch()
+	{
+		int posted = 0;
+		for (int index = 0; index < MAX_ENTITIES; ++index)
+		{
+			unsigned char buffer[0x170];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE, buffer, sizeof(buffer)))
+			{
+				break;
+			}
+
+			unsigned short class_id = 0;
+			memcpy(&class_id, buffer + OFF_CLASSNAME, sizeof(class_id));
+			unsigned int state = 0;
+			memcpy(&state, buffer + 0xD8, sizeof(state));
+			const unsigned short before_class = g_watch_class[index];
+			const unsigned int before_state = g_watch_state[index];
+			g_watch_class[index] = class_id;
+			g_watch_state[index] = state;
+			if (!g_watch_primed || posted >= 6)
+			{
+				continue;
+			}
+
+			const unsigned short relevant = class_id ? class_id : before_class;
+			if (relevant == 0 || classify(relevant) < 2)
+			{
+				continue;
+			}
+
+			char name[48] = {};
+			unsigned int name_id = 0;
+			memcpy(&name_id, buffer + 0x160, sizeof(name_id));
+			if (name_id > 1 && name_id < 0x10000)
+			{
+				class_name(name_id, name, sizeof(name));
+			}
+
+			char kind[48] = {};
+			class_name(relevant, kind, sizeof(kind));
+			char text[44];
+			if (before_class != 0 && class_id == 0)
+			{
+				snprintf(text, sizeof(text), "GONE %s #%d", name[0] ? name : kind, index);
+			}
+			else if (before_class == 0 && class_id != 0)
+			{
+				snprintf(text, sizeof(text), "NEW %s #%d", name[0] ? name : kind, index);
+			}
+			else if (class_id != 0 && state != before_state)
+			{
+				snprintf(text, sizeof(text), "%X>%X %s #%d", before_state, state, name[0] ? name : kind, index);
+			}
+			else
+			{
+				continue;
+			}
+
+			++posted;
+			post_event_text(text);
+		}
+
+		g_watch_primed = true;
+	}
+
 	void record_event(const unsigned int entity, const unsigned int string_id)
 	{
 		char name[44];
@@ -1323,6 +1463,77 @@ namespace
 		return kind;
 	}
 
+	// Does this trigger's name look like it ends the mission, fails it, or marks the edge of the play area?
+	unsigned char g_name_flag[65536];
+
+	bool name_has_token(const char* name, const char* token)
+	{
+		const size_t length = strlen(token);
+		const char* p = name;
+		while ((p = strstr(p, token)) != nullptr)
+		{
+			const bool start_ok = p == name || p[-1] == '_';
+			const bool end_ok = p[length] == '\0' || p[length] == '_' || (p[length] >= '0' && p[length] <= '9');
+			if (start_ok && end_ok)
+			{
+				return true;
+			}
+
+			p += 1;
+		}
+
+		return false;
+	}
+
+	unsigned char name_flag(const unsigned int name_id)
+	{
+		if (name_id < 2 || name_id >= 0x10000)
+		{
+			return 1;
+		}
+
+		if (g_name_flag[name_id] != 0)
+		{
+			return g_name_flag[name_id];
+		}
+
+		unsigned char flag = 1;
+		char name[64];
+		if (class_name(name_id, name, sizeof(name)))
+		{
+			for (char* c = name; *c; ++c)
+			{
+				if (*c >= 'A' && *c <= 'Z') *c = static_cast<char>(*c + 32);
+			}
+
+			static const char* const kTokens[] = {"end", "endmission", "outro", "fail", "failed", "failure", "kill", "killplayer",
+			                                      "oob", "bounds", "boundary", "leaving", "leave", "abandon", "restricted",
+			                                      "complete", "completed", "finish", "finished", "credits", "ending",
+			                                      "nextmission", "deadzone", "warning"};
+			static const char* const kPhrases[] = {"mission_end", "end_mission", "out_of_bounds", "leave_area", "mission_area",
+			                                       "playable_area", "kill_player", "player_kill", "mission_fail", "fail_mission",
+			                                       "mission_complete", "level_end", "end_level", "return_to", "go_back"};
+			for (const char* token : kTokens)
+			{
+				if (name_has_token(name, token))
+				{
+					flag = 2;
+				}
+			}
+
+			for (const char* phrase : kPhrases)
+			{
+				if (strstr(name, phrase))
+				{
+					flag = 2;
+				}
+			}
+		}
+
+		g_name_flag[name_id] = flag;
+		return flag;
+	}
+
 	// Finds the closest triggers. Returns how many it put in out[].
 	int find_triggers(const vec3& player, const float max_distance, hit* out, const int capacity)
 	{
@@ -1384,13 +1595,19 @@ namespace
 			const float ey = oy > 0.0f ? oy : 0.0f;
 			const float ez = oz > 0.0f ? oz : 0.0f;
 			const float dist = std::sqrt(ex * ex + ey * ey + ez * ez);
-			if (dist > max_distance)
+			unsigned int name_id_value = 0;
+			memcpy(&name_id_value, buffer + 0x160, sizeof(name_id_value));
+			const bool end_candidate = kind != 7 && name_flag(name_id_value) == 2;
+			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f))
 			{
 				continue;
 			}
 
 			hit h;
 			h.dist = dist;
+			h.key = end_candidate ? dist - 1.0e9f : dist;
+			h.flag = end_candidate ? 1 : 0;
+			memcpy(&h.state, buffer + 0xD8, sizeof(h.state));
 			h.slot = index;
 			h.class_id = class_id;
 			memcpy(&h.name_id, buffer + 0x160, sizeof(h.name_id));
@@ -1402,12 +1619,12 @@ namespace
 
 			// Keep the list sorted, nearest first, and only the closest `capacity`.
 			int position = count < capacity ? count : capacity - 1;
-			if (count >= capacity && dist >= out[position].dist)
+			if (count >= capacity && h.key >= out[position].key)
 			{
 				continue;
 			}
 
-			while (position > 0 && out[position - 1].dist > dist)
+			while (position > 0 && out[position - 1].key > h.key)
 			{
 				if (position < capacity)
 				{
@@ -3107,6 +3324,11 @@ namespace
 			{
 				command_tried = true;
 				try_add_console_command();
+			}
+
+			if (g_overlay_on && tick % 3 == 0)
+			{
+				entity_watch();
 			}
 
 			if (g_collision_on && (g_collision_refresh || tick % 150 == 0))
