@@ -2,7 +2,11 @@ name: Build
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -23,3 +27,15 @@ jobs:
         with:
           name: s1x-debug-overlay
           path: dist/
+
+      # Publishes version.dll as a plain file on the Releases page:
+      # https://github.com/murphyongit/s1x-debug_overlay/releases/latest/download/version.dll
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest *> $null
+          if ($LASTEXITCODE -eq 0) { gh release delete latest --yes --cleanup-tag }
+          $notes = "Build of commit ${{ github.sha }}. Download version.dll and put it in your game folder."
+          gh release create latest dist/try_this_first/version.dll --title "Latest build" --notes $notes --target ${{ github.sha }}

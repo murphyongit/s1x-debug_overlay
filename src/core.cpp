@@ -1586,6 +1586,7 @@ namespace
 		static unsigned char chunk[65536];
 		g_candidate_count = 0;
 		size_t scanned = 0;
+		int regions_logged = 0;
 
 		uintptr_t address = base;
 		while (address < image_end && g_candidate_count < MAX_CANDIDATES)
@@ -1603,10 +1604,19 @@ namespace
 				region_end = image_end;
 			}
 
-			const bool writable = mbi.State == MEM_COMMIT && (mbi.Protect & (PAGE_READWRITE | PAGE_WRITECOPY)) != 0 &&
-				(mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) == 0;
+			// Any readable memory inside the game program (its protection flags turned out to be
+			// different from what I assumed, so don't be picky).
+			const bool readable = mbi.State == MEM_COMMIT && (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) == 0;
 
-			if (writable)
+			if (regions_logged < 40)
+			{
+				++regions_logged;
+				log_line("  region 0x%llX size %llu KB state 0x%lX protect 0x%lX", static_cast<unsigned long long>(region_start),
+				         static_cast<unsigned long long>((region_end - region_start) / 1024), static_cast<unsigned long>(mbi.State),
+				         static_cast<unsigned long>(mbi.Protect));
+			}
+
+			if (readable)
 			{
 				for (uintptr_t position = address; position < region_end && g_candidate_count < MAX_CANDIDATES;)
 				{
@@ -1742,7 +1752,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.11, camera search build) ----");
+		log_line("---- add-on loaded (version 0.12, camera search build (reads all game memory)) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F7 distance | F6 thickness | F5 fov style | F4 camera search | F9 data files");
 

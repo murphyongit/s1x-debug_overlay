@@ -1,4 +1,4 @@
-S1x DEBUG OVERLAY - TEST BUILD 0.11 (camera search)
+S1x DEBUG OVERLAY - TEST BUILD 0.12 (camera search, second try)
 ===================================================
 
 This build works like the last one (F8 = overlay on/off), plus a one-time
