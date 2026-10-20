@@ -815,6 +815,8 @@ namespace
 		}
 	}
 
+	bool learned_flags(int slot, char* out, size_t capacity);
+
 	void draw_label(const hit& h, const float* color)
 	{
 		const vec3 c = to_camera(h.mid);
@@ -879,6 +881,13 @@ namespace
 		else
 		{
 			snprintf(text, sizeof(text), "%s #%d %dm", shown, h.slot, static_cast<int>(h.dist / 39.37f));
+		}
+
+		char learned[100];
+		if (learned_flags(h.slot, learned, sizeof(learned)))
+		{
+			const size_t used = strlen(text);
+			snprintf(text + used, sizeof(text) - used, " -> %s", learned);
 		}
 
 		const float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
@@ -1267,6 +1276,8 @@ namespace
 		g_watch_primed = true;
 	}
 
+	void push_recent(const char* name, double now);
+
 	void record_event(const unsigned int entity, const unsigned int string_id)
 	{
 		char name[44];
@@ -1277,6 +1288,11 @@ namespace
 
 		const double now = now_seconds();
 		count_event(name, entity, now);
+		if (!is_always_noise(name))
+		{
+			push_recent(name, now);
+		}
+
 		if (g_filter_on && (is_always_noise(name) || is_too_frequent(name, now)))
 		{
 			return;
@@ -1322,6 +1338,191 @@ namespace
 		}
 
 		g_original_notify(entity, string_id, count);
+	}
+
+	// ---- learning which flag a flag-setting trigger sets ------------------------------------
+	// The flag's name is not stored in the trigger itself. But when you step into one, the scripts
+	// announce the flag right away, so we remember the messages that follow each entry.
+	struct recent_event
+	{
+		char name[44];
+		double time;
+	};
+
+	recent_event g_recent[64];
+	volatile int g_recent_next = 0;
+
+	void push_recent(const char* name, const double now)
+	{
+		// ignore the very common ones that are never flag names
+		static const char* const kSkip[] = {"trigger", "death", "spawned", "enemy", "explode", "sound", "hide", "look",
+		                                    "turn", "trans", "react", "pop_up", "crouch", "suppression"};
+		for (const char* word : kSkip)
+		{
+			if (strstr(name, word))
+			{
+				return;
+			}
+		}
+
+		const int slot = g_recent_next % 64;
+		strcpy_s(g_recent[slot].name, sizeof(g_recent[slot].name), name);
+		g_recent[slot].time = now;
+		g_recent_next = g_recent_next + 1;
+	}
+
+	struct flag_learning
+	{
+		char names[4][44];
+		int counts[4];
+		int used;
+	};
+
+	flag_learning g_learned[MAX_ENTITIES];
+	bool g_was_inside[MAX_ENTITIES];
+	double g_entry_time[MAX_ENTITIES];
+	double g_consumed[MAX_ENTITIES];
+
+	bool learned_flags(const int slot, char* out, const size_t capacity)
+	{
+		if (slot < 0 || slot >= MAX_ENTITIES || g_learned[slot].used == 0)
+		{
+			return false;
+		}
+
+		out[0] = '\0';
+		const flag_learning& l = g_learned[slot];
+		for (int i = 0; i < l.used; ++i)
+		{
+			const size_t used = strlen(out);
+			if (used + 4 >= capacity)
+			{
+				break;
+			}
+
+			snprintf(out + used, capacity - used, "%s%s?", i ? ", " : "", l.names[i]);
+		}
+
+		return out[0] != '\0';
+	}
+
+	void learn_from_entry(const int slot, const double now)
+	{
+		const double consumed = g_consumed[slot];
+		for (int n = 0; n < 64; ++n)
+		{
+			const recent_event& e = g_recent[n];
+			if (e.time <= consumed || e.time < g_entry_time[slot] - 0.3 || e.time > g_entry_time[slot] + 2.5 || e.time > now)
+			{
+				continue;
+			}
+
+			if (e.time > g_consumed[slot])
+			{
+				g_consumed[slot] = e.time;
+			}
+
+			flag_learning& l = g_learned[slot];
+			bool found = false;
+			for (int i = 0; i < l.used; ++i)
+			{
+				if (strcmp(l.names[i], e.name) == 0)
+				{
+					++l.counts[i];
+					found = true;
+				}
+			}
+
+			if (!found && l.used < 4)
+			{
+				strcpy_s(l.names[l.used], sizeof(l.names[l.used]), e.name);
+				l.counts[l.used] = 1;
+				++l.used;
+				log_line("flag trigger #%d: message after entering: %s", slot, e.name);
+			}
+		}
+	}
+
+	// Called once per picture with everything near the player.
+	void update_flag_learning(const hit* hits, const int count)
+	{
+		const double now = now_seconds();
+		static bool inside_now[MAX_ENTITIES];
+		memset(inside_now, 0, sizeof(inside_now));
+		for (int i = 0; i < count; ++i)
+		{
+			if (hits[i].slot < 0 || hits[i].slot >= MAX_ENTITIES || !hits[i].inside || type_special(hits[i].type_id) != 2)
+			{
+				continue;
+			}
+
+			const int slot = hits[i].slot;
+			inside_now[slot] = true;
+			if (!g_was_inside[slot])
+			{
+				g_entry_time[slot] = now;
+			}
+
+			if (now - g_entry_time[slot] < 3.0)
+			{
+				learn_from_entry(slot, now);
+			}
+		}
+
+		memcpy(g_was_inside, inside_now, sizeof(g_was_inside));
+	}
+
+	// Top-centre list of every box the player is standing in.
+	void draw_inside_panel(const hit* hits, const int count)
+	{
+		const float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
+		const float line = 10.0f * scale + 4.0f;
+		float y = 10.0f;
+		int shown = 0;
+		for (int i = 0; i < count && shown < 8; ++i)
+		{
+			if (!hits[i].inside)
+			{
+				continue;
+			}
+
+			char kind[64] = {};
+			char given[48] = {};
+			if (hits[i].type_id > 1 && hits[i].type_id < 0x10000)
+			{
+				class_name(hits[i].type_id, kind, sizeof(kind));
+			}
+
+			if (!kind[0])
+			{
+				class_name(hits[i].class_id, kind, sizeof(kind));
+			}
+
+			if (hits[i].name_id > 1 && hits[i].name_id < 0x10000)
+			{
+				class_name(hits[i].name_id, given, sizeof(given));
+			}
+
+			const char* type_short = strncmp(kind, "trigger_", 8) == 0 ? kind + 8 : kind;
+			char text[200];
+			char learned[100];
+			if (learned_flags(hits[i].slot, learned, sizeof(learned)))
+			{
+				snprintf(text, sizeof(text), "IN: %s - %s #%d -> %s", given[0] ? given : "-", type_short, hits[i].slot, learned);
+			}
+			else
+			{
+				snprintf(text, sizeof(text), "IN: %s - %s #%d", given[0] ? given : "-", type_short, hits[i].slot);
+			}
+
+			const float width = static_cast<float>(strlen(text)) * 6.0f * scale;
+			const float x = g_w * 0.5f - width * 0.5f;
+			const float back[4] = {0.0f, 0.0f, 0.0f, 0.6f};
+			add_rect(x - 4.0f, y - 3.0f, width + 8.0f, 7.0f * scale + 6.0f, back);
+			draw_text(x, y, text, scale, kColors[5]);
+			y += line;
+			++shown;
+		}
 	}
 
 	void draw_events()
@@ -2136,6 +2337,9 @@ namespace
 				draw_label(hits[i], color_for(hits[i]));
 			}
 		}
+
+		update_flag_learning(hits, count);
+		draw_inside_panel(hits, count);
 
 		if (g_log_settings)
 		{
@@ -3289,7 +3493,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.28, rainbow end triggers, full wall watch) ----");
+		log_line("---- add-on loaded (version 0.29, inside list, learned flags) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
