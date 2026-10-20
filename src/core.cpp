@@ -1,4 +1,4 @@
-// S1x debug overlay - version 0.9 (draws with Direct3D just before the picture is shown)
+// S1x debug overlay - version 0.10 (Direct3D overlay, smoothed camera)
 //
 // Draws a box around every trigger in the campaign. Keys:
 //   F8 = overlay on/off (starts OFF)     F7 = how far away to draw
@@ -415,7 +415,7 @@ namespace
 
 	volatile bool g_overlay_on = false;   // starts OFF; press F8 in a mission to turn it on
 	volatile int g_dist_level = 1;
-	volatile int g_fov_style = 1;
+	volatile int g_fov_style = 0;   // 0 was confirmed to line up correctly
 	volatile int g_thick_level = 1;
 	volatile bool g_log_settings = false;
 	const float kDistances[4] = {1500.0f, 4000.0f, 12000.0f, 1.0e9f};
@@ -835,6 +835,83 @@ namespace
 		return g_in_game;
 	}
 
+	// The game updates your position and view angles only a few dozen times per second, but
+	// the picture is drawn much faster, so raw values make the boxes stutter. We watch how the
+	// numbers change and carry them forward in between updates.
+	struct motion_sample
+	{
+		float origin[3];
+		float pitch;
+		float yaw;
+		double time;
+		bool valid;
+	};
+
+	motion_sample g_older = {};
+	motion_sample g_newer = {};
+
+	double now_seconds()
+	{
+		LARGE_INTEGER frequency, counter;
+		QueryPerformanceFrequency(&frequency);
+		QueryPerformanceCounter(&counter);
+		return static_cast<double>(counter.QuadPart) / static_cast<double>(frequency.QuadPart);
+	}
+
+	float wrap_angle_difference(float delta)
+	{
+		while (delta > 180.0f) delta -= 360.0f;
+		while (delta < -180.0f) delta += 360.0f;
+		return delta;
+	}
+
+	void smooth_camera(float* origin, float* pitch, float* yaw)
+	{
+		const double now = now_seconds();
+
+		const bool changed = !g_newer.valid || g_newer.origin[0] != origin[0] || g_newer.origin[1] != origin[1] ||
+			g_newer.origin[2] != origin[2] || g_newer.pitch != *pitch || g_newer.yaw != *yaw;
+
+		if (changed)
+		{
+			// A big jump (new mission, teleport, cutscene cut) must not be "carried forward".
+			const bool jump = g_newer.valid && (std::fabs(g_newer.origin[0] - origin[0]) > 400.0f ||
+				std::fabs(g_newer.origin[1] - origin[1]) > 400.0f || std::fabs(g_newer.origin[2] - origin[2]) > 400.0f);
+
+			g_older = jump ? motion_sample{} : g_newer;
+			g_newer.origin[0] = origin[0];
+			g_newer.origin[1] = origin[1];
+			g_newer.origin[2] = origin[2];
+			g_newer.pitch = *pitch;
+			g_newer.yaw = *yaw;
+			g_newer.time = now;
+			g_newer.valid = true;
+		}
+
+		if (!g_older.valid)
+		{
+			return;
+		}
+
+		double interval = g_newer.time - g_older.time;
+		if (interval < 0.004 || interval > 0.12)
+		{
+			return;
+		}
+
+		float factor = static_cast<float>((now - g_newer.time) / interval);
+		if (factor < 0.0f) factor = 0.0f;
+		if (factor > 1.0f) factor = 1.0f;
+
+		for (int i = 0; i < 3; ++i)
+		{
+			origin[i] = g_newer.origin[i] + (g_newer.origin[i] - g_older.origin[i]) * factor;
+		}
+
+		*pitch = g_newer.pitch + (g_newer.pitch - g_older.pitch) * factor;
+		*yaw = g_newer.yaw + wrap_angle_difference(g_newer.yaw - g_older.yaw) * factor;
+	}
+
 	// Fills g_verts with everything to draw this picture. Returns false if there is nothing to draw.
 	bool build_picture(const float width, const float height)
 	{
@@ -864,6 +941,8 @@ namespace
 		{
 			return false;
 		}
+
+		smooth_camera(origin, &pitch, &yaw);
 
 		if (g_frame_counter % 120 == 1)
 		{
@@ -1470,7 +1549,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.9, draws with Direct3D just before the picture is shown) ----");
+		log_line("---- add-on loaded (version 0.10, draws with Direct3D, smoothed camera) ----");
 		log_line("host program: %s", exe);
 		log_line("F9 = save entity table | F8 on/off | F7 distance | F6 thickness | F5 fov style");
 
