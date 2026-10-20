@@ -161,6 +161,14 @@ namespace
 		return text && safe_copy_string(text, out, capacity);
 	}
 
+	double now_seconds()
+	{
+		LARGE_INTEGER frequency, counter;
+		QueryPerformanceFrequency(&frequency);
+		QueryPerformanceCounter(&counter);
+		return static_cast<double>(counter.QuadPart) / static_cast<double>(frequency.QuadPart);
+	}
+
 	struct census_entry
 	{
 		char name[48];
@@ -765,6 +773,117 @@ namespace
 		draw_text(x, y, text, scale, color);
 	}
 
+	// ---- script events (what the map scripts are being told) -------------------------------
+	// Hooks the game's "notify" function. Every time a script sends a message such as "trigger" or
+	// "death", we remember its name and show the newest ones in the top-right corner.
+	constexpr uintptr_t SP_SCR_NOTIFY_ID = 0x14031CB80;
+	constexpr int EVENT_SLOTS = 16;
+
+	struct script_event
+	{
+		char name[44];
+		unsigned int entity;
+		int count;
+		double time;
+	};
+
+	script_event g_events[EVENT_SLOTS];
+	volatile int g_event_next = 0;
+	volatile bool g_events_on = true;   // F11
+	int g_events_logged = 0;
+	using notify_t = void (*)(unsigned int, unsigned int, unsigned int);
+	notify_t g_original_notify = nullptr;
+
+	void record_event(const unsigned int entity, const unsigned int string_id)
+	{
+		char name[44];
+		if (!class_name(string_id, name, sizeof(name)))
+		{
+			return;
+		}
+
+		const double now = now_seconds();
+		for (int i = 0; i < EVENT_SLOTS; ++i)
+		{
+			script_event& e = g_events[i];
+			if (e.time > 0.0 && now - e.time < 3.0 && e.entity == entity && strcmp(e.name, name) == 0)
+			{
+				++e.count;
+				e.time = now;
+				return;
+			}
+		}
+
+		const int slot = g_event_next % EVENT_SLOTS;
+		script_event& e = g_events[slot];
+		strcpy_s(e.name, sizeof(e.name), name);
+		e.entity = entity;
+		e.count = 1;
+		e.time = now;
+		g_event_next = g_event_next + 1;
+
+		if (g_events_logged < 5000)
+		{
+			++g_events_logged;
+			log_line("event: %s (entity id %u)", name, entity);
+		}
+	}
+
+	void hooked_notify(const unsigned int entity, const unsigned int string_id, const unsigned int count)
+	{
+		__try
+		{
+			if (string_id != 0 && string_id < 0x10000)
+			{
+				record_event(entity, string_id);
+			}
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+		}
+
+		g_original_notify(entity, string_id, count);
+	}
+
+	void draw_events()
+	{
+		const double now = now_seconds();
+		const float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
+		const float line_height = 11.0f * scale;
+		float y = 10.0f;
+
+		// newest first
+		for (int n = 1; n <= EVENT_SLOTS; ++n)
+		{
+			const int index = ((g_event_next - n) % EVENT_SLOTS + EVENT_SLOTS) % EVENT_SLOTS;
+			const script_event& e = g_events[index];
+			const double age = now - e.time;
+			if (e.time <= 0.0 || age > 10.0)
+			{
+				continue;
+			}
+
+			char text[96];
+			if (e.count > 1)
+			{
+				snprintf(text, sizeof(text), "%s x%d", e.name, e.count);
+			}
+			else
+			{
+				snprintf(text, sizeof(text), "%s", e.name);
+			}
+
+			const float alpha = age < 7.0 ? 1.0f : static_cast<float>((10.0 - age) / 3.0);
+			const float width = static_cast<float>(strlen(text)) * 6.0f * scale;
+			const float x = g_w - width - 14.0f;
+			const float back[4] = {0.0f, 0.0f, 0.0f, 0.65f * alpha};
+			const float color[4] = {1.0f, 1.0f, 1.0f, alpha};
+			add_rect(x - 4.0f, y - 3.0f, width + 7.0f, 7.0f * scale + 6.0f, back);
+			draw_text(x, y, text, scale, color);
+			y += line_height + 4.0f;
+		}
+	}
+
 	// 1 = ignore, 2.. = a kind of trigger. Looked up once and remembered for a while.
 	unsigned char classify(const unsigned short id)
 	{
@@ -899,14 +1018,6 @@ namespace
 	}
 
 	// Reads the F-keys. Runs once per picture, whether or not anything is being drawn.
-	double now_seconds()
-	{
-		LARGE_INTEGER frequency, counter;
-		QueryPerformanceFrequency(&frequency);
-		QueryPerformanceCounter(&counter);
-		return static_cast<double>(counter.QuadPart) / static_cast<double>(frequency.QuadPart);
-	}
-
 	// ---- camera sources ---------------------------------------------------------------
 	// Found by the camera search: places where the game keeps the camera it renders with.
 	// Source 0 is the player's own data (slow-updating, smoothed by us). The others are read
@@ -1047,7 +1158,8 @@ namespace
 
 	void poll_keys()
 	{
-		static bool was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		static bool was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		const bool f11 = key_pressed(VK_F11, &was_f11);
 		const bool f2 = key_pressed(VK_F2, &was_f2);
 		const bool f3 = key_pressed(VK_F3, &was_f3);
 		const bool f4 = key_pressed(VK_F4, &was_f4);
@@ -1060,6 +1172,12 @@ namespace
 		{
 			g_overlay_on = !g_overlay_on;
 			log_line("F8: overlay %s", g_overlay_on ? "ON" : "OFF");
+		}
+
+		if (f11)
+		{
+			g_events_on = !g_events_on;
+			log_line("F11: events %s", g_events_on ? "ON" : "OFF");
 		}
 
 		if (f2)
@@ -1296,6 +1414,11 @@ namespace
 		for (int i = count - 1; i >= 0; --i)
 		{
 			draw_box(hits[i]);
+		}
+
+		if (g_events_on)
+		{
+			draw_events();
 		}
 
 		if (g_labels_on)
@@ -1833,6 +1956,21 @@ namespace
 			}
 		}
 
+		if (any)
+		{
+			void* notify = reinterpret_cast<void*>(SP_SCR_NOTIFY_ID);
+			if (MH_CreateHook(notify, reinterpret_cast<LPVOID>(&hooked_notify),
+			                  reinterpret_cast<LPVOID*>(&g_original_notify)) == MH_OK &&
+				MH_EnableHook(notify) == MH_OK)
+			{
+				log_line("hook: script events installed");
+			}
+			else
+			{
+				log_line("hook: could not hook script events");
+			}
+		}
+
 		return any;
 	}
 
@@ -1853,9 +1991,9 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.15, text labels) ----");
+		log_line("---- add-on loaded (version 0.16, text labels + script events) ----");
 		log_line("host program: %s", exe);
-		log_line("F8 on/off | F2 labels | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
+		log_line("F8 on/off | F2 labels | F11 events | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
 
 		bool hook_done = false;
 
