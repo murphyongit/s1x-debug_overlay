@@ -394,7 +394,7 @@ namespace
 	constexpr size_t DVAR_CURRENT_OFFSET = 0x18;
 
 	constexpr float EYE_HEIGHT = 60.0f;
-	constexpr int MAX_BOXES = 64;
+	constexpr int MAX_BOXES = 96;
 	constexpr int MAX_VERTS = 60000;
 
 	using find_var_t = void* (*)(const char*);
@@ -410,6 +410,7 @@ namespace
 		int slot;
 		unsigned short class_id;
 		unsigned int name_id;
+		unsigned int type_id;
 		unsigned char kind;
 		bool inside;
 		vec3 mid;
@@ -451,13 +452,16 @@ namespace
 
 	unsigned char g_class_kind[65536];
 
-	float kColors[6][4] = {
+	float kColors[9][4] = {
 		{0.1f, 1.0f, 0.2f, 1.0f},   // trigger_multiple (green)
 		{1.0f, 0.2f, 0.2f, 1.0f},   // hurt / damage (red)
 		{1.0f, 0.9f, 0.1f, 1.0f},   // use (yellow)
 		{1.0f, 0.55f, 0.1f, 1.0f},  // radius (orange)
 		{0.2f, 0.8f, 1.0f, 1.0f},   // everything else (blue)
 		{1.0f, 1.0f, 1.0f, 1.0f},   // you are inside this one (white)
+		{1.0f, 0.3f, 1.0f, 1.0f},   // sets or clears a level flag (magenta)
+		{0.2f, 1.0f, 1.0f, 1.0f},   // checkpoint / autosave (cyan)
+		{0.65f, 0.65f, 0.75f, 1.0f},  // moving brush models and volumes (grey)
 	};
 
 	bool read_dvar_float(const char* name, float* out)
@@ -646,9 +650,46 @@ namespace
 		add_line(x0, y0, x1, y1, color, kThickness[g_thick_level]);
 	}
 
+	// 1 = ordinary, 2 = sets/clears a level flag, 3 = checkpoint. Looked up once per name.
+	unsigned char g_type_special[65536];
+
+	unsigned char type_special(const unsigned int type_id)
+	{
+		if (type_id < 2 || type_id >= 0x10000)
+		{
+			return 1;
+		}
+
+		if (g_type_special[type_id] != 0)
+		{
+			return g_type_special[type_id];
+		}
+
+		char name[64];
+		unsigned char special = 1;
+		if (class_name(type_id, name, sizeof(name)))
+		{
+			if (strstr(name, "flag")) special = 2;
+			else if (strstr(name, "autosave") || strstr(name, "checkpoint")) special = 3;
+		}
+
+		g_type_special[type_id] = special;
+		return special;
+	}
+
+	const float* color_for(const hit& h)
+	{
+		if (h.inside) return kColors[5];
+		if (h.kind == 7) return kColors[8];
+		const unsigned char special = type_special(h.type_id);
+		if (special == 2) return kColors[6];
+		if (special == 3) return kColors[7];
+		return kColors[h.kind > 1 && h.kind < 7 ? h.kind - 2 : 4];
+	}
+
 	void draw_box(const hit& h)
 	{
-		const float* color = h.inside ? kColors[5] : kColors[h.kind > 1 && h.kind < 7 ? h.kind - 2 : 4];
+		const float* color = color_for(h);
 
 		vec3 c[8];
 		for (int i = 0; i < 8; ++i)
@@ -672,6 +713,7 @@ namespace
 
 	// ---- tiny built-in text (5x7 letters drawn as little rectangles) ------------------------
 	volatile bool g_labels_on = true;   // F2
+	volatile bool g_brushes_on = false;   // Home
 
 	const unsigned char* glyph_for(const char c)
 	{
@@ -760,8 +802,23 @@ namespace
 			return;
 		}
 
-		const char* shown = strncmp(name, "trigger_", 8) == 0 ? name + 8 : name;
-		char text[96];
+		// The more specific type (such as trigger_multiple_flag_set) is stored next to the class.
+		char type_text[64] = {};
+		if (h.type_id > 1 && h.type_id < 0x10000 && class_name(h.type_id, type_text, sizeof(type_text)))
+		{
+			for (const char* ch = type_text; *ch; ++ch)
+			{
+				if (*ch < 32 || *ch > 126)
+				{
+					type_text[0] = '\0';
+					break;
+				}
+			}
+		}
+
+		const char* source = type_text[0] ? type_text : name;
+		const char* shown = strncmp(source, "trigger_", 8) == 0 ? source + 8 : source;
+		char text[160];
 		char given[40] = {};
 		if (h.name_id > 1 && h.name_id < 0x10000 && class_name(h.name_id, given, sizeof(given)))
 		{
@@ -777,7 +834,7 @@ namespace
 
 		if (given[0])
 		{
-			snprintf(text, sizeof(text), "%s #%d %dm [%s]", shown, h.slot, static_cast<int>(h.dist / 39.37f), given);
+			snprintf(text, sizeof(text), "%s - %s #%d %dm", given, shown, h.slot, static_cast<int>(h.dist / 39.37f));
 		}
 		else
 		{
@@ -1169,6 +1226,10 @@ namespace
 			else if (strstr(name, "radius")) kind = 5;
 			else kind = 6;
 		}
+		else if (class_name(id, name, sizeof(name)) && (strcmp(name, "script_brushmodel") == 0 || strcmp(name, "info_volume") == 0))
+		{
+			kind = 7;
+		}
 
 		g_class_kind[id] = kind;
 		return kind;
@@ -1206,7 +1267,7 @@ namespace
 			}
 
 			const unsigned char kind = classify(class_id);
-			if (kind < 2)
+			if (kind < 2 || (kind == 7 && !g_brushes_on))
 			{
 				continue;
 			}
@@ -1245,6 +1306,7 @@ namespace
 			h.slot = index;
 			h.class_id = class_id;
 			memcpy(&h.name_id, buffer + 0x160, sizeof(h.name_id));
+			memcpy(&h.type_id, buffer + 0x150, sizeof(h.type_id));
 			h.kind = kind;
 			h.inside = ox <= 0.0f && oy <= 0.0f && oz <= 0.0f;
 			h.mid = {b[0], b[1], b[2]};
@@ -1426,7 +1488,8 @@ namespace
 
 	void poll_keys()
 	{
-		static bool was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		static bool was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		const bool home = key_pressed(VK_HOME, &was_home);
 		const bool f11 = key_pressed(VK_F11, &was_f11);
 		const bool f2 = key_pressed(VK_F2, &was_f2);
 		const bool f3 = key_pressed(VK_F3, &was_f3);
@@ -1440,6 +1503,12 @@ namespace
 		{
 			g_overlay_on = !g_overlay_on;
 			log_line("F8: overlay %s", g_overlay_on ? "ON" : "OFF");
+		}
+
+		if (home)
+		{
+			g_brushes_on = !g_brushes_on;
+			log_line("Home: moving brush models and volumes %s", g_brushes_on ? "ON" : "OFF");
 		}
 
 		if (f11)
@@ -1695,7 +1764,7 @@ namespace
 			const int label_count = count < 20 ? count : 20;
 			for (int i = label_count - 1; i >= 0; --i)
 			{
-				draw_label(hits[i], hits[i].inside ? kColors[5] : kColors[hits[i].kind > 1 && hits[i].kind < 7 ? hits[i].kind - 2 : 4]);
+				draw_label(hits[i], color_for(hits[i]));
 			}
 		}
 
@@ -2524,7 +2593,7 @@ namespace
 
 		log_line("---- add-on loaded (version 0.20, script events (player animations hidden)) ----");
 		log_line("host program: %s", exe);
-		log_line("F8 on/off | F2 labels | F11 events | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
+		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
 		bool hook_done = false;
 		int notify_tries = 0;
