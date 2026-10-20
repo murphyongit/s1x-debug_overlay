@@ -795,9 +795,157 @@ namespace
 	}
 
 	// Reads the F-keys. Runs once per picture, whether or not anything is being drawn.
+	double now_seconds()
+	{
+		LARGE_INTEGER frequency, counter;
+		QueryPerformanceFrequency(&frequency);
+		QueryPerformanceCounter(&counter);
+		return static_cast<double>(counter.QuadPart) / static_cast<double>(frequency.QuadPart);
+	}
+
+	// ---- camera sources ---------------------------------------------------------------
+	// Found by the camera search: places where the game keeps the camera it renders with.
+	// Source 0 is the player's own data (slow-updating, smoothed by us). The others are read
+	// straight from the game; F3 cycles through them, F4 measures how often each one updates.
+	struct camera_source
+	{
+		uintptr_t address;   // where the eye position (3 floats) is
+		int kind;            // 0 = axes follow (forward, left, up), 1 = view angles follow
+		size_t angle_offset; // for kind 1: where pitch/yaw are, relative to address
+	};
+
+	constexpr int SOURCE_COUNT = 10;
+	const camera_source kSources[SOURCE_COUNT] = {
+		{0, 0, 0},                // 0: player data (not a real address)
+		{0x14094A7C4, 0, 12},     // 1: eye + axes
+		{0x14096FA64, 0, 12},     // 2: eye + axes
+		{0x141111CB8, 0, 12},     // 3: eye + axes
+		{0x14094AB88, 1, 12},     // 4: eye + angles
+		{0x14115DE84, 1, 24},     // 5: eye, eye, angles
+		{0x14115DE90, 1, 12},     // 6: eye + angles
+		{0x141173784, 1, 12},     // 7: eye + angles
+		{0x14117379C, 1, 12},     // 8: eye + angles
+		{0x1411738D8, 1, 12},     // 9: eye + angles
+	};
+
+	volatile int g_source = 0;
+
+	// Reads eye position and the two view angles (or axes turned back into angles) from a source.
+	bool read_source(const int index, float* eye, float* pitch, float* yaw)
+	{
+		const camera_source& source = kSources[index];
+		float first[3];
+		if (!read_bytes(source.address, first, sizeof(first)))
+		{
+			return false;
+		}
+
+		memcpy(eye, first, sizeof(first));
+
+		if (source.kind == 1)
+		{
+			float angles[2];
+			if (!read_bytes(source.address + source.angle_offset, angles, sizeof(angles)))
+			{
+				return false;
+			}
+
+			*pitch = angles[0];
+			*yaw = angles[1];
+			return true;
+		}
+
+		float forward[3];
+		if (!read_bytes(source.address + source.angle_offset, forward, sizeof(forward)))
+		{
+			return false;
+		}
+
+		const float rad_to_deg = 180.0f / 3.14159265f;
+		*pitch = -std::asin(forward[2] > 1.0f ? 1.0f : (forward[2] < -1.0f ? -1.0f : forward[2])) * rad_to_deg;
+		*yaw = std::atan2(forward[1], forward[0]) * rad_to_deg;
+		return true;
+	}
+
+	// ---- how often does each source update? (F4) ----------------------------------------
+	bool g_rate_test_active = false;
+	double g_rate_test_end = 0.0;
+	int g_rate_presents = 0;
+	int g_rate_changes[SOURCE_COUNT];
+	unsigned char g_rate_last[SOURCE_COUNT][24];
+	bool g_rate_have_last[SOURCE_COUNT];
+
+	void rate_test_start()
+	{
+		g_rate_test_active = true;
+		g_rate_test_end = now_seconds() + 4.0;
+		g_rate_presents = 0;
+		memset(g_rate_changes, 0, sizeof(g_rate_changes));
+		memset(g_rate_have_last, 0, sizeof(g_rate_have_last));
+		log_line("rate test started: turn around continuously for 4 seconds");
+	}
+
+	// Raw bytes that should change when the camera moves or turns.
+	bool rate_sample(const int index, unsigned char* out)
+	{
+		if (index == 0)
+		{
+			unsigned long long pointer = 0;
+			if (!read_bytes(SP_G_ENTITIES + OFF_CLIENT, &pointer, sizeof(pointer)) || pointer < 0x140000000ull)
+			{
+				return false;
+			}
+
+			return read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_ORIGIN, out, 12) &&
+				read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_PITCH, out + 12, 8);
+		}
+
+		const camera_source& source = kSources[index];
+		return read_bytes(source.address, out, 12) && read_bytes(source.address + source.angle_offset, out + 12, 12);
+	}
+
+	void rate_test_tick()
+	{
+		if (!g_rate_test_active)
+		{
+			return;
+		}
+
+		++g_rate_presents;
+		for (int i = 0; i < SOURCE_COUNT; ++i)
+		{
+			unsigned char now_bytes[24] = {};
+			if (!rate_sample(i, now_bytes))
+			{
+				continue;
+			}
+
+			if (g_rate_have_last[i] && memcmp(now_bytes, g_rate_last[i], sizeof(now_bytes)) != 0)
+			{
+				++g_rate_changes[i];
+			}
+
+			memcpy(g_rate_last[i], now_bytes, sizeof(now_bytes));
+			g_rate_have_last[i] = true;
+		}
+
+		if (now_seconds() >= g_rate_test_end)
+		{
+			g_rate_test_active = false;
+			log_line("rate test finished: %d pictures were shown in 4 seconds", g_rate_presents);
+			for (int i = 0; i < SOURCE_COUNT; ++i)
+			{
+				log_line("  source %d (0x%llX): changed in %d of %d pictures", i,
+				         static_cast<unsigned long long>(kSources[i].address), g_rate_changes[i], g_rate_presents);
+			}
+		}
+	}
+
 	void poll_keys()
 	{
-		static bool was_f5, was_f6, was_f7, was_f8;
+		static bool was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		const bool f3 = key_pressed(VK_F3, &was_f3);
+		const bool f4 = key_pressed(VK_F4, &was_f4);
 		const bool f5 = key_pressed(VK_F5, &was_f5);
 		const bool f6 = key_pressed(VK_F6, &was_f6);
 		const bool f7 = key_pressed(VK_F7, &was_f7);
@@ -807,6 +955,17 @@ namespace
 		{
 			g_overlay_on = !g_overlay_on;
 			log_line("F8: overlay %s", g_overlay_on ? "ON" : "OFF");
+		}
+
+		if (f3)
+		{
+			g_source = (g_source + 1) % SOURCE_COUNT;
+			log_line("F3: camera source %d", static_cast<int>(g_source));
+		}
+
+		if (f4)
+		{
+			rate_test_start();
 		}
 
 		if (f5) g_fov_style = (g_fov_style + 1) % 3;
@@ -849,14 +1008,6 @@ namespace
 
 	motion_sample g_older = {};
 	motion_sample g_newer = {};
-
-	double now_seconds()
-	{
-		LARGE_INTEGER frequency, counter;
-		QueryPerformanceFrequency(&frequency);
-		QueryPerformanceCounter(&counter);
-		return static_cast<double>(counter.QuadPart) / static_cast<double>(frequency.QuadPart);
-	}
 
 	float wrap_angle_difference(float delta)
 	{
@@ -929,9 +1080,24 @@ namespace
 		float origin[3];
 		float pitch = 0.0f;
 		float yaw = 0.0f;
-		if (!read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_ORIGIN, origin, sizeof(origin)) ||
-			!read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_PITCH, &pitch, sizeof(pitch)) ||
-			!read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_YAW, &yaw, sizeof(yaw)))
+		const int source_index = g_source;
+		bool have_camera = false;
+		float eye_height = EYE_HEIGHT;
+
+		if (source_index == 0)
+		{
+			have_camera = read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_ORIGIN, origin, sizeof(origin)) &&
+				read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_PITCH, &pitch, sizeof(pitch)) &&
+				read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_YAW, &yaw, sizeof(yaw));
+		}
+		else
+		{
+			// These already include the eye height.
+			have_camera = read_source(source_index, origin, &pitch, &yaw);
+			eye_height = 0.0f;
+		}
+
+		if (!have_camera)
 		{
 			return false;
 		}
@@ -942,7 +1108,10 @@ namespace
 			return false;
 		}
 
-		smooth_camera(origin, &pitch, &yaw);
+		if (source_index == 0)
+		{
+			smooth_camera(origin, &pitch, &yaw);
+		}
 
 		if (g_frame_counter % 120 == 1)
 		{
@@ -961,7 +1130,7 @@ namespace
 		const float sp = std::sin(pitch * rad);
 		const float cy = std::cos(yaw * rad);
 		const float sy = std::sin(yaw * rad);
-		g_eye = {origin[0], origin[1], origin[2] + EYE_HEIGHT};
+		g_eye = {origin[0], origin[1], origin[2] + eye_height};
 		g_fwd = {cp * cy, cp * sy, -sp};
 		g_right = {sy, -cy, 0.0f};
 		g_up = {sp * cy, sp * sy, cp};
@@ -996,8 +1165,13 @@ namespace
 			}
 		}
 
+		for (int i = 0; i <= g_source; ++i)
+		{
+			add_rect(10.0f + static_cast<float>(i) * 18.0f, 10.0f + 3 * 18.0f, 12.0f, 12.0f, kColors[5]);
+		}
+
 		hit hits[MAX_BOXES];
-		const int count = find_triggers({origin[0], origin[1], origin[2] + 30.0f}, kDistances[g_dist_level], hits, MAX_BOXES);
+		const int count = find_triggers({origin[0], origin[1], origin[2] + 30.0f - (eye_height == 0.0f ? EYE_HEIGHT : 0.0f)}, kDistances[g_dist_level], hits, MAX_BOXES);
 
 		for (int i = count - 1; i >= 0; --i)
 		{
@@ -1248,6 +1422,7 @@ namespace
 	{
 		poll_keys();
 		++g_frame_counter;
+		rate_test_tick();
 
 		if (!g_overlay_on || !in_mission())
 		{
@@ -1544,217 +1719,14 @@ namespace
 		return strstr(exe, "s1_sp64_ship") != nullptr;
 	}
 
-	// ------------------------------------------------------------------------------
-	// Camera search (F4): finds where the game keeps the camera it actually renders with.
-	// Press F4 once, walk a few steps and look around, press F4 again (and once more).
-	// Each press keeps only the memory spots that kept following you.
-	// ------------------------------------------------------------------------------
-	constexpr int MAX_CANDIDATES = 20000;
-	uintptr_t g_candidates[MAX_CANDIDATES];
-	int g_candidate_count = 0;
-	int g_search_round = 0;
-	float g_search_start[3] = {};
-
-	bool read_player_origin(float* out)
-	{
-		unsigned long long pointer = 0;
-		if (!read_bytes(SP_G_ENTITIES + OFF_CLIENT, &pointer, sizeof(pointer)) || pointer < 0x140000000ull ||
-			pointer > 0x7FFFFFFE0000ull)
-		{
-			return false;
-		}
-
-		return read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_ORIGIN, out, sizeof(float) * 3);
-	}
-
-	// Does the triple at `f` look like an eye position for a player standing at `p`?
-	bool looks_like_eye(const float* f, const float* p)
-	{
-		return std::fabs(f[0] - p[0]) < 3.0f && std::fabs(f[1] - p[1]) < 3.0f && f[2] > p[2] + 20.0f && f[2] < p[2] + 85.0f;
-	}
-
-	void search_first_round(const float* player)
-	{
-		const auto base = reinterpret_cast<uintptr_t>(GetModuleHandleA(nullptr));
-		const auto dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
-		const auto nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
-		const uintptr_t image_end = base + nt->OptionalHeader.SizeOfImage;
-
-		unsigned long long client = 0;
-		read_bytes(SP_G_ENTITIES + OFF_CLIENT, &client, sizeof(client));
-
-		static unsigned char chunk[65536];
-		g_candidate_count = 0;
-		size_t scanned = 0;
-		int regions_logged = 0;
-
-		uintptr_t address = base;
-		while (address < image_end && g_candidate_count < MAX_CANDIDATES)
-		{
-			MEMORY_BASIC_INFORMATION mbi;
-			if (VirtualQuery(reinterpret_cast<const void*>(address), &mbi, sizeof(mbi)) == 0)
-			{
-				break;
-			}
-
-			const uintptr_t region_start = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
-			uintptr_t region_end = region_start + mbi.RegionSize;
-			if (region_end > image_end)
-			{
-				region_end = image_end;
-			}
-
-			// Any readable memory inside the game program (its protection flags turned out to be
-			// different from what I assumed, so don't be picky).
-			const bool readable = mbi.State == MEM_COMMIT && (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) == 0;
-
-			if (regions_logged < 40)
-			{
-				++regions_logged;
-				log_line("  region 0x%llX size %llu KB state 0x%lX protect 0x%lX", static_cast<unsigned long long>(region_start),
-				         static_cast<unsigned long long>((region_end - region_start) / 1024), static_cast<unsigned long>(mbi.State),
-				         static_cast<unsigned long>(mbi.Protect));
-			}
-
-			if (readable)
-			{
-				for (uintptr_t position = address; position < region_end && g_candidate_count < MAX_CANDIDATES;)
-				{
-					size_t length = region_end - position;
-					if (length > sizeof(chunk))
-					{
-						length = sizeof(chunk);
-					}
-
-					if (read_bytes(position, chunk, length))
-					{
-						scanned += length;
-						for (size_t i = 0; i + 12 <= length && g_candidate_count < MAX_CANDIDATES; i += 4)
-						{
-							float f[3];
-							memcpy(f, chunk + i, sizeof(f));
-							if (!looks_like_eye(f, player))
-							{
-								continue;
-							}
-
-							const uintptr_t found = position + i;
-							const bool in_entities = found >= SP_G_ENTITIES &&
-								found < SP_G_ENTITIES + static_cast<uintptr_t>(MAX_ENTITIES) * ENTITY_SIZE;
-							const bool in_client = client != 0 && found >= client && found < client + CLIENT_DUMP_SIZE;
-							if (!in_entities && !in_client)
-							{
-								g_candidates[g_candidate_count++] = found;
-							}
-						}
-					}
-
-					position += length;
-				}
-			}
-
-			address = region_end;
-		}
-
-		log_line("camera search, round 1: scanned %zu MB, kept %d candidates (player at %.0f %.0f %.0f)",
-		         scanned / (1024 * 1024), g_candidate_count, player[0], player[1], player[2]);
-	}
-
-	void search_next_round(const float* player)
-	{
-		if (std::fabs(player[0] - g_search_start[0]) + std::fabs(player[1] - g_search_start[1]) < 80.0f)
-		{
-			log_line("camera search: you have not moved far enough yet (walk about 10 steps), press F4 again");
-			return;
-		}
-
-		int kept = 0;
-		for (int i = 0; i < g_candidate_count; ++i)
-		{
-			float f[3];
-			if (read_bytes(g_candidates[i], f, sizeof(f)) && looks_like_eye(f, player))
-			{
-				g_candidates[kept++] = g_candidates[i];
-			}
-		}
-
-		g_candidate_count = kept;
-		log_line("camera search, round %d: %d candidates still follow you (player at %.0f %.0f %.0f)", g_search_round, kept,
-		         player[0], player[1], player[2]);
-
-		if (kept > 0 && kept <= 60)
-		{
-			char path[MAX_PATH];
-			make_path(path, "camera_search.txt");
-			FILE* f = nullptr;
-			if (fopen_s(&f, path, "w") == 0 && f)
-			{
-				fprintf(f, "player (feet) at %.2f %.2f %.2f\n", player[0], player[1], player[2]);
-				for (int i = 0; i < kept; ++i)
-				{
-					const uintptr_t address = g_candidates[i];
-					fprintf(f, "\n== candidate %d at 0x%llX\n", i, static_cast<unsigned long long>(address));
-					const uintptr_t from = address - 0x40;
-					for (uintptr_t position = from; position < address + 0x100; position += 16)
-					{
-						unsigned char row[16];
-						if (!read_bytes(position, row, sizeof(row)))
-						{
-							fprintf(f, "%+05d: ??\n", static_cast<int>(position - address));
-							continue;
-						}
-
-						float v[4];
-						memcpy(v, row, sizeof(v));
-						fprintf(f, "%+05d:", static_cast<int>(position - address));
-						for (const unsigned char byte : row)
-						{
-							fprintf(f, " %02X", byte);
-						}
-
-						fprintf(f, "   %10.4f %10.4f %10.4f %10.4f\n", v[0], v[1], v[2], v[3]);
-					}
-				}
-
-				fclose(f);
-				log_line("camera search: wrote camera_search.txt (%d candidates)", kept);
-			}
-		}
-		else if (kept > 60)
-		{
-			log_line("camera search: still too many candidates, walk further / turn around, then press F4 again");
-		}
-	}
-
-	void camera_search_pressed()
-	{
-		float player[3];
-		if (!in_mission() || !read_player_origin(player))
-		{
-			log_line("camera search: start a mission first");
-			return;
-		}
-
-		++g_search_round;
-		if (g_search_round == 1)
-		{
-			memcpy(g_search_start, player, sizeof(player));
-			search_first_round(player);
-		}
-		else
-		{
-			search_next_round(player);
-		}
-	}
-
 	DWORD WINAPI worker(LPVOID)
 	{
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.12, camera search build (reads all game memory)) ----");
+		log_line("---- add-on loaded (version 0.13, camera source test) ----");
 		log_line("host program: %s", exe);
-		log_line("F8 on/off | F7 distance | F6 thickness | F5 fov style | F4 camera search | F9 data files");
+		log_line("F8 on/off | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
 
 		bool hook_done = false;
 
@@ -1762,7 +1734,6 @@ namespace
 		int seconds_with_data = 0;
 		bool auto_done = false;
 		bool f9_was_down = false;
-		bool f4_was_down = false;
 
 		// 100 ms per tick; stop after about 30 minutes.
 		for (int tick = 1; tick <= 18000; ++tick)
@@ -1787,15 +1758,6 @@ namespace
 			{
 				seconds_with_data = entity_list_has_data() ? seconds_with_data + 1 : 0;
 			}
-
-			const bool f4_down = (GetAsyncKeyState(VK_F4) & 0x8000) != 0;
-			if (f4_down && !f4_was_down)
-			{
-				log_line("F4 pressed (camera search)");
-				camera_search_pressed();
-			}
-
-			f4_was_down = f4_down;
 
 			const bool f9_down = (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
 			const bool f9_pressed = f9_down && !f9_was_down;

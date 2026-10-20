@@ -1,27 +1,7 @@
-S1x DEBUG OVERLAY - TEST BUILD 0.12 (camera search, second try)
-===================================================
+Version 0.13 - camera source test
 
-This build works like the last one (F8 = overlay on/off), plus a one-time
-search that finds where the game keeps its real camera. That is what will
-make the boxes perfectly smooth. It only READS memory. Campaign only.
+Download: https://github.com/murphyongit/s1x-debug_overlay/releases/latest/download/version.dll
+Put version.dll in D:\GAMES\AW (replace the old one), start the game, load a mission.
 
-HOW TO INSTALL
-1. Close the game completely.
-2. Open the folder "try_this_first". Copy the file inside it (version.dll)
-   into your game folder (D:\GAMES\AW). Say YES to replace the old one.
-
-HOW TO RUN THE SEARCH
-1. Load a campaign mission and wait until you can move. Stand still.
-2. Press F4 once. Wait 5 seconds.
-3. Walk forward about 10-15 steps and look around a little, then stop.
-4. Press F4 again. Wait 5 seconds.
-5. Walk somewhere else (turn around, 10 more steps), stop, press F4 a third
-   time. Wait 5 seconds.
-6. Quit the game. Send Claude these two files from D:\GAMES\AW:
-      s1x_debug_overlay.log
-      camera_search.txt        (if it exists)
-
-KEYS (as before)  F8 overlay  F7 distance  F6 thickness  F5 fov style
-
-TO UNINSTALL
-Delete version.dll from the game folder.
+Keys: F8 on/off | F3 next camera source | F4 update-rate test | F5 fov style | F6 thickness | F7 distance
+Row of small squares (4th row, top-left) = which camera source is in use.
