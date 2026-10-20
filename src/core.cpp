@@ -1,8 +1,8 @@
-// S1x debug overlay - version 0.6 (first build that DRAWS)
+// S1x debug overlay - version 0.7 (first build that DRAWS; 0.6 crashed on a stale material pointer)
 //
 // Draws a box around every trigger in the campaign. Because this could not be tested
 // before shipping, a few keys let you try different drawing settings:
-//   F8 = overlay on/off          F6 = drawing mode (4 choices)
+//   F8 = overlay on/off (starts OFF)         F6 = drawing mode (4 choices)
 //   F7 = how far away to draw    F5 = field-of-view style (3 choices)
 //   F4 = text labels on/off      F9 = save the data files (as before)
 // Small squares in the top-left corner show the current F6 / F7 / F5 settings.
@@ -415,7 +415,7 @@ namespace
 
 	com_frame_t g_original_frame = nullptr;
 
-	volatile bool g_overlay_on = true;
+	volatile bool g_overlay_on = false;   // starts OFF; press F8 in a mission to turn it on
 	volatile bool g_text_on = false;
 	volatile int g_mode = 0;       // bit 0: draw before the game's frame; bit 1: 640x480 coordinates
 	volatile int g_dist_level = 1;
@@ -425,8 +425,9 @@ namespace
 	void* g_white = nullptr;
 	void* g_font = nullptr;
 	float g_font_height = 0.0f;
-	bool g_resources_tried = false;
-	bool g_font_tried = false;
+	void* g_last_white = nullptr;
+	bool g_in_game = false;
+	unsigned short g_player_class_id = 0;
 
 	float g_fov = 65.0f;
 	float g_fov_scale = 1.0f;
@@ -909,6 +910,26 @@ namespace
 		}
 	}
 
+	// True only while a mission is running (slot 0 of the entity list is the player).
+	bool in_mission()
+	{
+		unsigned short id = 0;
+		if (!read_bytes(SP_G_ENTITIES + OFF_CLASSNAME, &id, sizeof(id)) || id == 0)
+		{
+			g_in_game = false;
+			return false;
+		}
+
+		if (g_frame_counter % 60 == 1 || id != g_player_class_id)
+		{
+			char name[32];
+			g_in_game = class_name(id, name, sizeof(name)) && strcmp(name, "player") == 0;
+			g_player_class_id = g_in_game ? id : 0;
+		}
+
+		return g_in_game;
+	}
+
 	void frame_draw()
 	{
 		static bool was_f4, was_f5, was_f6, was_f7, was_f8;
@@ -935,7 +956,7 @@ namespace
 			log_line("drawing hook is running (first frame)");
 		}
 
-		if (!g_overlay_on)
+		if (!g_overlay_on || !in_mission())
 		{
 			return;
 		}
@@ -964,11 +985,13 @@ namespace
 			return;
 		}
 
-		if (!g_resources_tried)
+		// The game moves and replaces its pictures and fonts when a mission loads, so a
+		// remembered pointer goes stale (that is what crashed 0.6). Ask again every frame.
+		g_white = try_register(SP_MATERIAL_REGISTER, "white");
+		if (g_white != g_last_white)
 		{
-			g_resources_tried = true;
-			g_white = try_register(SP_MATERIAL_REGISTER, "white");
-			log_line("white material: %p", g_white);
+			log_line("white material is now %p (was %p)", g_white, g_last_white);
+			g_last_white = g_white;
 		}
 
 		if (!g_white)
@@ -976,11 +999,10 @@ namespace
 			return;
 		}
 
-		if (g_text_on && !g_font_tried)
+		g_font = nullptr;
+		if (g_text_on)
 		{
-			g_font_tried = true;
 			g_font = make_font(&g_font_height);
-			log_line("text font: %p (height %.0f)", g_font, g_font_height);
 		}
 
 		if (g_frame_counter % 120 == 1)
@@ -1140,7 +1162,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.6, first drawing build) ----");
+		log_line("---- add-on loaded (version 0.7, first drawing build, fix 1) ----");
 		log_line("host program: %s", exe);
 		log_line("F9 = save entity table | F8 on/off | F6 mode | F7 distance | F5 fov style | F4 text");
 
