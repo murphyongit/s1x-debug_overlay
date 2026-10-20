@@ -1,4 +1,4 @@
-Version 0.23 - trigger names, flag-trigger colors, Home = brush models/volumes
+Version 0.24 - key help (End), console command overlay_help, PageUp = collision data dump
 
 Download: https://github.com/murphyongit/s1x-debug_overlay/releases/latest/download/version.dll
 Put version.dll in D:\GAMES\AW (replace the old one), start the game, load a mission.

@@ -714,6 +714,8 @@ namespace
 	// ---- tiny built-in text (5x7 letters drawn as little rectangles) ------------------------
 	volatile bool g_labels_on = true;   // F2
 	volatile bool g_brushes_on = false;   // Home
+	double g_help_until = 0.0;            // keys help is shown until this time (End key toggles)
+	volatile bool g_help_requested = false;   // set by the console command
 
 	const unsigned char* glyph_for(const char c)
 	{
@@ -1488,7 +1490,8 @@ namespace
 
 	void poll_keys()
 	{
-		static bool was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		static bool was_end, was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		const bool end_key = key_pressed(VK_END, &was_end);
 		const bool home = key_pressed(VK_HOME, &was_home);
 		const bool f11 = key_pressed(VK_F11, &was_f11);
 		const bool f2 = key_pressed(VK_F2, &was_f2);
@@ -1503,6 +1506,17 @@ namespace
 		{
 			g_overlay_on = !g_overlay_on;
 			log_line("F8: overlay %s", g_overlay_on ? "ON" : "OFF");
+			if (g_overlay_on)
+			{
+				g_help_until = now_seconds() + 12.0;
+			}
+		}
+
+		if (end_key || g_help_requested)
+		{
+			g_help_requested = false;
+			const double now = now_seconds();
+			g_help_until = g_help_until > now ? 0.0 : 1.0e15;
 		}
 
 		if (home)
@@ -1757,6 +1771,24 @@ namespace
 		if (g_events_on)
 		{
 			draw_events();
+		}
+
+		if (g_help_until > now_seconds())
+		{
+			static const char* const kHelp[] = {
+				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
+				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "F9 save data files",
+				"Insert geometry search", "PageUp dump level collision data", "End this help (or console: overlay_help)"};
+			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
+			const float line = 10.0f * scale + 2.0f;
+			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));
+			const float dim[4] = {0.85f, 0.85f, 0.85f, 0.7f};
+			const float back[4] = {0.0f, 0.0f, 0.0f, 0.4f};
+			add_rect(8.0f, top - 6.0f, 330.0f * scale / 1.5f + 20.0f, g_h - top - 2.0f, back);
+			for (size_t i = 0; i < sizeof(kHelp) / sizeof(kHelp[0]); ++i)
+			{
+				draw_text(16.0f, top + line * static_cast<float>(i), kHelp[i], scale, dim);
+			}
 		}
 
 		if (g_labels_on)
@@ -2541,6 +2573,151 @@ namespace
 		log_line("geometry search: wrote geometry_search.txt");
 	}
 
+	// ---- level collision data dump (PageUp) ------------------------------------------------
+	// Asks the game for its loaded "clipmap" (the level's collision data) and saves what it looks like
+	// so the layout can be worked out.
+	constexpr int ASSET_TYPE_CLIPMAP_INDEX = 24;
+	constexpr uintptr_t SP_DB_ENUM_XASSETS = 0x14017D7C0;
+	void* g_found_assets[16];
+	int g_found_count = 0;
+
+	void found_asset_callback(void* header, void*)
+	{
+		if (g_found_count < 16)
+		{
+			g_found_assets[g_found_count++] = header;
+		}
+	}
+
+	void dump_bytes(FILE* f, const uintptr_t address, const size_t length, const char* indent)
+	{
+		for (size_t offset = 0; offset < length; offset += 16)
+		{
+			unsigned char row[16];
+			if (!read_bytes(address + offset, row, sizeof(row)))
+			{
+				fprintf(f, "%s%04zX: ??\n", indent, offset);
+				continue;
+			}
+
+			int ints[4];
+			memcpy(ints, row, sizeof(ints));
+			fprintf(f, "%s%04zX:", indent, offset);
+			for (const unsigned char byte : row)
+			{
+				fprintf(f, " %02X", byte);
+			}
+
+			fprintf(f, "   %d %d %d %d\n", ints[0], ints[1], ints[2], ints[3]);
+		}
+	}
+
+	void dump_clipmap()
+	{
+		log_line("collision dump: asking the game for its level collision data");
+		g_found_count = 0;
+		using enum_t = void (*)(int, void (*)(void*, void*), void*, bool);
+		bool ok = true;
+		__try
+		{
+			reinterpret_cast<enum_t>(SP_DB_ENUM_XASSETS)(ASSET_TYPE_CLIPMAP_INDEX, &found_asset_callback, nullptr, false);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			ok = false;
+		}
+
+		if (!ok || g_found_count == 0)
+		{
+			log_line("collision dump: found nothing (%s)", ok ? "no clipmap loaded" : "the call failed");
+			return;
+		}
+
+		char path[MAX_PATH];
+		make_path(path, "clipmap_dump.txt");
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "w") != 0 || !f)
+		{
+			return;
+		}
+
+		for (int a = 0; a < g_found_count; ++a)
+		{
+			const uintptr_t base = reinterpret_cast<uintptr_t>(g_found_assets[a]);
+			fprintf(f, "=== clipmap asset %d at 0x%llX ===\n", a, static_cast<unsigned long long>(base));
+			dump_bytes(f, base, 0x200, "  ");
+
+			int followed = 0;
+			for (size_t offset = 0; offset < 0x200 && followed < 40; offset += 8)
+			{
+				unsigned long long value = 0;
+				if (!read_bytes(base + offset, &value, sizeof(value)) || value < 0x10000ull || value > 0x7FFFFFFE0000ull)
+				{
+					continue;
+				}
+
+				unsigned char probe[8];
+				if (!read_bytes(static_cast<uintptr_t>(value), probe, sizeof(probe)))
+				{
+					continue;
+				}
+
+				++followed;
+				char text[40];
+				const bool is_text = safe_copy_string(reinterpret_cast<const char*>(value), text, sizeof(text));
+				fprintf(f, "\n  field +0x%03zX -> 0x%llX%s%s\n", offset, value, is_text ? " text: " : "", is_text ? text : "");
+				if (!is_text)
+				{
+					dump_bytes(f, static_cast<uintptr_t>(value), 0x80, "      ");
+				}
+			}
+		}
+
+		fclose(f);
+		log_line("collision dump: wrote clipmap_dump.txt (%d asset(s))", g_found_count);
+	}
+
+	// Console command: overlay_help
+	struct console_command
+	{
+		console_command* next;
+		const char* name;
+		void (*function)();
+	};
+
+	console_command g_help_command = {};
+	bool g_command_added = false;
+
+	void help_command_function()
+	{
+		g_help_requested = true;
+	}
+
+	void try_add_console_command()
+	{
+		if (g_command_added)
+		{
+			return;
+		}
+
+		g_command_added = true;
+		constexpr uintptr_t SP_CMD_ADD_INTERNAL = 0x1402EDDB0;
+		using add_t = void (*)(const char*, void (*)(), console_command*);
+		g_help_command.name = "overlay_help";
+		g_help_command.function = &help_command_function;
+		bool ok = true;
+		__try
+		{
+			reinterpret_cast<add_t>(SP_CMD_ADD_INTERNAL)("overlay_help", &help_command_function, &g_help_command);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			ok = false;
+		}
+
+		log_line("console command overlay_help %s", ok ? "added" : "could not be added");
+	}
+
 	bool g_notify_hooked = false;
 
 	// Tries to hook the script "notify" function. Can be called again and again until it works.
@@ -2603,6 +2780,8 @@ namespace
 		bool auto_done = false;
 		bool f9_was_down = false;
 		bool insert_was_down = false;
+		bool pageup_was_down = false;
+		bool command_tried = false;
 
 		// 100 ms per tick; stop after about 30 minutes.
 		for (int tick = 1; tick <= 18000; ++tick)
@@ -2633,6 +2812,21 @@ namespace
 			{
 				seconds_with_data = entity_list_has_data() ? seconds_with_data + 1 : 0;
 			}
+
+			if (!command_tried && seconds_with_data >= 5)
+			{
+				command_tried = true;
+				try_add_console_command();
+			}
+
+			const bool pageup_down = (GetAsyncKeyState(VK_PRIOR) & 0x8000) != 0;
+			if (pageup_down && !pageup_was_down)
+			{
+				log_line("PageUp pressed (collision data dump)");
+				dump_clipmap();
+			}
+
+			pageup_was_down = pageup_down;
 
 			const bool insert_down = (GetAsyncKeyState(VK_INSERT) & 0x8000) != 0;
 			if (insert_down && !insert_was_down)
