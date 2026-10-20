@@ -15,3 +15,5 @@ v0.35: fixed the position matching so most flag triggers show their flag names.
 v0.36: when a mission ends the log lists every box entered in the last 2 minutes, with flag names. To find the end trigger: finish a mission, then send the log.
 
 v0.38: triggers whose flag is on the known end list (see KNOWN_END_TRIGGERS.txt) are drawn as rainbow end triggers at any range, and the log and top-right list announce when you enter one.
+
+v0.39: invisible barriers (brush models named clip/blocker/collision) are drawn hot pink within about 100 m even with Home off, and the top-right list says WALL REMOVED when one disappears. Triggers that set "player_leaving_map" or a death/kill/fail flag are drawn as rainbow warning boxes at any range.

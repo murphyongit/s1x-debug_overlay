@@ -415,6 +415,7 @@ namespace
 		float key;               // sort order (end-of-mission candidates sort first)
 		unsigned char flag;      // 0 = normal, 1 = might end the mission / leave the area
 		unsigned char kind;
+		bool barrier;
 		bool inside;
 		vec3 mid;
 		vec3 half;
@@ -455,7 +456,7 @@ namespace
 
 	unsigned char g_class_kind[65536];
 
-	float kColors[10][4] = {
+	float kColors[11][4] = {
 		{0.1f, 1.0f, 0.2f, 1.0f},   // trigger_multiple (green)
 		{1.0f, 0.2f, 0.2f, 1.0f},   // hurt / damage (red)
 		{1.0f, 0.9f, 0.1f, 1.0f},   // use (yellow)
@@ -466,6 +467,7 @@ namespace
 		{0.2f, 1.0f, 1.0f, 1.0f},   // checkpoint / autosave (cyan)
 		{0.65f, 0.65f, 0.75f, 1.0f},  // moving brush models and volumes (grey)
 		{0.95f, 0.6f, 0.35f, 0.9f},   // level collision blocks (warm brown)
+		{1.0f, 0.25f, 0.65f, 1.0f},   // invisible barrier brush (hot pink)
 	};
 
 	bool read_dvar_float(const char* name, float* out)
@@ -708,6 +710,7 @@ namespace
 		}
 
 		if (h.inside) return kColors[5];
+		if (h.kind == 7 && h.barrier) return kColors[10];
 		if (h.kind == 7) return kColors[8];
 		if (h.kind == 9) return kColors[9];
 		const unsigned char special = type_special(h.type_id);
@@ -1194,6 +1197,7 @@ namespace
 	}
 
 	void log_recent_entries(const char* why);
+	bool barrier_name(unsigned int name_id);
 
 	void entity_watch()
 	{
@@ -1220,22 +1224,24 @@ namespace
 				char name[48] = {};
 				char kind[48] = {};
 				unsigned int name_id = 0;
-				memcpy(&name_id, current + 0x160, sizeof(name_id));
+				memcpy(&name_id, (class_id == 0 ? before : current) + 0x160, sizeof(name_id));
 				if (name_id > 1 && name_id < 0x10000)
 				{
 					class_name(name_id, name, sizeof(name));
 				}
 
 				class_name(relevant, kind, sizeof(kind));
+				const bool wall = classify(relevant) == 7 && barrier_name(name_id);
 				char text[44] = {};
 				if (before_class != 0 && class_id == 0)
 				{
 					++gone_count;
-					snprintf(text, sizeof(text), "GONE %s #%d", name[0] ? name : kind, index);
+					snprintf(text, sizeof(text), "%s %s #%d", wall ? "WALL REMOVED" : "GONE", name[0] ? name : kind, index);
+					if (wall) log_line("INVISIBLE WALL REMOVED: %s #%d", name, index);
 				}
 				else if (before_class == 0 && class_id != 0)
 				{
-					snprintf(text, sizeof(text), "NEW %s #%d", name[0] ? name : kind, index);
+					snprintf(text, sizeof(text), "%s %s #%d", wall ? "WALL ADDED" : "NEW", name[0] ? name : kind, index);
 				}
 				else if (class_id != 0 && now - g_watch_last[index] > 1.5)
 				{
@@ -1411,6 +1417,27 @@ namespace
 	// Flags confirmed (by playing) to start a mission ending. Add new ones here as they are found.
 	//   mission: fission - multiple_flag_set, stepping in starts the ~48 second ending
 	const char* const kKnownEndFlags[] = {"ct_final_retreat"};
+
+	// Flags that mean "you are leaving the play area / this kills you".
+	bool is_fail_flag(const int slot)
+	{
+		if (slot < 0 || slot >= MAX_ENTITIES || !g_slot_flags[slot][0])
+		{
+			return false;
+		}
+
+		static const char* const kFail[] = {"player_leaving_map", "leaving_map", "_death", "kill", "fail", "out_of_bounds", "oob",
+		                                    "abandon", "mission_area", "leave_area"};
+		for (const char* word : kFail)
+		{
+			if (strstr(g_slot_flags[slot], word))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
 
 	bool is_known_end_flag(const int slot)
 	{
@@ -1879,6 +1906,43 @@ namespace
 		return flag;
 	}
 
+	// Brush models whose name says they are an invisible wall / blocker.
+	unsigned char g_barrier_name[65536];
+
+	bool barrier_name(const unsigned int name_id)
+	{
+		if (name_id < 2 || name_id >= 0x10000)
+		{
+			return false;
+		}
+
+		if (g_barrier_name[name_id] == 0)
+		{
+			unsigned char verdict = 1;
+			char name[64];
+			if (class_name(name_id, name, sizeof(name)))
+			{
+				for (char* c = name; *c; ++c)
+				{
+					if (*c >= 'A' && *c <= 'Z') *c = static_cast<char>(*c + 32);
+				}
+
+				static const char* const kWords[] = {"clip", "blocker", "collision", "_col", "barrier", "invisible", "playerblock", "block_"};
+				for (const char* word : kWords)
+				{
+					if (strstr(name, word))
+					{
+						verdict = 2;
+					}
+				}
+			}
+
+			g_barrier_name[name_id] = verdict;
+		}
+
+		return g_barrier_name[name_id] == 2;
+	}
+
 	// Finds the closest triggers. Returns how many it put in out[].
 	int find_triggers(const vec3& player, const float max_distance, hit* out, const int capacity)
 	{
@@ -1911,7 +1975,10 @@ namespace
 			}
 
 			const unsigned char kind = classify(class_id);
-			if (kind < 2 || (kind == 7 && !g_brushes_on))
+			unsigned int early_name = 0;
+			memcpy(&early_name, buffer + 0x160, sizeof(early_name));
+			const bool barrier = kind == 7 && barrier_name(early_name);
+			if (kind < 2 || (kind == 7 && !g_brushes_on && !barrier))
 			{
 				continue;
 			}
@@ -1942,8 +2009,8 @@ namespace
 			const float dist = std::sqrt(ex * ex + ey * ey + ez * ez);
 			unsigned int name_id_value = 0;
 			memcpy(&name_id_value, buffer + 0x160, sizeof(name_id_value));
-			const bool end_candidate = kind != 7 && (name_flag(name_id_value) == 2 || is_known_end_flag(index));
-			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f))
+			const bool end_candidate = kind != 7 && (name_flag(name_id_value) == 2 || is_known_end_flag(index) || is_fail_flag(index));
+			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f) && !(barrier && dist < 4000.0f))
 			{
 				continue;
 			}
@@ -1952,6 +2019,7 @@ namespace
 			h.dist = dist;
 			h.key = end_candidate ? dist - 1.0e9f : dist;
 			h.flag = end_candidate ? 1 : 0;
+			h.barrier = barrier;
 			memcpy(&h.state, buffer + 0xD8, sizeof(h.state));
 			h.slot = index;
 			h.class_id = class_id;
@@ -4147,7 +4215,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.38, known end triggers list) ----");
+		log_line("---- add-on loaded (version 0.39, barriers and leave-area triggers) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
