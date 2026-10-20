@@ -1544,14 +1544,207 @@ namespace
 		return strstr(exe, "s1_sp64_ship") != nullptr;
 	}
 
+	// ------------------------------------------------------------------------------
+	// Camera search (F4): finds where the game keeps the camera it actually renders with.
+	// Press F4 once, walk a few steps and look around, press F4 again (and once more).
+	// Each press keeps only the memory spots that kept following you.
+	// ------------------------------------------------------------------------------
+	constexpr int MAX_CANDIDATES = 20000;
+	uintptr_t g_candidates[MAX_CANDIDATES];
+	int g_candidate_count = 0;
+	int g_search_round = 0;
+	float g_search_start[3] = {};
+
+	bool read_player_origin(float* out)
+	{
+		unsigned long long pointer = 0;
+		if (!read_bytes(SP_G_ENTITIES + OFF_CLIENT, &pointer, sizeof(pointer)) || pointer < 0x140000000ull ||
+			pointer > 0x7FFFFFFE0000ull)
+		{
+			return false;
+		}
+
+		return read_bytes(static_cast<uintptr_t>(pointer) + OFF_CAM_ORIGIN, out, sizeof(float) * 3);
+	}
+
+	// Does the triple at `f` look like an eye position for a player standing at `p`?
+	bool looks_like_eye(const float* f, const float* p)
+	{
+		return std::fabs(f[0] - p[0]) < 3.0f && std::fabs(f[1] - p[1]) < 3.0f && f[2] > p[2] + 20.0f && f[2] < p[2] + 85.0f;
+	}
+
+	void search_first_round(const float* player)
+	{
+		const auto base = reinterpret_cast<uintptr_t>(GetModuleHandleA(nullptr));
+		const auto dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+		const auto nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+		const uintptr_t image_end = base + nt->OptionalHeader.SizeOfImage;
+
+		unsigned long long client = 0;
+		read_bytes(SP_G_ENTITIES + OFF_CLIENT, &client, sizeof(client));
+
+		static unsigned char chunk[65536];
+		g_candidate_count = 0;
+		size_t scanned = 0;
+
+		uintptr_t address = base;
+		while (address < image_end && g_candidate_count < MAX_CANDIDATES)
+		{
+			MEMORY_BASIC_INFORMATION mbi;
+			if (VirtualQuery(reinterpret_cast<const void*>(address), &mbi, sizeof(mbi)) == 0)
+			{
+				break;
+			}
+
+			const uintptr_t region_start = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
+			uintptr_t region_end = region_start + mbi.RegionSize;
+			if (region_end > image_end)
+			{
+				region_end = image_end;
+			}
+
+			const bool writable = mbi.State == MEM_COMMIT && (mbi.Protect & (PAGE_READWRITE | PAGE_WRITECOPY)) != 0 &&
+				(mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) == 0;
+
+			if (writable)
+			{
+				for (uintptr_t position = address; position < region_end && g_candidate_count < MAX_CANDIDATES;)
+				{
+					size_t length = region_end - position;
+					if (length > sizeof(chunk))
+					{
+						length = sizeof(chunk);
+					}
+
+					if (read_bytes(position, chunk, length))
+					{
+						scanned += length;
+						for (size_t i = 0; i + 12 <= length && g_candidate_count < MAX_CANDIDATES; i += 4)
+						{
+							float f[3];
+							memcpy(f, chunk + i, sizeof(f));
+							if (!looks_like_eye(f, player))
+							{
+								continue;
+							}
+
+							const uintptr_t found = position + i;
+							const bool in_entities = found >= SP_G_ENTITIES &&
+								found < SP_G_ENTITIES + static_cast<uintptr_t>(MAX_ENTITIES) * ENTITY_SIZE;
+							const bool in_client = client != 0 && found >= client && found < client + CLIENT_DUMP_SIZE;
+							if (!in_entities && !in_client)
+							{
+								g_candidates[g_candidate_count++] = found;
+							}
+						}
+					}
+
+					position += length;
+				}
+			}
+
+			address = region_end;
+		}
+
+		log_line("camera search, round 1: scanned %zu MB, kept %d candidates (player at %.0f %.0f %.0f)",
+		         scanned / (1024 * 1024), g_candidate_count, player[0], player[1], player[2]);
+	}
+
+	void search_next_round(const float* player)
+	{
+		if (std::fabs(player[0] - g_search_start[0]) + std::fabs(player[1] - g_search_start[1]) < 80.0f)
+		{
+			log_line("camera search: you have not moved far enough yet (walk about 10 steps), press F4 again");
+			return;
+		}
+
+		int kept = 0;
+		for (int i = 0; i < g_candidate_count; ++i)
+		{
+			float f[3];
+			if (read_bytes(g_candidates[i], f, sizeof(f)) && looks_like_eye(f, player))
+			{
+				g_candidates[kept++] = g_candidates[i];
+			}
+		}
+
+		g_candidate_count = kept;
+		log_line("camera search, round %d: %d candidates still follow you (player at %.0f %.0f %.0f)", g_search_round, kept,
+		         player[0], player[1], player[2]);
+
+		if (kept > 0 && kept <= 60)
+		{
+			char path[MAX_PATH];
+			make_path(path, "camera_search.txt");
+			FILE* f = nullptr;
+			if (fopen_s(&f, path, "w") == 0 && f)
+			{
+				fprintf(f, "player (feet) at %.2f %.2f %.2f\n", player[0], player[1], player[2]);
+				for (int i = 0; i < kept; ++i)
+				{
+					const uintptr_t address = g_candidates[i];
+					fprintf(f, "\n== candidate %d at 0x%llX\n", i, static_cast<unsigned long long>(address));
+					const uintptr_t from = address - 0x40;
+					for (uintptr_t position = from; position < address + 0x100; position += 16)
+					{
+						unsigned char row[16];
+						if (!read_bytes(position, row, sizeof(row)))
+						{
+							fprintf(f, "%+05d: ??\n", static_cast<int>(position - address));
+							continue;
+						}
+
+						float v[4];
+						memcpy(v, row, sizeof(v));
+						fprintf(f, "%+05d:", static_cast<int>(position - address));
+						for (const unsigned char byte : row)
+						{
+							fprintf(f, " %02X", byte);
+						}
+
+						fprintf(f, "   %10.4f %10.4f %10.4f %10.4f\n", v[0], v[1], v[2], v[3]);
+					}
+				}
+
+				fclose(f);
+				log_line("camera search: wrote camera_search.txt (%d candidates)", kept);
+			}
+		}
+		else if (kept > 60)
+		{
+			log_line("camera search: still too many candidates, walk further / turn around, then press F4 again");
+		}
+	}
+
+	void camera_search_pressed()
+	{
+		float player[3];
+		if (!in_mission() || !read_player_origin(player))
+		{
+			log_line("camera search: start a mission first");
+			return;
+		}
+
+		++g_search_round;
+		if (g_search_round == 1)
+		{
+			memcpy(g_search_start, player, sizeof(player));
+			search_first_round(player);
+		}
+		else
+		{
+			search_next_round(player);
+		}
+	}
+
 	DWORD WINAPI worker(LPVOID)
 	{
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.10, draws with Direct3D, smoothed camera) ----");
+		log_line("---- add-on loaded (version 0.11, camera search build) ----");
 		log_line("host program: %s", exe);
-		log_line("F9 = save entity table | F8 on/off | F7 distance | F6 thickness | F5 fov style");
+		log_line("F8 on/off | F7 distance | F6 thickness | F5 fov style | F4 camera search | F9 data files");
 
 		bool hook_done = false;
 
@@ -1559,6 +1752,7 @@ namespace
 		int seconds_with_data = 0;
 		bool auto_done = false;
 		bool f9_was_down = false;
+		bool f4_was_down = false;
 
 		// 100 ms per tick; stop after about 30 minutes.
 		for (int tick = 1; tick <= 18000; ++tick)
@@ -1583,6 +1777,15 @@ namespace
 			{
 				seconds_with_data = entity_list_has_data() ? seconds_with_data + 1 : 0;
 			}
+
+			const bool f4_down = (GetAsyncKeyState(VK_F4) & 0x8000) != 0;
+			if (f4_down && !f4_was_down)
+			{
+				log_line("F4 pressed (camera search)");
+				camera_search_pressed();
+			}
+
+			f4_was_down = f4_down;
 
 			const bool f9_down = (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
 			const bool f9_pressed = f9_down && !f9_was_down;
