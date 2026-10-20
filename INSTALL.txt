@@ -1,24 +1,33 @@
-S1x DEBUG OVERLAY - TEST BUILD 0.4 (entity table, unfiltered)
-=============================================================
+S1x DEBUG OVERLAY - TEST BUILD 0.5 (camera hunt)
+================================================
 
-What this does: NOTHING visible. It reads the game's entity list and writes
-text files into your game folder. It changes nothing in the game.
-This build has NO memory scan and does NOT use F10. Don't press F10.
+What this does: NOTHING visible. It reads the game's memory and writes text
+files into your game folder. It changes nothing in the game.
+No memory scan, no F10. Don't press F10.
 
 HOW TO INSTALL
 1. Close the game completely.
 2. Open the folder "try_this_first". Copy the file inside it (version.dll)
    into your game folder (D:\GAMES\AW). Say YES to replace the old one.
-3. Start the game and load a campaign mission.
-4. When you can move around, wait about 15 seconds. The add-on saves the
-   entity table by itself.
-5. Optional: walk somewhere else in the mission and press F9 once for a
-   second table.
-6. Quit the game. New files in the game folder to send to Claude:
+
+HOW TO COLLECT THE DATA (stand somewhere safe, no enemies near)
+1. Start the game, load a campaign mission, and wait ~15 seconds after you can
+   move. The add-on saves a first snapshot by itself. (Ignore this one.)
+2. Your position and view angles should be written on screen in small text
+   (the game setting cg_drawViewpos). If you can't see them, open the console
+   with ~ and type:   cg_drawViewpos 1   then press Enter, and close it.
+3. Now stand STILL (don't walk) and take these 4 snapshots. Each time, press
+   F9 once, wait 3 seconds, then take a screenshot with Windows key + PrtScn
+   (or just write down the numbers shown on screen):
+      A. Look straight ahead, level.
+      B. Turn right about 90 degrees (a quarter turn), keep level.
+      C. Look as far UP as the game lets you.
+      D. Look as far DOWN as the game lets you.
+4. Quit the game. Send Claude these files from D:\GAMES\AW:
       s1x_debug_overlay.log
-      entities_1.txt
-      other_raw_1.txt
-   (and entities_2.txt / other_raw_2.txt if you pressed F9)
+      client_2.txt   client_3.txt   client_4.txt   client_5.txt
+   and your 4 screenshots (or the numbers you wrote down), in the order A-D.
+   The screenshots from Windows+PrtScn are in Pictures > Screenshots.
 
 TO UNINSTALL
 Delete version.dll from the game folder.

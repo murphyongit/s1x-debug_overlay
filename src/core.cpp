@@ -1,8 +1,10 @@
-// S1x debug overlay - version 0.4 ("entity table, unfiltered" build)
+// S1x debug overlay - version 0.5 ("camera hunt" build)
 //
-// Still invisible: this build only READS the entity list and writes text files next to the DLL.
-//   F9 -> writes entities_N.txt  (every non-empty entity slot, nothing filtered out)
-//         and other_raw_N.txt    (raw bytes of entities that are not the player or "scriptable")
+// Still invisible: this build only READS memory and writes text files next to the DLL.
+//   F9 -> writes entities_N.txt, other_raw_N.txt (same as 0.4) and also
+//         client_N.txt: the first 4 KB of the player's own data block, which should
+//         contain where you are looking. Take several F9 snapshots while looking in
+//         different directions (see INSTALL.txt).
 // F9 also fires automatically ~10 seconds after a mission has loaded.
 
 #include "core.hpp"
@@ -25,6 +27,8 @@ namespace
 	constexpr size_t OFF_ORIGIN = 0x1C;   // 3 floats
 	constexpr size_t OFF_BOUNDS = 0xDC;   // 6 floats: midpoint xyz, half-size xyz
 	constexpr size_t OFF_CLASSNAME = 0x14C; // 16-bit script string id
+	constexpr size_t OFF_CLIENT = 0x118;    // 64-bit pointer to the player's client block
+	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	constexpr int MAX_TABLES = 6;
 
@@ -291,6 +295,60 @@ namespace
 		}
 	}
 
+	// Saves the first part of the player's own data block (position, view angles, ...).
+	void write_client(const int number)
+	{
+		unsigned long long pointer = 0;
+		if (!read_bytes(SP_G_ENTITIES + OFF_CLIENT, &pointer, sizeof(pointer)))
+		{
+			log_line("client: could not read the player's client pointer");
+			return;
+		}
+
+		if (pointer < 0x140000000ull || pointer > 0x7FFFFFFE0000ull)
+		{
+			log_line("client: pointer 0x%llX looks wrong, skipping", pointer);
+			return;
+		}
+
+		char name[64];
+		sprintf_s(name, sizeof(name), "client_%d.txt", number);
+		char path[MAX_PATH];
+		make_path(path, name);
+
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "w") != 0 || !f)
+		{
+			log_line("could not create %s", name);
+			return;
+		}
+
+		fprintf(f, "client block at 0x%llX\n", pointer);
+
+		unsigned char row[16];
+		int rows = 0;
+		for (size_t offset = 0; offset < CLIENT_DUMP_SIZE; offset += sizeof(row))
+		{
+			if (!read_bytes(static_cast<uintptr_t>(pointer) + offset, row, sizeof(row)))
+			{
+				fprintf(f, "%04zX: ??\n", offset);
+				continue;
+			}
+
+			fprintf(f, "%04zX:", offset);
+			for (const unsigned char byte : row)
+			{
+				fprintf(f, " %02X", byte);
+			}
+
+			fputc('\n', f);
+			++rows;
+		}
+
+		fclose(f);
+		log_line("wrote %s (pointer 0x%llX, %d rows)", name, pointer, rows);
+	}
+
 	bool entity_list_has_data()
 	{
 		unsigned char bytes[32] = {};
@@ -315,7 +373,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.4, entity table, unfiltered) ----");
+		log_line("---- add-on loaded (version 0.5, camera hunt) ----");
 		log_line("host program: %s", exe);
 		log_line("F9 = save entity table");
 
@@ -353,6 +411,7 @@ namespace
 
 				++tables;
 				write_table(tables);
+				write_client(tables);
 			}
 		}
 
