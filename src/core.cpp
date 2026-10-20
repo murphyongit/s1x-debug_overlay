@@ -452,7 +452,7 @@ namespace
 
 	unsigned char g_class_kind[65536];
 
-	float kColors[9][4] = {
+	float kColors[10][4] = {
 		{0.1f, 1.0f, 0.2f, 1.0f},   // trigger_multiple (green)
 		{1.0f, 0.2f, 0.2f, 1.0f},   // hurt / damage (red)
 		{1.0f, 0.9f, 0.1f, 1.0f},   // use (yellow)
@@ -462,6 +462,7 @@ namespace
 		{1.0f, 0.3f, 1.0f, 1.0f},   // sets or clears a level flag (magenta)
 		{0.2f, 1.0f, 1.0f, 1.0f},   // checkpoint / autosave (cyan)
 		{0.65f, 0.65f, 0.75f, 1.0f},  // moving brush models and volumes (grey)
+		{0.95f, 0.6f, 0.35f, 0.9f},   // level collision blocks (warm brown)
 	};
 
 	bool read_dvar_float(const char* name, float* out)
@@ -681,6 +682,7 @@ namespace
 	{
 		if (h.inside) return kColors[5];
 		if (h.kind == 7) return kColors[8];
+		if (h.kind == 9) return kColors[9];
 		const unsigned char special = type_special(h.type_id);
 		if (special == 2) return kColors[6];
 		if (special == 3) return kColors[7];
@@ -1210,6 +1212,83 @@ namespace
 		}
 	}
 
+	// ---- level collision blocks (Delete key) ------------------------------------------------
+	// The level's collision data is stored as a tree of boxes. We keep the smallest boxes (the "leaves")
+	// and draw the ones near the player.
+	struct block
+	{
+		float mid[3];
+		float half[3];
+	};
+
+	block* volatile g_blocks = nullptr;
+	volatile int g_block_count = 0;
+	volatile bool g_collision_on = false;   // Delete
+	volatile bool g_collision_refresh = false;
+
+	void draw_collision_blocks(const vec3& player)
+	{
+		block* blocks = g_blocks;
+		const int count = g_block_count;
+		if (!blocks || count <= 0)
+		{
+			return;
+		}
+
+		constexpr int KEEP = 220;
+		float best_dist[KEEP];
+		int best_index[KEEP];
+		int kept = 0;
+		const float max_distance = 2200.0f;
+
+		for (int i = 0; i < count; ++i)
+		{
+			const block& b = blocks[i];
+			const float ex = std::fabs(player.x - b.mid[0]) - b.half[0];
+			const float ey = std::fabs(player.y - b.mid[1]) - b.half[1];
+			const float ez = std::fabs(player.z - b.mid[2]) - b.half[2];
+			const float cx = ex > 0.0f ? ex : 0.0f;
+			const float cy = ey > 0.0f ? ey : 0.0f;
+			const float cz = ez > 0.0f ? ez : 0.0f;
+			const float dist = cx * cx + cy * cy + cz * cz;
+			if (dist > max_distance * max_distance)
+			{
+				continue;
+			}
+
+			int position = kept < KEEP ? kept : KEEP - 1;
+			if (kept >= KEEP && dist >= best_dist[KEEP - 1])
+			{
+				continue;
+			}
+
+			if (kept < KEEP)
+			{
+				++kept;
+			}
+
+			while (position > 0 && best_dist[position - 1] > dist)
+			{
+				best_dist[position] = best_dist[position - 1];
+				best_index[position] = best_index[position - 1];
+				--position;
+			}
+
+			best_dist[position] = dist;
+			best_index[position] = i;
+		}
+
+		for (int n = kept - 1; n >= 0; --n)
+		{
+			const block& b = blocks[best_index[n]];
+			hit h = {};
+			h.kind = 9;
+			h.mid = {b.mid[0], b.mid[1], b.mid[2]};
+			h.half = {b.half[0], b.half[1], b.half[2]};
+			draw_box(h);
+		}
+	}
+
 	// 1 = ignore, 2.. = a kind of trigger. Looked up once and remembered for a while.
 	unsigned char classify(const unsigned short id)
 	{
@@ -1490,7 +1569,8 @@ namespace
 
 	void poll_keys()
 	{
-		static bool was_end, was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		static bool was_delete, was_end, was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		const bool delete_key = key_pressed(VK_DELETE, &was_delete);
 		const bool end_key = key_pressed(VK_END, &was_end);
 		const bool home = key_pressed(VK_HOME, &was_home);
 		const bool f11 = key_pressed(VK_F11, &was_f11);
@@ -1517,6 +1597,13 @@ namespace
 			g_help_requested = false;
 			const double now = now_seconds();
 			g_help_until = g_help_until > now ? 0.0 : 1.0e15;
+		}
+
+		if (delete_key)
+		{
+			g_collision_on = !g_collision_on;
+			g_collision_refresh = g_collision_on;
+			log_line("Delete: level collision blocks %s", g_collision_on ? "ON" : "OFF");
 		}
 
 		if (home)
@@ -1768,6 +1855,11 @@ namespace
 			draw_box(hits[i]);
 		}
 
+		if (g_collision_on)
+		{
+			draw_collision_blocks({origin[0], origin[1], origin[2] + 30.0f - (eye_height == 0.0f ? EYE_HEIGHT : 0.0f)});
+		}
+
 		if (g_events_on)
 		{
 			draw_events();
@@ -1778,7 +1870,7 @@ namespace
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
 				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "F9 save data files",
-				"Insert geometry search", "PageUp dump level collision data", "End this help (or console: overlay_help)"};
+				"Delete level collision blocks", "PageUp save collision data", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
 			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));
@@ -2677,6 +2769,190 @@ namespace
 		log_line("collision dump: wrote clipmap_dump.txt (%d asset(s))", g_found_count);
 	}
 
+	// Finds the collision tree and keeps its small boxes. Also works out which of the three numbers in
+	// each box is which direction by checking where the player is standing.
+	void refresh_collision()
+	{
+		g_found_count = 0;
+		using enum_t = void (*)(int, void (*)(void*, void*), void*, bool);
+		bool ok = true;
+		__try
+		{
+			reinterpret_cast<enum_t>(SP_DB_ENUM_XASSETS)(ASSET_TYPE_CLIPMAP_INDEX, &found_asset_callback, nullptr, false);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			ok = false;
+		}
+
+		if (!ok || g_found_count == 0)
+		{
+			log_line("collision: no level collision data found");
+			return;
+		}
+
+		static uintptr_t last_header = 0;
+		static long long last_count = -1;
+		const uintptr_t header = reinterpret_cast<uintptr_t>(g_found_assets[0]);
+		long long count = 0;
+		unsigned long long tree = 0;
+		if (!read_bytes(header + 0x50, &count, 4) || !read_bytes(header + 0x58, &tree, 8))
+		{
+			return;
+		}
+
+		count &= 0xFFFFFFFFll;
+		if (count <= 0 || count > 4000000 || tree < 0x10000ull)
+		{
+			log_line("collision: tree looks wrong (count %lld)", count);
+			return;
+		}
+
+		if (header == last_header && count == last_count && g_blocks)
+		{
+			return;
+		}
+
+		unsigned char* raw = static_cast<unsigned char*>(malloc(static_cast<size_t>(count) * 32));
+		if (!raw)
+		{
+			return;
+		}
+
+		bool copied = true;
+		for (long long done = 0; done < count && copied; done += 4096)
+		{
+			const long long n = count - done < 4096 ? count - done : 4096;
+			copied = read_bytes(static_cast<uintptr_t>(tree) + static_cast<size_t>(done) * 32, raw + done * 32,
+			                    static_cast<size_t>(n) * 32);
+		}
+
+		if (!copied)
+		{
+			log_line("collision: could not copy the tree");
+			free(raw);
+			return;
+		}
+
+		// Player position (feet) for the direction check.
+		float player[3] = {0, 0, 0};
+		unsigned long long client = 0;
+		bool have_player = read_bytes(SP_G_ENTITIES + OFF_CLIENT, &client, sizeof(client)) && client > 0x140000000ull &&
+			read_bytes(static_cast<uintptr_t>(client) + OFF_CAM_ORIGIN, player, sizeof(player));
+
+		static const int perms[6][3] = {{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}};
+		long long leaves = 0;
+		long long hist_zero = 0;
+		float lo[3] = {1e30f, 1e30f, 1e30f};
+		float hi[3] = {-1e30f, -1e30f, -1e30f};
+		int contain[6] = {};
+		for (long long i = 0; i < count; ++i)
+		{
+			const unsigned char* node = raw + i * 32;
+			float mid[3];
+			float half[3];
+			unsigned short child_count;
+			memcpy(mid, node, 12);
+			memcpy(&child_count, node + 14, 2);
+			memcpy(half, node + 16, 12);
+			if (child_count != 0)
+			{
+				continue;
+			}
+
+			++hist_zero;
+			if (!(std::fabs(mid[0]) < 1e6f && std::fabs(mid[1]) < 1e6f && std::fabs(mid[2]) < 1e6f && half[0] >= 0.0f && half[1] >= 0.0f &&
+				half[2] >= 0.0f && half[0] < 1e5f && half[1] < 1e5f && half[2] < 1e5f))
+			{
+				continue;
+			}
+
+			++leaves;
+			for (int k = 0; k < 3; ++k)
+			{
+				if (mid[k] < lo[k]) lo[k] = mid[k];
+				if (mid[k] > hi[k]) hi[k] = mid[k];
+			}
+
+			if (have_player)
+			{
+				for (int p = 0; p < 6; ++p)
+				{
+					bool inside = true;
+					for (int axis = 0; axis < 3; ++axis)
+					{
+						const int source = perms[p][axis];
+						const float d = std::fabs(player[axis] - mid[source]);
+						if (d > half[source] + 24.0f)
+						{
+							inside = false;
+							break;
+						}
+					}
+
+					if (inside)
+					{
+						++contain[p];
+					}
+				}
+			}
+		}
+
+		int best = 0;
+		for (int p = 1; p < 6; ++p)
+		{
+			if (contain[p] > contain[best])
+			{
+				best = p;
+			}
+		}
+
+		log_line("collision: %lld boxes, %lld small ones; range of first numbers %.0f..%.0f, %.0f..%.0f, %.0f..%.0f; player %.0f %.0f %.0f",
+		         count, leaves, lo[0], hi[0], lo[1], hi[1], lo[2], hi[2], player[0], player[1], player[2]);
+		log_line("collision: boxes touching the player for each direction order: %d %d %d %d %d %d (using order %d)", contain[0],
+		         contain[1], contain[2], contain[3], contain[4], contain[5], best);
+
+		block* out = static_cast<block*>(malloc(static_cast<size_t>(leaves > 0 ? leaves : 1) * sizeof(block)));
+		if (!out)
+		{
+			free(raw);
+			return;
+		}
+
+		long long written = 0;
+		for (long long i = 0; i < count && written < leaves; ++i)
+		{
+			const unsigned char* node = raw + i * 32;
+			float mid[3];
+			float half[3];
+			unsigned short child_count;
+			memcpy(mid, node, 12);
+			memcpy(&child_count, node + 14, 2);
+			memcpy(half, node + 16, 12);
+			if (child_count != 0 ||
+				!(std::fabs(mid[0]) < 1e6f && std::fabs(mid[1]) < 1e6f && std::fabs(mid[2]) < 1e6f && half[0] >= 0.0f && half[1] >= 0.0f &&
+					half[2] >= 0.0f && half[0] < 1e5f && half[1] < 1e5f && half[2] < 1e5f))
+			{
+				continue;
+			}
+
+			for (int axis = 0; axis < 3; ++axis)
+			{
+				out[written].mid[axis] = mid[perms[best][axis]];
+				out[written].half[axis] = half[perms[best][axis]];
+			}
+
+			++written;
+		}
+
+		free(raw);
+		last_header = header;
+		last_count = count;
+		g_blocks = out;          // the previous array is intentionally not freed (the picture thread may still be reading it)
+		g_block_count = static_cast<int>(written);
+		log_line("collision: %lld blocks ready", written);
+	}
+
 	// Console command: overlay_help
 	struct console_command
 	{
@@ -2817,6 +3093,12 @@ namespace
 			{
 				command_tried = true;
 				try_add_console_command();
+			}
+
+			if (g_collision_on && (g_collision_refresh || tick % 150 == 0))
+			{
+				g_collision_refresh = false;
+				refresh_collision();
 			}
 
 			const bool pageup_down = (GetAsyncKeyState(VK_PRIOR) & 0x8000) != 0;
