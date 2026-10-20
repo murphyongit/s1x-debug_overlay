@@ -1,4 +1,4 @@
-Version 0.29 - top-centre list of boxes you stand in, flag-trigger flag guesses
+Version 0.30 - map entity dump (F9), mission-end report in the log
 
 Download: https://github.com/murphyongit/s1x-debug_overlay/releases/latest/download/version.dll
 Put version.dll in D:\GAMES\AW (replace the old one), start the game, load a mission.

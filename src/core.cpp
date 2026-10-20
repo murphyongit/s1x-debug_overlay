@@ -1193,9 +1193,12 @@ namespace
 		return (offset >= 0x10 && offset < 0x50) || (offset >= 0xC0 && offset < 0x110) || offset >= 0x2F0;
 	}
 
+	void log_recent_entries(const char* why);
+
 	void entity_watch()
 	{
 		int posted = 0;
+		int gone_count = 0;
 		const double now = now_seconds();
 		for (int index = 0; index < MAX_ENTITIES; ++index)
 		{
@@ -1227,6 +1230,7 @@ namespace
 				char text[44] = {};
 				if (before_class != 0 && class_id == 0)
 				{
+					++gone_count;
 					snprintf(text, sizeof(text), "GONE %s #%d", name[0] ? name : kind, index);
 				}
 				else if (before_class == 0 && class_id != 0)
@@ -1274,6 +1278,10 @@ namespace
 		}
 
 		g_watch_primed = true;
+		if (gone_count >= 20)
+		{
+			log_recent_entries("LEVEL UNLOADING (many entities vanished at once)");
+		}
 	}
 
 	void push_recent(const char* name, double now);
@@ -1385,6 +1393,7 @@ namespace
 
 	bool learned_flags(const int slot, char* out, const size_t capacity)
 	{
+		return false;   // the guesses from script messages turned out to be unrelated; disabled
 		if (slot < 0 || slot >= MAX_ENTITIES || g_learned[slot].used == 0)
 		{
 			return false;
@@ -1443,12 +1452,79 @@ namespace
 		}
 	}
 
+	// Remembers the last few boxes entered, to explain a mission end afterwards.
+	struct entry_note
+	{
+		char text[96];
+		double time;
+	};
+
+	entry_note g_entries[24];
+	int g_entry_next = 0;
+	bool g_any_inside[MAX_ENTITIES];
+
+	void note_entry(const hit& h, const double now)
+	{
+		char type_text[64] = {};
+		char given[48] = {};
+		if (h.type_id > 1 && h.type_id < 0x10000)
+		{
+			class_name(h.type_id, type_text, sizeof(type_text));
+		}
+
+		if (h.name_id > 1 && h.name_id < 0x10000)
+		{
+			class_name(h.name_id, given, sizeof(given));
+		}
+
+		entry_note& n = g_entries[g_entry_next % 24];
+		snprintf(n.text, sizeof(n.text), "%s #%d %s", type_text[0] ? type_text : "?", h.slot, given[0] ? given : "(no name)");
+		n.time = now;
+		++g_entry_next;
+	}
+
+	void log_recent_entries(const char* why)
+	{
+		const double now = now_seconds();
+		log_line("%s - boxes entered in the last 60 seconds (newest last):", why);
+		for (int k = 24; k >= 1; --k)
+		{
+			const int index = ((g_entry_next - k) % 24 + 24) % 24;
+			if (g_entry_next - k < 0 || now - g_entries[index].time > 60.0)
+			{
+				continue;
+			}
+
+			log_line("   %.0f s ago: %s", now - g_entries[index].time, g_entries[index].text);
+		}
+	}
+
 	// Called once per picture with everything near the player.
 	void update_flag_learning(const hit* hits, const int count)
 	{
 		const double now = now_seconds();
 		static bool inside_now[MAX_ENTITIES];
 		memset(inside_now, 0, sizeof(inside_now));
+		for (int i = 0; i < count; ++i)
+		{
+			if (hits[i].inside && hits[i].slot >= 0 && hits[i].slot < MAX_ENTITIES && !g_any_inside[hits[i].slot])
+			{
+				note_entry(hits[i], now);
+			}
+		}
+
+		static bool any_now[MAX_ENTITIES];
+		memset(any_now, 0, sizeof(any_now));
+		for (int i = 0; i < count; ++i)
+		{
+			if (hits[i].inside && hits[i].slot >= 0 && hits[i].slot < MAX_ENTITIES)
+			{
+				any_now[hits[i].slot] = true;
+			}
+		}
+
+		memcpy(g_any_inside, any_now, sizeof(g_any_inside));
+
 		for (int i = 0; i < count; ++i)
 		{
 			if (hits[i].slot < 0 || hits[i].slot >= MAX_ENTITIES || !hits[i].inside || type_special(hits[i].type_id) != 2)
@@ -3218,6 +3294,91 @@ namespace
 		log_line("collision dump: wrote clipmap_dump.txt (%d asset(s))", g_found_count);
 	}
 
+	// Saves the level's raw entity text (every trigger's script keys, such as which flag it sets).
+	void dump_map_ents()
+	{
+		g_found_count = 0;
+		using enum_t = void (*)(int, void (*)(void*, void*), void*, bool);
+		bool ok = true;
+		__try
+		{
+			reinterpret_cast<enum_t>(SP_DB_ENUM_XASSETS)(29, &found_asset_callback, nullptr, false);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			ok = false;
+		}
+
+		if (!ok || g_found_count == 0)
+		{
+			log_line("map entities: nothing found");
+			return;
+		}
+
+		for (int a = 0; a < g_found_count; ++a)
+		{
+			const uintptr_t base = reinterpret_cast<uintptr_t>(g_found_assets[a]);
+			for (size_t offset = 0; offset < 0x80; offset += 8)
+			{
+				unsigned long long value = 0;
+				if (!read_bytes(base + offset, &value, sizeof(value)) || value < 0x10000ull || value > 0x7FFFFFFE0000ull)
+				{
+					continue;
+				}
+
+				char head[256] = {};
+				if (!read_bytes(static_cast<uintptr_t>(value), head, sizeof(head) - 1) || !strstr(head, "classname") ||
+					!strchr(head, '{'))
+				{
+					continue;
+				}
+
+				char name[64];
+				sprintf_s(name, sizeof(name), "map_ents_%d.txt", a);
+				char path[MAX_PATH];
+				make_path(path, name);
+				FILE* f = nullptr;
+				if (fopen_s(&f, path, "wb") != 0 || !f)
+				{
+					return;
+				}
+
+				size_t total = 0;
+				bool finished = false;
+				while (!finished && total < 6u * 1024u * 1024u)
+				{
+					char chunk[4096];
+					size_t got = sizeof(chunk);
+					while (got > 0 && !read_bytes(static_cast<uintptr_t>(value) + total, chunk, got))
+					{
+						got /= 2;
+					}
+
+					if (got == 0)
+					{
+						break;
+					}
+
+					size_t used = 0;
+					while (used < got && chunk[used] != '\0')
+					{
+						++used;
+					}
+
+					fwrite(chunk, 1, used, f);
+					total += used;
+					finished = used < got;
+				}
+
+				fclose(f);
+				log_line("map entities: wrote %s (%zu bytes)", name, total);
+				return;
+			}
+		}
+
+		log_line("map entities: could not find the entity text in the asset");
+	}
+
 	// Finds the collision tree and keeps its small boxes. Also works out which of the three numbers in
 	// each box is which direction by checking where the player is standing.
 	void refresh_collision()
@@ -3493,7 +3654,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.29, inside list, learned flags) ----");
+		log_line("---- add-on loaded (version 0.30, map entity dump, mission end report) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
@@ -3594,6 +3755,7 @@ namespace
 				write_table(tables);
 				write_event_summary();
 				write_trigger_names();
+				dump_map_ents();
 				write_client(tables);
 			}
 		}
