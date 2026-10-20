@@ -3342,7 +3342,7 @@ namespace
 		for (int a = 0; a < g_found_count; ++a)
 		{
 			const uintptr_t base = reinterpret_cast<uintptr_t>(g_found_assets[a]);
-			for (size_t offset = 0; offset < 0x80; offset += 8)
+			for (size_t offset = 0; offset < 0x40; offset += 8)
 			{
 				unsigned long long value = 0;
 				if (!read_bytes(base + offset, &value, sizeof(value)) || value < 0x10000ull || value > 0x7FFFFFFE0000ull)
@@ -3350,10 +3350,36 @@ namespace
 					continue;
 				}
 
-				char head[256] = {};
-				if (!read_bytes(static_cast<uintptr_t>(value), head, sizeof(head) - 1) || !strstr(head, "classname") ||
-					!strchr(head, '{'))
+				char head[8] = {};
+				if (!read_bytes(static_cast<uintptr_t>(value), head, 2) || head[0] != '{')
 				{
+					continue;
+				}
+
+				int length = 0;
+				read_bytes(base + offset + 8, &length, sizeof(length));
+				if (length < 100 || length > 12 * 1024 * 1024)
+				{
+					continue;
+				}
+
+				char* text = static_cast<char*>(malloc(static_cast<size_t>(length) + 1));
+				if (!text)
+				{
+					return;
+				}
+
+				bool good = true;
+				for (int done = 0; done < length && good; done += 4096)
+				{
+					const int n = length - done < 4096 ? length - done : 4096;
+					good = read_bytes(static_cast<uintptr_t>(value) + done, text + done, static_cast<size_t>(n));
+				}
+
+				text[length] = '\0';
+				if (!good)
+				{
+					free(text);
 					continue;
 				}
 
@@ -3364,38 +3390,50 @@ namespace
 				FILE* f = nullptr;
 				if (fopen_s(&f, path, "wb") != 0 || !f)
 				{
+					free(text);
 					return;
 				}
 
-				size_t total = 0;
-				bool finished = false;
-				while (!finished && total < 6u * 1024u * 1024u)
+				// Lines look like  12562 "value"  where the number is a script string id; turn it back into the key name.
+				int lines = 0;
+				int index = 0;
+				while (index < length)
 				{
-					char chunk[4096];
-					size_t got = sizeof(chunk);
-					while (got > 0 && !read_bytes(static_cast<uintptr_t>(value) + total, chunk, got))
+					int end = index;
+					while (end < length && text[end] != '\n' && text[end] != '\0')
 					{
-						got /= 2;
+						++end;
 					}
 
-					if (got == 0)
+					int cursor = index;
+					unsigned int number = 0;
+					int digits = 0;
+					while (cursor < end && text[cursor] >= '0' && text[cursor] <= '9' && digits < 9)
 					{
-						break;
+						number = number * 10 + static_cast<unsigned int>(text[cursor] - '0');
+						++cursor;
+						++digits;
 					}
 
-					size_t used = 0;
-					while (used < got && chunk[used] != '\0')
+					char key[64] = {};
+					if (digits > 0 && cursor < end && text[cursor] == ' ' && class_name(number, key, sizeof(key)))
 					{
-						++used;
+						fprintf(f, "%s", key);
+					}
+					else
+					{
+						cursor = index;
 					}
 
-					fwrite(chunk, 1, used, f);
-					total += used;
-					finished = used < got;
+					fwrite(text + cursor, 1, static_cast<size_t>(end - cursor), f);
+					fputc('\n', f);
+					++lines;
+					index = end + 1;
 				}
 
 				fclose(f);
-				log_line("map entities: wrote %s (%zu bytes)", name, total);
+				free(text);
+				log_line("map entities: wrote %s (%d bytes, %d lines)", name, length, lines);
 				return;
 			}
 		}
@@ -3745,7 +3783,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.31, reliable event hook, entry list) ----");
+		log_line("---- add-on loaded (version 0.32, decoded map entity text) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
