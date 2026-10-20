@@ -11,3 +11,5 @@ v0.33: flag triggers (multiple_flag_set etc.) now show the real flag name(s) fro
 v0.34: flag triggers are matched to the map data by position, so more of them show flag names.
 
 v0.35: fixed the position matching so most flag triggers show their flag names.
+
+v0.36: when a mission ends the log lists every box entered in the last 2 minutes, with flag names. To find the end trigger: finish a mission, then send the log.

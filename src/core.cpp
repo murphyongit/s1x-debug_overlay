@@ -1444,11 +1444,11 @@ namespace
 	// Remembers the last few boxes entered, to explain a mission end afterwards.
 	struct entry_note
 	{
-		char text[96];
+		char text[160];
 		double time;
 	};
 
-	entry_note g_entries[24];
+	entry_note g_entries[300];
 	int g_entry_next = 0;
 	bool g_any_inside[MAX_ENTITIES];
 
@@ -1490,8 +1490,11 @@ namespace
 			}
 		}
 
-		entry_note& n = g_entries[g_entry_next % 24];
-		snprintf(n.text, sizeof(n.text), "%s #%d %s", type_text[0] ? type_text : "?", h.slot, given[0] ? given : "(no name)");
+		entry_note& n = g_entries[g_entry_next % 300];
+		char flagtext[100] = {};
+		learned_flags(h.slot, flagtext, sizeof(flagtext));
+		snprintf(n.text, sizeof(n.text), "%s #%d %s%s%s", type_text[0] ? type_text : "?", h.slot, given[0] ? given : "(no name)",
+			flagtext[0] ? " -> " : "", flagtext);
 		n.time = now;
 		++g_entry_next;
 	}
@@ -1499,11 +1502,11 @@ namespace
 	void log_recent_entries(const char* why)
 	{
 		const double now = now_seconds();
-		log_line("%s - boxes entered in the last 60 seconds (newest last):", why);
-		for (int k = 24; k >= 1; --k)
+		log_line("%s - boxes entered in the last 120 seconds (newest last; the mission end is usually 45-50 s before the unload):", why);
+		for (int k = 300; k >= 1; --k)
 		{
-			const int index = ((g_entry_next - k) % 24 + 24) % 24;
-			if (g_entry_next - k < 0 || now - g_entries[index].time > 60.0)
+			const int index = ((g_entry_next - k) % 300 + 300) % 300;
+			if (g_entry_next - k < 0 || now - g_entries[index].time > 120.0)
 			{
 				continue;
 			}
@@ -4101,7 +4104,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.35, flag positions fixed) ----");
+		log_line("---- add-on loaded (version 0.36, longer entry history with flag names) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
