@@ -2038,22 +2038,40 @@ namespace
 			}
 		}
 
-		if (any)
+		return any;
+	}
+
+	bool g_notify_hooked = false;
+
+	// Tries to hook the script "notify" function. Can be called again and again until it works.
+	void try_hook_notify(const int attempt)
+	{
+		void* notify = reinterpret_cast<void*>(SP_SCR_NOTIFY_ID);
+		unsigned char probe[16];
+		if (!read_bytes(SP_SCR_NOTIFY_ID, probe, sizeof(probe)))
 		{
-			void* notify = reinterpret_cast<void*>(SP_SCR_NOTIFY_ID);
-			if (MH_CreateHook(notify, reinterpret_cast<LPVOID>(&hooked_notify),
-			                  reinterpret_cast<LPVOID*>(&g_original_notify)) == MH_OK &&
-				MH_EnableHook(notify) == MH_OK)
-			{
-				log_line("hook: script events installed");
-			}
-			else
-			{
-				log_line("hook: could not hook script events");
-			}
+			log_line("hook: script events attempt %d: function memory not readable yet", attempt);
+			return;
 		}
 
-		return any;
+		MH_STATUS created = MH_CreateHook(notify, reinterpret_cast<LPVOID>(&hooked_notify),
+		                                  reinterpret_cast<LPVOID*>(&g_original_notify));
+		if (created != MH_OK && created != MH_ERROR_ALREADY_CREATED)
+		{
+			log_line("hook: script events attempt %d: create failed (%s); first bytes %02X %02X %02X %02X %02X %02X", attempt,
+			         MH_StatusToString(created), probe[0], probe[1], probe[2], probe[3], probe[4], probe[5]);
+			return;
+		}
+
+		MH_STATUS enabled = MH_EnableHook(notify);
+		if (enabled != MH_OK)
+		{
+			log_line("hook: script events attempt %d: enable failed (%s)", attempt, MH_StatusToString(enabled));
+			return;
+		}
+
+		g_notify_hooked = true;
+		log_line("hook: script events installed (attempt %d)", attempt);
 	}
 
 	bool is_campaign_exe()
@@ -2073,11 +2091,12 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.17, text labels + script events (noise filter)) ----");
+		log_line("---- add-on loaded (version 0.18, script events (retrying hook)) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
 
 		bool hook_done = false;
+		int notify_tries = 0;
 
 		int tables = 0;
 		int seconds_with_data = 0;
@@ -2101,6 +2120,12 @@ namespace
 				{
 					log_line("not the campaign program, drawing not installed");
 				}
+			}
+
+			if (hook_done && !g_notify_hooked && notify_tries < 24 && tick % 50 == 0)
+			{
+				++notify_tries;
+				try_hook_notify(notify_tries);
 			}
 
 			if (tick % 10 == 0)
