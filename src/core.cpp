@@ -3368,9 +3368,45 @@ namespace
 
 			unsigned int key = 0;
 			char value[160] = {};
-			const bool origin_line = strncmp(line, "flankkills ", 11) == 0;
+			bool origin_line = false;
+			if (line[0] >= '0' && line[0] <= '9')
+			{
+				unsigned int k = 0;
+				for (const char* d = line; *d >= '0' && *d <= '9'; ++d)
+				{
+					k = k * 10 + static_cast<unsigned int>(*d - '0');
+				}
+
+				if (k != 171 && k != 1191 && k != 31182 && k != 31188)
+				{
+					// the game's string table calls the origin key "flankkills"; remember the verdict per id
+					static unsigned int seen_key[64];
+					static signed char seen_verdict[64];
+					int slot = -1;
+					for (int z = 0; z < 64; ++z)
+					{
+						if (seen_key[z] == k && seen_verdict[z] != 0) { slot = z; break; }
+					}
+
+					if (slot < 0)
+					{
+						char nm[64] = {};
+						const bool is_origin = class_name(k, nm, sizeof(nm)) && strcmp(nm, "flankkills") == 0;
+						for (int z = 0; z < 64; ++z)
+						{
+							if (seen_verdict[z] == 0) { seen_key[z] = k; seen_verdict[z] = is_origin ? 1 : -1; slot = z; break; }
+						}
+
+						origin_line = is_origin;
+					}
+					else
+					{
+						origin_line = seen_verdict[slot] == 1;
+					}
+				}
+			}
 			const char* q = strchr(line, '"');
-			if (!q || ((line[0] < '0' || line[0] > '9') && !origin_line))
+			if (!q || (line[0] < '0' || line[0] > '9'))
 			{
 				continue;
 			}
@@ -4065,7 +4101,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.34, flag names matched by position) ----");
+		log_line("---- add-on loaded (version 0.35, flag positions fixed) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
