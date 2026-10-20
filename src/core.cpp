@@ -799,9 +799,8 @@ namespace
 	{
 		static const char* const kNoise[] = {"goal", "touch", "reached_end_node", "turret_", "entitydeleted", "deathanim",
 		                                     "damage", "bulletwhizby", "weapon_fired", "sprint_begin", "sprint_end",
-		                                     "path_blocked", "node_", "enemy", "ai_event", "animscript", "anim_",
-		                                     "starting_", "stop_", "move_", "cover_", "bad_path", "got_path",
-		                                     "a_pressed", "a_released", "idle", "stance", "jump", "reload", "weapon_"};
+		                                     "path_blocked", "ai_event", "animscript", "anim_", "bad_path", "got_path",
+		                                     "jump", "reload", "weapon_"};
 		for (const char* prefix : kNoise)
 		{
 			if (strncmp(name, prefix, strlen(prefix)) == 0)
@@ -812,7 +811,7 @@ namespace
 
 		// Hidden when the name contains any of these anywhere (animations, idles, button presses).
 		static const char* const kContains[] = {"anim", "idle", "pressed", "released", "_loop", "look_at", "lookat",
-		                                        "step", "footstep", "stance", "crouch", "prone", "stand"};
+		                                        "footstep", "stance"};
 		for (const char* part : kContains)
 		{
 			if (strstr(name, part))
@@ -908,6 +907,62 @@ namespace
 		return false;
 	}
 
+	// Every message ever seen (even hidden ones), written to events_summary.txt on F9.
+	struct event_stat
+	{
+		char name[44];
+		int count;
+		unsigned int first_entity;
+		double first_time;
+	};
+
+	event_stat g_stats[512];
+	int g_stat_count = 0;
+	volatile bool g_filter_on = true;   // F4
+
+	void count_event(const char* name, const unsigned int entity, const double now)
+	{
+		for (int i = 0; i < g_stat_count; ++i)
+		{
+			if (strcmp(g_stats[i].name, name) == 0)
+			{
+				++g_stats[i].count;
+				return;
+			}
+		}
+
+		if (g_stat_count < 512)
+		{
+			event_stat& st = g_stats[g_stat_count++];
+			strcpy_s(st.name, sizeof(st.name), name);
+			st.count = 1;
+			st.first_entity = entity;
+			st.first_time = now;
+		}
+	}
+
+	void write_event_summary()
+	{
+		char path[MAX_PATH];
+		make_path(path, "events_summary.txt");
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "w") != 0 || !f)
+		{
+			return;
+		}
+
+		fprintf(f, "every script message seen so far: name, how many times, first entity id, seconds since first one\n");
+		const double now = now_seconds();
+		for (int i = 0; i < g_stat_count; ++i)
+		{
+			fprintf(f, "%-40s %8d  entity %u  first seen %.0f s ago\n", g_stats[i].name, g_stats[i].count,
+			        g_stats[i].first_entity, now - g_stats[i].first_time);
+		}
+
+		fclose(f);
+		log_line("wrote events_summary.txt (%d different messages)", g_stat_count);
+	}
+
 	void record_event(const unsigned int entity, const unsigned int string_id)
 	{
 		char name[44];
@@ -917,7 +972,8 @@ namespace
 		}
 
 		const double now = now_seconds();
-		if (is_always_noise(name) || is_too_frequent(name, now))
+		count_event(name, entity, now);
+		if (g_filter_on && (is_always_noise(name) || is_too_frequent(name, now)))
 		{
 			return;
 		}
@@ -1313,7 +1369,8 @@ namespace
 
 		if (f4)
 		{
-			rate_test_start();
+			g_filter_on = !g_filter_on;
+			log_line("F4: event filter %s", g_filter_on ? "ON (noise hidden)" : "OFF (everything shown)");
 		}
 
 		if (f5) g_fov_style = (g_fov_style + 1) % 3;
@@ -2078,6 +2135,233 @@ namespace
 		return any;
 	}
 
+	// ---- geometry search (Insert key) -------------------------------------------------------
+	// Looks through the game's memory for the exact box sizes of a few known trigger volumes. Wherever
+	// those numbers also appear in the level's collision data, we learn how that data is laid out.
+	struct geo_target
+	{
+		int slot;
+		float mins[3];
+		float maxs[3];
+		char name[40];
+	};
+
+	struct geo_hit
+	{
+		int target;
+		uintptr_t address;
+	};
+
+	constexpr int GEO_TARGETS = 8;
+	constexpr int GEO_MAX_HITS = 400;
+
+	bool near_value(const float a, const float b)
+	{
+		const float d = a - b;
+		return d < 0.06f && d > -0.06f;
+	}
+
+	void geometry_search()
+	{
+		log_line("geometry search: started (this can take up to a minute; the game may stutter)");
+
+		geo_target targets[GEO_TARGETS];
+		int target_count = 0;
+		int last_taken = -100;
+		for (int index = 0; index < MAX_ENTITIES && target_count < GEO_TARGETS; ++index)
+		{
+			unsigned char buffer[OFF_CLASSNAME + 2];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE, buffer, sizeof(buffer)))
+			{
+				break;
+			}
+
+			unsigned short class_id = 0;
+			memcpy(&class_id, buffer + OFF_CLASSNAME, sizeof(class_id));
+			if (class_id == 0 || classify(class_id) != 2)
+			{
+				continue;
+			}
+
+			float b[6];
+			memcpy(b, buffer + OFF_BOUNDS, sizeof(b));
+			if (!(b[3] > 16.0f && b[4] > 16.0f && b[5] > 16.0f && b[3] < 4000.0f && b[4] < 4000.0f && b[5] < 4000.0f &&
+				std::fabs(b[0]) < 100000.0f && std::fabs(b[1]) < 100000.0f && std::fabs(b[2]) < 100000.0f))
+			{
+				continue;
+			}
+
+			if (index - last_taken < 40)
+			{
+				continue;
+			}
+
+			last_taken = index;
+			geo_target& t = targets[target_count++];
+			t.slot = index;
+			for (int i = 0; i < 3; ++i)
+			{
+				t.mins[i] = b[i] - b[3 + i];
+				t.maxs[i] = b[i] + b[3 + i];
+			}
+
+			class_name(class_id, t.name, sizeof(t.name));
+		}
+
+		if (target_count == 0)
+		{
+			log_line("geometry search: no suitable trigger volumes found (is a mission loaded?)");
+			return;
+		}
+
+		static geo_hit hits[GEO_MAX_HITS];
+		int hit_count = 0;
+
+		// Skip our own copy of the numbers.
+		MEMORY_BASIC_INFORMATION own = {};
+		VirtualQuery(reinterpret_cast<const void*>(&geometry_search), &own, sizeof(own));
+		const uintptr_t own_base = reinterpret_cast<uintptr_t>(own.AllocationBase);
+
+		constexpr size_t CHUNK = 4u * 1024u * 1024u;
+		unsigned char* buffer = static_cast<unsigned char*>(malloc(CHUNK + 64));
+		if (!buffer)
+		{
+			return;
+		}
+
+		const double started = now_seconds();
+		double megabytes = 0.0;
+		uintptr_t address = 0x10000;
+		const uintptr_t limit = 0x7FFFFFFE0000ull;
+
+		while (address < limit && now_seconds() - started < 90.0 && hit_count < GEO_MAX_HITS)
+		{
+			MEMORY_BASIC_INFORMATION info = {};
+			if (VirtualQuery(reinterpret_cast<const void*>(address), &info, sizeof(info)) == 0)
+			{
+				break;
+			}
+
+			const uintptr_t base = reinterpret_cast<uintptr_t>(info.BaseAddress);
+			const uintptr_t end = base + info.RegionSize;
+			const DWORD protect = info.Protect & 0xFF;
+			const bool readable = info.State == MEM_COMMIT && !(info.Protect & (PAGE_GUARD | PAGE_NOACCESS)) &&
+				(protect == PAGE_READONLY || protect == PAGE_READWRITE || protect == PAGE_WRITECOPY ||
+					protect == PAGE_EXECUTE_READ || protect == PAGE_EXECUTE_READWRITE) &&
+				info.Type != MEM_MAPPED;
+			const bool ours = reinterpret_cast<uintptr_t>(info.AllocationBase) == own_base;
+
+			if (readable && !ours)
+			{
+				for (uintptr_t position = base < address ? address : base; position < end; position += CHUNK)
+				{
+					size_t length = end - position;
+					if (length > CHUNK)
+					{
+						length = CHUNK;
+					}
+
+					size_t copy = length;
+					if (position + length + 24 <= end)
+					{
+						copy = length + 24;
+					}
+
+					bool ok = true;
+					__try
+					{
+						memcpy(buffer, reinterpret_cast<const void*>(position), copy);
+					}
+					__except (EXCEPTION_EXECUTE_HANDLER)
+					{
+						ok = false;
+					}
+
+					if (!ok)
+					{
+						continue;
+					}
+
+					megabytes += static_cast<double>(length) / 1048576.0;
+					for (size_t offset = 0; offset + 24 <= copy && offset < length; offset += 4)
+					{
+						float f[6];
+						memcpy(f, buffer + offset, sizeof(f));
+						for (int t = 0; t < target_count; ++t)
+						{
+							if (near_value(f[0], targets[t].mins[0]) && near_value(f[1], targets[t].mins[1]) &&
+								near_value(f[2], targets[t].mins[2]) && near_value(f[3], targets[t].maxs[0]) &&
+								near_value(f[4], targets[t].maxs[1]) && near_value(f[5], targets[t].maxs[2]))
+							{
+								if (hit_count < GEO_MAX_HITS)
+								{
+									hits[hit_count++] = {t, position + offset};
+								}
+							}
+						}
+					}
+				}
+			}
+
+			address = end;
+		}
+
+		free(buffer);
+		log_line("geometry search: scanned %.0f MB in %.1f s, %d matches", megabytes, now_seconds() - started, hit_count);
+
+		char path[MAX_PATH];
+		make_path(path, "geometry_search.txt");
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "w") != 0 || !f)
+		{
+			return;
+		}
+
+		fprintf(f, "geometry search: %d matches\n", hit_count);
+		for (int t = 0; t < target_count; ++t)
+		{
+			fprintf(f, "target %d: slot %d %s mins %.3f %.3f %.3f maxs %.3f %.3f %.3f\n", t, targets[t].slot, targets[t].name,
+			        targets[t].mins[0], targets[t].mins[1], targets[t].mins[2], targets[t].maxs[0], targets[t].maxs[1],
+			        targets[t].maxs[2]);
+		}
+
+		for (int i = 0; i < hit_count; ++i)
+		{
+			MEMORY_BASIC_INFORMATION info = {};
+			VirtualQuery(reinterpret_cast<const void*>(hits[i].address), &info, sizeof(info));
+			fprintf(f, "\nHIT %d target %d at 0x%llX  region 0x%llX size 0x%llX type 0x%lX protect 0x%lX\n", i, hits[i].target,
+			        static_cast<unsigned long long>(hits[i].address),
+			        static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(info.BaseAddress)),
+			        static_cast<unsigned long long>(info.RegionSize), static_cast<unsigned long>(info.Type),
+			        static_cast<unsigned long>(info.Protect));
+
+			// 0x80 bytes before to 0xA0 after, as hex and as numbers.
+			for (int row = -8; row < 10; ++row)
+			{
+				unsigned char line[16];
+				const uintptr_t where = hits[i].address + static_cast<intptr_t>(row) * 16;
+				if (!read_bytes(where, line, sizeof(line)))
+				{
+					fprintf(f, "  %+04d: ??\n", row * 16);
+					continue;
+				}
+
+				float v[4];
+				memcpy(v, line, sizeof(v));
+				fprintf(f, "  %+04d:", row * 16);
+				for (const unsigned char byte : line)
+				{
+					fprintf(f, " %02X", byte);
+				}
+
+				fprintf(f, "   %.3f %.3f %.3f %.3f\n", v[0], v[1], v[2], v[3]);
+			}
+		}
+
+		fclose(f);
+		log_line("geometry search: wrote geometry_search.txt");
+	}
+
 	bool g_notify_hooked = false;
 
 	// Tries to hook the script "notify" function. Can be called again and again until it works.
@@ -2130,7 +2414,7 @@ namespace
 
 		log_line("---- add-on loaded (version 0.20, script events (player animations hidden)) ----");
 		log_line("host program: %s", exe);
-		log_line("F8 on/off | F2 labels | F11 events | F7 distance | F6 thickness | F5 fov style | F4 update-rate test | F3 camera source");
+		log_line("F8 on/off | F2 labels | F11 events | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
 		bool hook_done = false;
 		int notify_tries = 0;
@@ -2139,6 +2423,7 @@ namespace
 		int seconds_with_data = 0;
 		bool auto_done = false;
 		bool f9_was_down = false;
+		bool insert_was_down = false;
 
 		// 100 ms per tick; stop after about 30 minutes.
 		for (int tick = 1; tick <= 18000; ++tick)
@@ -2170,6 +2455,15 @@ namespace
 				seconds_with_data = entity_list_has_data() ? seconds_with_data + 1 : 0;
 			}
 
+			const bool insert_down = (GetAsyncKeyState(VK_INSERT) & 0x8000) != 0;
+			if (insert_down && !insert_was_down)
+			{
+				log_line("Insert pressed (geometry search)");
+				geometry_search();
+			}
+
+			insert_was_down = insert_down;
+
 			const bool f9_down = (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
 			const bool f9_pressed = f9_down && !f9_was_down;
 			f9_was_down = f9_down;
@@ -2189,6 +2483,7 @@ namespace
 
 				++tables;
 				write_table(tables);
+				write_event_summary();
 				write_client(tables);
 			}
 		}
