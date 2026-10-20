@@ -409,6 +409,7 @@ namespace
 		float dist;
 		int slot;
 		unsigned short class_id;
+		unsigned int name_id;
 		unsigned char kind;
 		bool inside;
 		vec3 mid;
@@ -761,7 +762,27 @@ namespace
 
 		const char* shown = strncmp(name, "trigger_", 8) == 0 ? name + 8 : name;
 		char text[96];
-		snprintf(text, sizeof(text), "%s #%d %dm", shown, h.slot, static_cast<int>(h.dist / 39.37f));
+		char given[40] = {};
+		if (h.name_id > 1 && h.name_id < 0x10000 && class_name(h.name_id, given, sizeof(given)))
+		{
+			for (const char* ch = given; *ch; ++ch)
+			{
+				if (*ch < 32 || *ch > 126)
+				{
+					given[0] = '\0';
+					break;
+				}
+			}
+		}
+
+		if (given[0])
+		{
+			snprintf(text, sizeof(text), "%s #%d %dm [%s]", shown, h.slot, static_cast<int>(h.dist / 39.37f), given);
+		}
+		else
+		{
+			snprintf(text, sizeof(text), "%s #%d %dm", shown, h.slot, static_cast<int>(h.dist / 39.37f));
+		}
 
 		const float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
 		const float width = static_cast<float>(strlen(text)) * 6.0f * scale;
@@ -797,10 +818,26 @@ namespace
 	// Messages that fire constantly for every character/vehicle and drown out everything else.
 	bool is_always_noise(const char* name)
 	{
-		static const char* const kNoise[] = {"goal", "touch", "reached_end_node", "turret_", "entitydeleted", "deathanim",
-		                                     "damage", "bulletwhizby", "weapon_fired", "sprint_begin", "sprint_end",
-		                                     "path_blocked", "ai_event", "animscript", "anim_", "bad_path", "got_path",
-		                                     "jump", "reload", "weapon_"};
+		// Names that always show, no matter how often they are sent.
+		static const char* const kImportant[] = {"chyron", "flag", "obj", "mission", "checkpoint", "spawned", "wave",
+		                                        "reinforce", "level_", "start_", "trigger_", "explode", "complete",
+		                                        "cinematic", "cutscene", "dialogue_", "alarm"};
+		for (const char* word : kImportant)
+		{
+			if (strstr(name, word))
+			{
+				return false;
+			}
+		}
+
+		static const char* const kNoise[] = {
+			"goal", "touch", "reached_end_node", "turret_", "entitydeleted", "deathanim", "damage", "bulletwhizby",
+			"weapon", "sprint_", "path_", "ai_event", "animscript", "anim_", "bad_path", "got_path", "jump", "reload",
+			"foley", "sounddone", "movemode", "known_event", "enemy", "cover", "groundEnt", "killanimscript",
+			"node_", "begin_", "end_firing", "movedone", "turn", "blendTransition", "traverse", "bullethit", "pain",
+			"physics_impact", "suppression", "BUTTON_", "dpad_", "start_move", "stepout", "looking_", "missile_",
+			"projectile_", "code_", "boost", "exo_", "single ", "looping ", "run", "walk", "move", "fire", "react",
+			"melee", "charge", "stop_", "reload", "death"};
 		for (const char* prefix : kNoise)
 		{
 			if (strncmp(name, prefix, strlen(prefix)) == 0)
@@ -939,6 +976,61 @@ namespace
 			st.first_entity = entity;
 			st.first_time = now;
 		}
+	}
+
+	unsigned char classify(const unsigned short id);
+
+	void write_trigger_names()
+	{
+		char path[MAX_PATH];
+		make_path(path, "trigger_names.txt");
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "w") != 0 || !f)
+		{
+			return;
+		}
+
+		fprintf(f, "slot class | text found at entity offsets 150 154 158 15C 160 164 168 16C\n");
+		int rows = 0;
+		for (int index = 0; index < MAX_ENTITIES && rows < 500; ++index)
+		{
+			unsigned char buffer[0x170];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE, buffer, sizeof(buffer)))
+			{
+				break;
+			}
+
+			unsigned short class_id = 0;
+			memcpy(&class_id, buffer + OFF_CLASSNAME, sizeof(class_id));
+			if (class_id == 0 || classify(class_id) < 2)
+			{
+				continue;
+			}
+
+			char cname[48] = {};
+			class_name(class_id, cname, sizeof(cname));
+			fprintf(f, "%d %s |", index, cname);
+			for (int off = 0x150; off <= 0x16C; off += 4)
+			{
+				unsigned int id = 0;
+				memcpy(&id, buffer + off, sizeof(id));
+				char text[48] = {};
+				if (id > 1 && id < 0x10000 && class_name(id, text, sizeof(text)))
+				{
+					fprintf(f, " %X=%s", off, text);
+				}
+				else
+				{
+					fprintf(f, " %X=-", off);
+				}
+			}
+
+			fputc('\n', f);
+			++rows;
+		}
+
+		fclose(f);
+		log_line("wrote trigger_names.txt (%d rows)", rows);
 	}
 
 	void write_event_summary()
@@ -1086,7 +1178,7 @@ namespace
 	int find_triggers(const vec3& player, const float max_distance, hit* out, const int capacity)
 	{
 		int count = 0;
-		unsigned char buffer[OFF_CLASSNAME + 2];
+		unsigned char buffer[0x170];
 
 		for (int index = 0; index < MAX_ENTITIES; ++index)
 		{
@@ -1152,6 +1244,7 @@ namespace
 			h.dist = dist;
 			h.slot = index;
 			h.class_id = class_id;
+			memcpy(&h.name_id, buffer + 0x160, sizeof(h.name_id));
 			h.kind = kind;
 			h.inside = ox <= 0.0f && oy <= 0.0f && oz <= 0.0f;
 			h.mid = {b[0], b[1], b[2]};
@@ -2143,6 +2236,8 @@ namespace
 		int slot;
 		float mins[3];
 		float maxs[3];
+		float lmins[3];
+		float lmaxs[3];
 		char name[40];
 	};
 
@@ -2203,6 +2298,8 @@ namespace
 			{
 				t.mins[i] = b[i] - b[3 + i];
 				t.maxs[i] = b[i] + b[3 + i];
+				t.lmins[i] = -b[3 + i];
+				t.lmaxs[i] = b[3 + i];
 			}
 
 			class_name(class_id, t.name, sizeof(t.name));
@@ -2221,6 +2318,9 @@ namespace
 		MEMORY_BASIC_INFORMATION own = {};
 		VirtualQuery(reinterpret_cast<const void*>(&geometry_search), &own, sizeof(own));
 		const uintptr_t own_base = reinterpret_cast<uintptr_t>(own.AllocationBase);
+		MEMORY_BASIC_INFORMATION stack_info = {};
+		VirtualQuery(reinterpret_cast<const void*>(&target_count), &stack_info, sizeof(stack_info));
+		const uintptr_t stack_base = reinterpret_cast<uintptr_t>(stack_info.AllocationBase);
 
 		constexpr size_t CHUNK = 4u * 1024u * 1024u;
 		unsigned char* buffer = static_cast<unsigned char*>(malloc(CHUNK + 64));
@@ -2249,7 +2349,8 @@ namespace
 				(protect == PAGE_READONLY || protect == PAGE_READWRITE || protect == PAGE_WRITECOPY ||
 					protect == PAGE_EXECUTE_READ || protect == PAGE_EXECUTE_READWRITE) &&
 				info.Type != MEM_MAPPED;
-			const bool ours = reinterpret_cast<uintptr_t>(info.AllocationBase) == own_base;
+			const bool ours = reinterpret_cast<uintptr_t>(info.AllocationBase) == own_base ||
+				reinterpret_cast<uintptr_t>(info.AllocationBase) == stack_base;
 
 			if (readable && !ours)
 			{
@@ -2295,7 +2396,16 @@ namespace
 							{
 								if (hit_count < GEO_MAX_HITS)
 								{
-									hits[hit_count++] = {t, position + offset};
+									hits[hit_count++] = {t * 2, position + offset};
+								}
+							}
+							else if (near_value(f[0], targets[t].lmins[0]) && near_value(f[1], targets[t].lmins[1]) &&
+								near_value(f[2], targets[t].lmins[2]) && near_value(f[3], targets[t].lmaxs[0]) &&
+								near_value(f[4], targets[t].lmaxs[1]) && near_value(f[5], targets[t].lmaxs[2]))
+							{
+								if (hit_count < GEO_MAX_HITS)
+								{
+									hits[hit_count++] = {t * 2 + 1, position + offset};
 								}
 							}
 						}
@@ -2329,7 +2439,7 @@ namespace
 		{
 			MEMORY_BASIC_INFORMATION info = {};
 			VirtualQuery(reinterpret_cast<const void*>(hits[i].address), &info, sizeof(info));
-			fprintf(f, "\nHIT %d target %d at 0x%llX  region 0x%llX size 0x%llX type 0x%lX protect 0x%lX\n", i, hits[i].target,
+			fprintf(f, "\nHIT %d target*2+variant %d (0 = world position, 1 = centered on itself) at 0x%llX  region 0x%llX size 0x%llX type 0x%lX protect 0x%lX\n", i, hits[i].target,
 			        static_cast<unsigned long long>(hits[i].address),
 			        static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(info.BaseAddress)),
 			        static_cast<unsigned long long>(info.RegionSize), static_cast<unsigned long>(info.Type),
@@ -2484,6 +2594,7 @@ namespace
 				++tables;
 				write_table(tables);
 				write_event_summary();
+				write_trigger_names();
 				write_client(tables);
 			}
 		}
