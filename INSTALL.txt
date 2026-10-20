@@ -1,0 +1,26 @@
+S1x DEBUG OVERLAY - TEST BUILD 0.1
+==================================
+
+What this does: NOTHING visible. It only writes a small text file called
+s1x_debug_overlay.log into your game folder so we can see whether it loaded.
+It does not draw anything and does not change the game.
+
+HOW TO INSTALL
+1. Close the game completely.
+2. Open the folder "try_this_first". Copy the file inside it (version.dll)
+   into your game folder: the folder that contains s1x.exe
+   (for you: D:\GAMES\AW).
+3. Start the game the way you normally do and load a campaign mission.
+4. Play for about 30 seconds, then look in the game folder for
+   s1x_debug_overlay.log and send it to Claude.
+
+IF NO LOG FILE APPEARS
+1. Close the game. Delete version.dll from the game folder.
+2. Open the folder "try_this_if_first_does_nothing" and copy the file inside
+   (dinput8.dll) into the game folder.
+3. Repeat steps 3 and 4 above.
+Only ever have ONE of these two files in the game folder at a time.
+
+TO UNINSTALL
+Delete version.dll or dinput8.dll (whichever you copied) from the game folder.
+Remove it before playing online, to be safe.
