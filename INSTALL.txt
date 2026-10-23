@@ -23,3 +23,5 @@ v0.40: first multiplayer version. The add-on now also loads in the multiplayer p
 v0.41: multiplayer camera search. In a multiplayer match press F8; the add-on looks for the game camera by itself (log line "camera search"). If boxes still do not line up, press F3 to try the other camera sources it found.
 
 v0.42: multiplayer layout is re-checked and recalibrated when the map changes.
+
+v0.44: multiplayer boxes now use the correct world positions, and the camera search keeps only the camera copies that follow you after you walk about 3 steps.

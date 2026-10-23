@@ -41,6 +41,19 @@ namespace
 	int g_player_slot = 0;                  // the local player entity
 	size_t OFF_CLIENT = 0x118;    // 64-bit pointer to the player's client block
 
+	// In multiplayer the bounds are stored relative to the entity position; turn them into world positions.
+	void make_world_bounds(float* b, const unsigned char* entity)
+	{
+		if (g_is_mp)
+		{
+			float origin[3];
+			memcpy(origin, entity + OFF_ORIGIN, sizeof(origin));
+			b[0] += origin[0];
+			b[1] += origin[1];
+			b[2] += origin[2];
+		}
+	}
+
 	uintptr_t player_entity()
 	{
 		return SP_G_ENTITIES + static_cast<uintptr_t>(g_player_slot) * g_stride;
@@ -255,6 +268,7 @@ namespace
 			memcpy(&class_id, entity + OFF_CLASSNAME, sizeof(class_id));
 			memcpy(origin, entity + OFF_ORIGIN, sizeof(origin));
 			memcpy(bounds, entity + OFF_BOUNDS, sizeof(bounds));
+			make_world_bounds(bounds, entity);
 
 			char name[48] = "-";
 			if (class_id != 0)
@@ -1996,6 +2010,7 @@ namespace
 
 			float b[6];
 			memcpy(b, buffer + OFF_BOUNDS, sizeof(b));
+			make_world_bounds(b, buffer);
 			bool sane = true;
 			for (int i = 0; i < 6; ++i)
 			{
@@ -3136,6 +3151,7 @@ namespace
 
 			float b[6];
 			memcpy(b, buffer + OFF_BOUNDS, sizeof(b));
+			make_world_bounds(b, buffer);
 			if (!(b[3] > 16.0f && b[4] > 16.0f && b[5] > 16.0f && b[3] < 4000.0f && b[4] < 4000.0f && b[5] < 4000.0f &&
 				std::fabs(b[0]) < 100000.0f && std::fabs(b[1]) < 100000.0f && std::fabs(b[2]) < 100000.0f))
 			{
@@ -4412,12 +4428,12 @@ namespace
 			log_line("multiplayer layout: type name at +0x%zX (%d triggers), target names at +0x%zX (%d different)", OFF_TYPE, best_type, OFF_NAME, best_names);
 		}
 
-		// 2. origin + bounds: triggers have their origin equal to the middle of their bounds
-		struct pair_score { size_t origin, bounds; int score; };
-		pair_score best = {0, 0, 0};
-		for (size_t bo = 0x40; bo + 24 <= 0x2F0; bo += 4)
+		// 2. origin: a float triple that appears twice in the entity (a copy 0xD0 further on) and differs from entity to entity.
+		//    The bounds are stored relative to that origin.
 		{
-			for (size_t oo = 0x08; oo + 12 <= 0x100; oo += 4)
+			size_t best_origin = 0x68;
+			int best_origin_score = 0;
+			for (size_t oo = 0x10; oo + 0xD0 + 12 <= 0x2F0; oo += 4)
 			{
 				int score = 0;
 				for (int i = 0; i < slots; ++i)
@@ -4425,47 +4441,27 @@ namespace
 					unsigned short id = 0;
 					memcpy(&id, ents[i] + best_class, 2);
 					if (id == 0) continue;
-					char name[48];
-					if (!class_name(id, name, sizeof(name)) || strncmp(name, "trigger_", 8) != 0) continue;
-					float o[3], b[6];
+					float o[3], c[3];
 					memcpy(o, ents[i] + oo, 12);
-					memcpy(b, ents[i] + bo, 24);
-					bool sane = true;
-					for (int k = 0; k < 6; ++k) if (!(std::fabs(b[k]) < 200000.0f)) sane = false;
-					for (int k = 0; k < 3; ++k) if (!(std::fabs(o[k]) < 200000.0f)) sane = false;
-					if (!sane || b[3] < 0.5f || b[4] < 0.5f || b[5] < 0.5f) continue;
-					if (std::fabs(o[0] - b[0]) < 2.0f && std::fabs(o[1] - b[1]) < 2.0f && std::fabs(o[2] - b[2]) < 2.0f) ++score;
+					memcpy(c, ents[i] + oo + 0xD0, 12);
+					const bool sane = std::fabs(o[0]) < 100000.0f && std::fabs(o[1]) < 100000.0f && std::fabs(o[2]) < 100000.0f;
+					if (sane && (std::fabs(o[0]) > 1.0f || std::fabs(o[1]) > 1.0f) && o[0] == c[0] && o[1] == c[1] && o[2] == c[2]) ++score;
 				}
 
-				if (score > best.score)
+				if (score > best_origin_score)
 				{
-					best.score = score;
-					best.origin = oo;
-					best.bounds = bo;
+					best_origin_score = score;
+					best_origin = oo;
 				}
 			}
-		}
 
-		static int bounds_tries = 0;
-		if (best.score < 3 && ++bounds_tries < 8)
-		{
-			log_line("multiplayer layout: no triggers found yet to calibrate bounds from; will retry (%d)", bounds_tries);
-			return false;
-		}
-
-		if (best.score < 3)
-		{
-			// maybe there are no triggers in this mode; fall back to a fixed shift of the single-player layout
-			const size_t shift = best_class >= 0x14C ? best_class - 0x14C : 0;
-			OFF_ORIGIN = 0x1C;
-			OFF_BOUNDS = 0xDC + shift;
-			log_line("multiplayer layout: no triggers to calibrate bounds from (best %d); guessing bounds at +0x%zX", best.score, OFF_BOUNDS);
-		}
-		else
-		{
-			OFF_ORIGIN = best.origin;
-			OFF_BOUNDS = best.bounds;
-			log_line("multiplayer layout: origin +0x%zX, bounds +0x%zX (%d triggers agree)", OFF_ORIGIN, OFF_BOUNDS, best.score);
+			OFF_ORIGIN = best_origin;
+			OFF_BOUNDS = best_origin + 0x9C;
+			log_line("multiplayer layout: world position at +0x%zX (%d entities), bounds (relative to it) at +0x%zX", OFF_ORIGIN, best_origin_score, OFF_BOUNDS);
+			if (best_origin_score < 5)
+			{
+				return false;
+			}
 		}
 
 		// 3. client pointer of the local player (entity 0): near the class field in the single-player layout, +0x158 per the headers
@@ -4523,6 +4519,76 @@ namespace
 	// at the local player's position. Every spot found becomes a camera source (F3 cycles through them).
 	int g_mp_cam_found = 0;
 	int g_mp_cam_tries = 0;
+	uintptr_t g_cand[64];
+	int g_cand_count = 0;
+	float g_cand_pos[3];
+	bool g_cand_final = false;
+
+	bool axes_ok(const float* m);
+
+	void use_candidates()
+	{
+		for (int i = 1; i < SOURCE_COUNT; ++i)
+		{
+			kSources[i].address = 0;
+		}
+
+		for (int i = 0; i < g_cand_count && i < SOURCE_COUNT - 1; ++i)
+		{
+			kSources[i + 1].address = g_cand[i];
+			kSources[i + 1].kind = 0;
+			kSources[i + 1].angle_offset = 12;
+		}
+	}
+
+	// Some of the places found are old copies. Once the player has walked a bit, keep only the ones that followed.
+	void mp_camera_prune()
+	{
+		if (g_cand_final || g_cand_count == 0)
+		{
+			return;
+		}
+
+		float feet[3];
+		if (!read_bytes(player_entity() + OFF_ORIGIN, feet, sizeof(feet)))
+		{
+			return;
+		}
+
+		const float moved = std::fabs(feet[0] - g_cand_pos[0]) + std::fabs(feet[1] - g_cand_pos[1]);
+		if (moved < 80.0f)
+		{
+			return;
+		}
+
+		int kept = 0;
+		for (int i = 0; i < g_cand_count; ++i)
+		{
+			float v[12];
+			if (read_bytes(g_cand[i], v, sizeof(v)) && std::fabs(v[0] - feet[0]) < 2.0f && std::fabs(v[1] - feet[1]) < 2.0f &&
+				v[2] > feet[2] - 1.0f && v[2] < feet[2] + 90.0f && axes_ok(v + 3))
+			{
+				g_cand[kept++] = g_cand[i];
+			}
+		}
+
+		log_line("camera search: after you moved, %d of %d places still follow the player", kept, g_cand_count);
+		g_cand_count = kept;
+		if (kept == 0)
+		{
+			g_mp_cam_found = 0;     // start over
+			return;
+		}
+
+		use_candidates();
+		for (int i = 0; i < kept && i < 9; ++i)
+		{
+			log_line("   source %d at 0x%llX", i + 1, static_cast<unsigned long long>(g_cand[i]));
+		}
+
+		g_cand_final = true;
+		g_source = 1;
+	}
 
 	bool axes_ok(const float* m)
 	{
@@ -4558,9 +4624,9 @@ namespace
 		uintptr_t address = reinterpret_cast<uintptr_t>(info.lpMinimumApplicationAddress);
 		const uintptr_t limit = reinterpret_cast<uintptr_t>(info.lpMaximumApplicationAddress);
 		static unsigned char chunk[1 << 20];
-		uintptr_t found[16];
+		uintptr_t* found = g_cand;
 		int found_count = 0;
-		while (address < limit && found_count < 16)
+		while (address < limit && found_count < 64)
 		{
 			MEMORY_BASIC_INFORMATION mbi;
 			if (!VirtualQuery(reinterpret_cast<void*>(address), &mbi, sizeof(mbi)))
@@ -4573,7 +4639,7 @@ namespace
 			const bool readable = mbi.State == MEM_COMMIT && (mbi.Protect == PAGE_READWRITE || mbi.Protect == PAGE_WRITECOPY) && mbi.RegionSize < (512ull << 20);
 			if (readable)
 			{
-				for (uintptr_t pos = base; pos < end && found_count < 16; pos += sizeof(chunk) - 64)
+				for (uintptr_t pos = base; pos < end && found_count < 64; pos += sizeof(chunk) - 64)
 				{
 					const size_t n = (end - pos) < sizeof(chunk) ? static_cast<size_t>(end - pos) : sizeof(chunk);
 					if (n < 48 || !read_bytes(pos, chunk, n))
@@ -4581,7 +4647,7 @@ namespace
 						continue;
 					}
 
-					for (size_t o = 0; o + 48 <= n && found_count < 16; o += 4)
+					for (size_t o = 0; o + 48 <= n && found_count < 64; o += 4)
 					{
 						float v[12];
 						memcpy(v, chunk + o, 48);
@@ -4596,18 +4662,14 @@ namespace
 			address = end;
 		}
 
-		log_line("camera search (try %d): %d places hold the player's eye followed by direction vectors", g_mp_cam_tries, found_count);
-		for (int i = 0; i < found_count && i < 9; ++i)
-		{
-			kSources[i + 1].address = found[i];
-			kSources[i + 1].kind = 0;
-			kSources[i + 1].angle_offset = 12;
-			log_line("   source %d at 0x%llX", i + 1, static_cast<unsigned long long>(found[i]));
-		}
-
+		log_line("camera search (try %d): %d places hold the player's eye followed by direction vectors - now walk around a bit", g_mp_cam_tries, found_count);
+		g_cand_count = found_count;
+		memcpy(g_cand_pos, feet, sizeof(feet));
+		g_cand_final = false;
 		if (found_count > 0)
 		{
 			g_mp_cam_found = found_count;
+			use_candidates();
 			g_source = 1;
 		}
 	}
@@ -4617,7 +4679,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.42, multiplayer calibration retries) ----");
+		log_line("---- add-on loaded (version 0.44, multiplayer world positions fixed) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
@@ -4690,6 +4752,11 @@ namespace
 			if (g_is_mp && !g_mp_calibrated && seconds_with_data >= 3 && tick % 20 == 0)
 			{
 				g_mp_calibrated = calibrate_mp_layout();
+			}
+
+			if (g_is_mp && g_mp_calibrated && g_overlay_on && g_mp_cam_found > 0 && !g_cand_final && tick % 5 == 0)
+			{
+				mp_camera_prune();
 			}
 
 			if (g_is_mp && g_mp_calibrated && g_overlay_on && g_mp_cam_found == 0 && g_mp_cam_tries < 12 && tick % 30 == 0)
