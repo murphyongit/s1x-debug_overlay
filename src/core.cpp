@@ -60,6 +60,7 @@ namespace
 	}
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
+	#define ADDON_VERSION "0.45"
 	constexpr int MAX_TABLES = 6;
 
 	volatile LONG g_started = 0;
@@ -332,6 +333,75 @@ namespace
 		{
 			log_line("  kind '%s': %d", census[i].name, census[i].count);
 		}
+	}
+
+
+	// ---- multiplayer: raw data about the local player, so the camera can be worked out ----------
+	void write_mp_player_debug(const int number)
+	{
+		using ps_t = unsigned char* (*)(int);
+		unsigned char* ps = nullptr;
+		__try
+		{
+			ps = reinterpret_cast<ps_t>(0x14043E260)(0);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			ps = nullptr;
+		}
+
+		char name[64];
+		sprintf_s(name, sizeof(name), "mp_player_%d.txt", number);
+		char path[MAX_PATH];
+		make_path(path, name);
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "wb") != 0 || !f)
+		{
+			return;
+		}
+
+		fprintf(f, "player slot %d, class offset 0x%zX, origin offset 0x%zX\n", g_player_slot, OFF_CLASSNAME, OFF_ORIGIN);
+		fprintf(f, "playerState pointer: 0x%llX\n", static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(ps)));
+		auto dump_block = [&](const char* title, uintptr_t address, size_t size)
+		{
+			fprintf(f, "\n== %s (0x%llX, 0x%zX bytes)\n", title, static_cast<unsigned long long>(address), size);
+			for (size_t row = 0; row < size; row += 16)
+			{
+				unsigned char line[16];
+				if (!read_bytes(address + row, line, sizeof(line)))
+				{
+					fprintf(f, "%04zX: ??\n", row);
+					continue;
+				}
+
+				float v[4];
+				memcpy(v, line, sizeof(v));
+				fprintf(f, "%04zX:", row);
+				for (const unsigned char b : line) fprintf(f, " %02X", b);
+				fprintf(f, "   %.3f %.3f %.3f %.3f\n", v[0], v[1], v[2], v[3]);
+			}
+		};
+
+		if (ps)
+		{
+			dump_block("playerState of client 0", reinterpret_cast<uintptr_t>(ps), 0x700);
+		}
+
+		unsigned long long client = 0;
+		if (read_bytes(player_entity() + OFF_CLIENT, &client, sizeof(client)) && client > 0x140000000ull)
+		{
+			dump_block("client block from the entity", static_cast<uintptr_t>(client), 0x400);
+		}
+
+		for (int slot = 0; slot < 3; ++slot)
+		{
+			char title[48];
+			sprintf_s(title, sizeof(title), "entity %d", slot);
+			dump_block(title, SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, 0x300);
+		}
+
+		fclose(f);
+		log_line("wrote %s (playerState pointer 0x%llX)", name, static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(ps)));
 	}
 
 	// Saves the first part of the player's own data block (position, view angles, ...).
@@ -2569,6 +2639,12 @@ namespace
 
 		update_flag_learning(hits, count);
 		draw_inside_panel(hits, count);
+		{
+			const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+			char tag[48];
+			snprintf(tag, sizeof(tag), "OVERLAY v%s", ADDON_VERSION);
+			draw_text(40.0f, 4.0f, tag, g_h >= 1200.0f ? 2.0f : 1.0f, white);
+		}
 
 		if (g_log_settings)
 		{
@@ -4679,7 +4755,10 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.44, multiplayer world positions fixed) ----");
+		log_line("################################################################");
+		log_line("########   VERSION NUMBER:  %s   (S1x debug overlay)   ########", ADDON_VERSION);
+		log_line("################################################################");
+		log_line("---- add-on loaded (version %s, multiplayer player data dump) ----", ADDON_VERSION);
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
@@ -4827,6 +4906,10 @@ namespace
 				write_trigger_names();
 				dump_map_ents();
 				write_client(tables);
+				if (g_is_mp)
+				{
+					write_mp_player_debug(tables);
+				}
 			}
 		}
 
