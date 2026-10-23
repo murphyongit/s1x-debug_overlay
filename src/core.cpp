@@ -20,6 +20,13 @@
 
 #include "MinHook.h"
 
+#ifndef VK_NUMPAD1
+#define VK_NUMPAD1 0x61
+#define VK_NUMPAD2 0x62
+#define VK_NUMPAD3 0x63
+#define VK_NUMPAD4 0x64
+#endif
+
 namespace
 {
 	// Addresses for the campaign (single-player), from the S1x source files.
@@ -60,7 +67,7 @@ namespace
 	}
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
-	#define ADDON_VERSION "0.46"
+	#define ADDON_VERSION "0.47"
 	constexpr int MAX_TABLES = 6;
 
 	volatile LONG g_started = 0;
@@ -2300,6 +2307,12 @@ namespace
 		}
 	}
 
+	// Live tuning for the camera (numpad 1-4), mainly for multiplayer.
+	volatile int g_pitch_sign = 1;
+	volatile int g_yaw_sign = 1;
+	volatile int g_yaw_turn = 0;       // times 90 degrees
+	volatile bool g_smooth_on = true;
+
 	void poll_keys()
 	{
 		static bool was_pagedown, was_delete, was_end, was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
@@ -2315,6 +2328,11 @@ namespace
 		const bool f6 = key_pressed(VK_F6, &was_f6);
 		const bool f7 = key_pressed(VK_F7, &was_f7);
 		const bool f8 = key_pressed(VK_F8, &was_f8);
+		static bool was_n1, was_n2, was_n3, was_n4;
+		if (key_pressed(VK_NUMPAD1, &was_n1)) { g_pitch_sign = -g_pitch_sign; log_line("numpad 1: pitch sign now %d", static_cast<int>(g_pitch_sign)); }
+		if (key_pressed(VK_NUMPAD2, &was_n2)) { g_yaw_sign = -g_yaw_sign; log_line("numpad 2: yaw sign now %d", static_cast<int>(g_yaw_sign)); }
+		if (key_pressed(VK_NUMPAD3, &was_n3)) { g_yaw_turn = (g_yaw_turn + 1) % 4; log_line("numpad 3: yaw turned by %d degrees", static_cast<int>(g_yaw_turn) * 90); }
+		if (key_pressed(VK_NUMPAD4, &was_n4)) { g_smooth_on = !g_smooth_on; log_line("numpad 4: smoothing %s", g_smooth_on ? "on" : "off"); }
 
 		if (f8)
 		{
@@ -2525,7 +2543,9 @@ namespace
 			return false;
 		}
 
-		if (source_index == 0)
+		pitch *= static_cast<float>(g_pitch_sign);
+		yaw = yaw * static_cast<float>(g_yaw_sign) + static_cast<float>(g_yaw_turn) * 90.0f;
+		if (source_index == 0 && g_smooth_on)
 		{
 			smooth_camera(origin, &pitch, &yaw);
 		}
@@ -2642,7 +2662,7 @@ namespace
 		{
 			const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 			char tag[48];
-			snprintf(tag, sizeof(tag), "OVERLAY v%s", ADDON_VERSION);
+			snprintf(tag, sizeof(tag), "OVERLAY v%s P%c Y%c T%d S%c", ADDON_VERSION, g_pitch_sign > 0 ? '+' : '-', g_yaw_sign > 0 ? '+' : '-', static_cast<int>(g_yaw_turn) * 90, g_smooth_on ? '1' : '0');
 			draw_text(40.0f, 4.0f, tag, g_h >= 1200.0f ? 2.0f : 1.0f, white);
 		}
 
@@ -4573,6 +4593,7 @@ namespace
 				OFF_CAM_PITCH = 0x90;
 				OFF_CAM_YAW = 0x94;
 				g_source = 0;
+				g_pitch_sign = -1;   // multiplayer reports pitch the other way round (confirmed by looking up/down)
 				log_line("multiplayer layout: playerState position +0x78, pitch +0x90, yaw +0x94 (position matches entity: %s)", same ? "yes" : "NO");
 			}
 		}
@@ -4753,7 +4774,7 @@ namespace
 		log_line("################################################################");
 		log_line("########   VERSION NUMBER:  %s   (S1x debug overlay)   ########", ADDON_VERSION);
 		log_line("################################################################");
-		log_line("---- add-on loaded (version %s, multiplayer camera from player data) ----", ADDON_VERSION);
+		log_line("---- add-on loaded (version %s, multiplayer camera tuning keys) ----", ADDON_VERSION);
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
