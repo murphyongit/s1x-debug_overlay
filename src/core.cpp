@@ -4322,7 +4322,7 @@ namespace
 			}
 		}
 
-		if (best_score < 8)
+		if (best_score < 80)
 		{
 			log_line("multiplayer layout: no class-name field found yet (best score %d); will retry", best_score);
 			return false;
@@ -4444,6 +4444,13 @@ namespace
 					best.bounds = bo;
 				}
 			}
+		}
+
+		static int bounds_tries = 0;
+		if (best.score < 3 && ++bounds_tries < 8)
+		{
+			log_line("multiplayer layout: no triggers found yet to calibrate bounds from; will retry (%d)", bounds_tries);
+			return false;
 		}
 
 		if (best.score < 3)
@@ -4610,7 +4617,7 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.41, multiplayer camera search) ----");
+		log_line("---- add-on loaded (version 0.42, multiplayer calibration retries) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
@@ -4656,6 +4663,28 @@ namespace
 			if (tick % 10 == 0)
 			{
 				seconds_with_data = entity_list_has_data() ? seconds_with_data + 1 : 0;
+			}
+
+			if (g_is_mp && g_mp_calibrated && tick % 50 == 0)
+			{
+				// a new map invalidates what was learned; notice when the class names stop making sense
+				int sensible = 0;
+				for (int i = 0; i < 600; ++i)
+				{
+					unsigned short id = 0;
+					if (read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(i) * g_stride + OFF_CLASSNAME, &id, sizeof(id)) && id && mp_class_ok(id))
+					{
+						++sensible;
+					}
+				}
+
+				if (sensible < 40)
+				{
+					log_line("multiplayer layout: only %d sensible entities, recalibrating", sensible);
+					g_mp_calibrated = false;
+					g_mp_cam_found = 0;
+					g_mp_cam_tries = 0;
+				}
 			}
 
 			if (g_is_mp && !g_mp_calibrated && seconds_with_data >= 3 && tick % 20 == 0)

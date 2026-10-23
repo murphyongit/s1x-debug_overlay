@@ -21,3 +21,5 @@ v0.39: invisible barriers (brush models named clip/blocker/collision) are drawn 
 v0.40: first multiplayer version. The add-on now also loads in the multiplayer program (s1_mp64_ship.exe). It works out the multiplayer entity layout itself (see "multiplayer layout" lines in the log). Start a private match with bots, press F8, then press F9 a few times while looking in different directions and send the log and the client_*.txt files.
 
 v0.41: multiplayer camera search. In a multiplayer match press F8; the add-on looks for the game camera by itself (log line "camera search"). If boxes still do not line up, press F3 to try the other camera sources it found.
+
+v0.42: multiplayer layout is re-checked and recalibrated when the map changes.
