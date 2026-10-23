@@ -36,7 +36,15 @@ namespace
 	size_t OFF_ORIGIN = 0x1C;   // 3 floats
 	size_t OFF_BOUNDS = 0xDC;   // 6 floats: midpoint xyz, half-size xyz
 	size_t OFF_CLASSNAME = 0x14C; // 16-bit script string id
+	size_t OFF_TYPE = 0x150;                // script string id of the type name (u32)
+	size_t OFF_NAME = 0x160;                // script string id of the targetname (u32)
+	int g_player_slot = 0;                  // the local player entity
 	size_t OFF_CLIENT = 0x118;    // 64-bit pointer to the player's client block
+
+	uintptr_t player_entity()
+	{
+		return SP_G_ENTITIES + static_cast<uintptr_t>(g_player_slot) * g_stride;
+	}
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	constexpr int MAX_TABLES = 6;
@@ -316,7 +324,7 @@ namespace
 	void write_client(const int number)
 	{
 		unsigned long long pointer = 0;
-		if (!read_bytes(SP_G_ENTITIES + OFF_CLIENT, &pointer, sizeof(pointer)))
+		if (!read_bytes(player_entity() + OFF_CLIENT, &pointer, sizeof(pointer)))
 		{
 			log_line("client: could not read the player's client pointer");
 			return;
@@ -1227,7 +1235,7 @@ namespace
 				char name[48] = {};
 				char kind[48] = {};
 				unsigned int name_id = 0;
-				memcpy(&name_id, (class_id == 0 ? before : current) + OFF_CLASSNAME + 0x14, sizeof(name_id));
+				memcpy(&name_id, (class_id == 0 ? before : current) + OFF_NAME, sizeof(name_id));
 				if (name_id > 1 && name_id < 0x10000)
 				{
 					class_name(name_id, name, sizeof(name));
@@ -1979,7 +1987,7 @@ namespace
 
 			const unsigned char kind = classify(class_id);
 			unsigned int early_name = 0;
-			memcpy(&early_name, buffer + OFF_CLASSNAME + 0x14, sizeof(early_name));
+			memcpy(&early_name, buffer + OFF_NAME, sizeof(early_name));
 			const bool barrier = kind == 7 && barrier_name(early_name);
 			if (kind < 2 || (kind == 7 && !g_brushes_on && !barrier))
 			{
@@ -2011,7 +2019,7 @@ namespace
 			const float ez = oz > 0.0f ? oz : 0.0f;
 			const float dist = std::sqrt(ex * ex + ey * ey + ez * ez);
 			unsigned int name_id_value = 0;
-			memcpy(&name_id_value, buffer + OFF_CLASSNAME + 0x14, sizeof(name_id_value));
+			memcpy(&name_id_value, buffer + OFF_NAME, sizeof(name_id_value));
 			const bool end_candidate = kind != 7 && (name_flag(name_id_value) == 2 || is_known_end_flag(index) || is_fail_flag(index));
 			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f) && !(barrier && dist < 4000.0f))
 			{
@@ -2026,8 +2034,8 @@ namespace
 			memcpy(&h.state, buffer + OFF_BOUNDS - 4, sizeof(h.state));
 			h.slot = index;
 			h.class_id = class_id;
-			memcpy(&h.name_id, buffer + OFF_CLASSNAME + 0x14, sizeof(h.name_id));
-			memcpy(&h.type_id, buffer + OFF_CLASSNAME + 4, sizeof(h.type_id));
+			memcpy(&h.name_id, buffer + OFF_NAME, sizeof(h.name_id));
+			memcpy(&h.type_id, buffer + OFF_TYPE, sizeof(h.type_id));
 			h.kind = kind;
 			h.inside = ox <= 0.0f && oy <= 0.0f && oz <= 0.0f;
 			h.mid = {b[0], b[1], b[2]};
@@ -2081,7 +2089,7 @@ namespace
 	};
 
 	constexpr int SOURCE_COUNT = 10;
-	const camera_source kSources[SOURCE_COUNT] = {
+	camera_source kSources[SOURCE_COUNT] = {
 		{0, 0, 0},                // 0: player data (not a real address)
 		{0x14094A7C4, 0, 12},     // 1: eye + axes
 		{0x14096FA64, 0, 12},     // 2: eye + axes
@@ -2157,7 +2165,7 @@ namespace
 		if (index == 0)
 		{
 			unsigned long long pointer = 0;
-			if (!read_bytes(SP_G_ENTITIES + OFF_CLIENT, &pointer, sizeof(pointer)) || pointer < 0x140000000ull)
+			if (!read_bytes(player_entity() + OFF_CLIENT, &pointer, sizeof(pointer)) || pointer < 0x140000000ull)
 			{
 				return false;
 			}
@@ -2293,7 +2301,7 @@ namespace
 	bool in_mission()
 	{
 		unsigned short id = 0;
-		if (!read_bytes(SP_G_ENTITIES + OFF_CLASSNAME, &id, sizeof(id)) || id == 0)
+		if (!read_bytes(player_entity() + OFF_CLASSNAME, &id, sizeof(id)) || id == 0)
 		{
 			g_in_game = false;
 			return false;
@@ -2386,7 +2394,7 @@ namespace
 		g_vert_count = 0;
 
 		unsigned long long pointer = 0;
-		if (!read_bytes(SP_G_ENTITIES + OFF_CLIENT, &pointer, sizeof(pointer)) || pointer < 0x140000000ull ||
+		if (!read_bytes(player_entity() + OFF_CLIENT, &pointer, sizeof(pointer)) || pointer < 0x140000000ull ||
 			pointer > 0x7FFFFFFE0000ull)
 		{
 			return false;
@@ -3599,10 +3607,10 @@ namespace
 			}
 
 			unsigned int type_id = 0;
-			memcpy(&type_id, buffer + OFF_CLASSNAME + 4, sizeof(type_id));
+			memcpy(&type_id, buffer + OFF_TYPE, sizeof(type_id));
 			memcpy(origins[i], buffer + 0x1C, 12);
 			memcpy(origins[i] + 3, buffer + 0xDC, 12);
-			memcpy(&names[i], buffer + OFF_CLASSNAME + 0x14, sizeof(unsigned int));
+			memcpy(&names[i], buffer + OFF_NAME, sizeof(unsigned int));
 			if (type_id > 1 && type_id < 0x10000)
 			{
 				class_name(type_id, types[i], sizeof(types[i]));
@@ -3981,7 +3989,7 @@ namespace
 		// Player position (feet) for the direction check.
 		float player[3] = {0, 0, 0};
 		unsigned long long client = 0;
-		bool have_player = read_bytes(SP_G_ENTITIES + OFF_CLIENT, &client, sizeof(client)) && client > 0x140000000ull &&
+		bool have_player = read_bytes(player_entity() + OFF_CLIENT, &client, sizeof(client)) && client > 0x140000000ull &&
 			read_bytes(static_cast<uintptr_t>(client) + OFF_CAM_ORIGIN, player, sizeof(player));
 
 		static const int perms[6][3] = {{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}};
@@ -4323,6 +4331,87 @@ namespace
 		log_line("multiplayer layout: class name field at +0x%zX (%d entities with a sensible class)", best_class, best_score);
 		OFF_CLASSNAME = best_class;
 
+		// 1b. which entity is the player, where the type and name strings are
+		g_player_slot = 0;
+		for (int i = 0; i < 64; ++i)
+		{
+			unsigned short id = 0;
+			memcpy(&id, ents[i] + best_class, 2);
+			char name[48];
+			if (id && class_name(id, name, sizeof(name)) && strcmp(name, "player") == 0)
+			{
+				g_player_slot = i;
+				break;
+			}
+		}
+
+		log_line("multiplayer layout: local player is entity %d", g_player_slot);
+		{
+			int best_type = 0;
+			size_t type_off = OFF_TYPE;
+			for (size_t off = best_class > 0x60 ? best_class - 0x60 : 0; off <= best_class + 0x80; off += 4)
+			{
+				int score = 0;
+				for (int i = 0; i < slots; ++i)
+				{
+					unsigned short id = 0;
+					memcpy(&id, ents[i] + best_class, 2);
+					unsigned int sid = 0;
+					memcpy(&sid, ents[i] + off, 4);
+					char a[48], b[48];
+					if (id && sid > 1 && sid < 0x10000 && class_name(id, a, sizeof(a)) && strncmp(a, "trigger_", 8) == 0 &&
+						class_name(sid, b, sizeof(b)) && strncmp(b, "trigger_", 8) == 0)
+					{
+						++score;
+					}
+				}
+
+				if (score > best_type)
+				{
+					best_type = score;
+					type_off = off;
+				}
+			}
+
+			OFF_TYPE = type_off;
+			size_t name_off = OFF_NAME;
+			int best_names = 0;
+			for (size_t off = best_class > 0x60 ? best_class - 0x60 : 0; off <= best_class + 0x80; off += 4)
+			{
+				if (off == type_off) continue;
+				unsigned int seen[300];
+				int distinct = 0;
+				for (int i = 0; i < slots; ++i)
+				{
+					unsigned short id = 0;
+					memcpy(&id, ents[i] + best_class, 2);
+					unsigned int sid = 0;
+					memcpy(&sid, ents[i] + off, 4);
+					char a[48], b[64];
+					if (!(id && sid > 1 && sid < 0x10000 && class_name(id, a, sizeof(a)) && (strncmp(a, "trigger_", 8) == 0 || strcmp(a, "script_brushmodel") == 0) &&
+						class_name(sid, b, sizeof(b)) && strlen(b) >= 3 && strncmp(b, "trigger_", 8) != 0))
+					{
+						continue;
+					}
+
+					bool printable = true;
+					for (const char* c = b; *c; ++c) if (static_cast<unsigned char>(*c) < 32 || static_cast<unsigned char>(*c) > 126) printable = false;
+					bool dup = false;
+					for (int k = 0; k < distinct; ++k) if (seen[k] == sid) dup = true;
+					if (printable && !dup && distinct < 300) seen[distinct++] = sid;
+				}
+
+				if (distinct > best_names)
+				{
+					best_names = distinct;
+					name_off = off;
+				}
+			}
+
+			OFF_NAME = name_off;
+			log_line("multiplayer layout: type name at +0x%zX (%d triggers), target names at +0x%zX (%d different)", OFF_TYPE, best_type, OFF_NAME, best_names);
+		}
+
 		// 2. origin + bounds: triggers have their origin equal to the middle of their bounds
 		struct pair_score { size_t origin, bounds; int score; };
 		pair_score best = {0, 0, 0};
@@ -4378,7 +4467,7 @@ namespace
 		for (const size_t cand : candidates)
 		{
 			unsigned long long ptr = 0;
-			memcpy(&ptr, ents[0] + cand, 8);
+			memcpy(&ptr, ents[g_player_slot] + cand, 8);
 			if (ptr > 0x140000000ull && ptr < 0x7FFFFFFE0000ull)
 			{
 				client_off = cand;
@@ -4391,9 +4480,9 @@ namespace
 			OFF_CLIENT = client_off;
 			log_line("multiplayer layout: client pointer at +0x%zX", client_off);
 			unsigned long long ptr = 0;
-			memcpy(&ptr, ents[0] + client_off, 8);
+			memcpy(&ptr, ents[g_player_slot] + client_off, 8);
 			float origin0[3];
-			memcpy(origin0, ents[0] + OFF_ORIGIN, 12);
+			memcpy(origin0, ents[g_player_slot] + OFF_ORIGIN, 12);
 			// find the player's position inside the client block
 			unsigned char block[0x400];
 			if (read_bytes(static_cast<uintptr_t>(ptr), block, sizeof(block)))
@@ -4421,12 +4510,107 @@ namespace
 		return true;
 	}
 
+
+	// ---- multiplayer camera search -----------------------------------------------------------
+	// Looks through the game's memory for "eye position followed by three direction vectors" where the eye is
+	// at the local player's position. Every spot found becomes a camera source (F3 cycles through them).
+	int g_mp_cam_found = 0;
+	int g_mp_cam_tries = 0;
+
+	bool axes_ok(const float* m)
+	{
+		for (int r = 0; r < 3; ++r)
+		{
+			const float len = m[r * 3] * m[r * 3] + m[r * 3 + 1] * m[r * 3 + 1] + m[r * 3 + 2] * m[r * 3 + 2];
+			if (!(len > 0.97f && len < 1.03f)) return false;
+		}
+
+		for (int a = 0; a < 3; ++a)
+		{
+			for (int b = a + 1; b < 3; ++b)
+			{
+				const float d = m[a * 3] * m[b * 3] + m[a * 3 + 1] * m[b * 3 + 1] + m[a * 3 + 2] * m[b * 3 + 2];
+				if (!(std::fabs(d) < 0.03f)) return false;
+			}
+		}
+
+		return true;
+	}
+
+	void mp_camera_search()
+	{
+		float feet[3];
+		if (!read_bytes(player_entity() + OFF_ORIGIN, feet, sizeof(feet)) || !(std::fabs(feet[0]) < 100000.0f) || (feet[0] == 0.0f && feet[1] == 0.0f))
+		{
+			return;
+		}
+
+		++g_mp_cam_tries;
+		SYSTEM_INFO info;
+		GetSystemInfo(&info);
+		uintptr_t address = reinterpret_cast<uintptr_t>(info.lpMinimumApplicationAddress);
+		const uintptr_t limit = reinterpret_cast<uintptr_t>(info.lpMaximumApplicationAddress);
+		static unsigned char chunk[1 << 20];
+		uintptr_t found[16];
+		int found_count = 0;
+		while (address < limit && found_count < 16)
+		{
+			MEMORY_BASIC_INFORMATION mbi;
+			if (!VirtualQuery(reinterpret_cast<void*>(address), &mbi, sizeof(mbi)))
+			{
+				break;
+			}
+
+			const uintptr_t base = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
+			const uintptr_t end = base + mbi.RegionSize;
+			const bool readable = mbi.State == MEM_COMMIT && (mbi.Protect == PAGE_READWRITE || mbi.Protect == PAGE_WRITECOPY) && mbi.RegionSize < (512ull << 20);
+			if (readable)
+			{
+				for (uintptr_t pos = base; pos < end && found_count < 16; pos += sizeof(chunk) - 64)
+				{
+					const size_t n = (end - pos) < sizeof(chunk) ? static_cast<size_t>(end - pos) : sizeof(chunk);
+					if (n < 48 || !read_bytes(pos, chunk, n))
+					{
+						continue;
+					}
+
+					for (size_t o = 0; o + 48 <= n && found_count < 16; o += 4)
+					{
+						float v[12];
+						memcpy(v, chunk + o, 48);
+						if (std::fabs(v[0] - feet[0]) < 1.5f && std::fabs(v[1] - feet[1]) < 1.5f && v[2] > feet[2] - 1.0f && v[2] < feet[2] + 90.0f && axes_ok(v + 3))
+						{
+							found[found_count++] = pos + o;
+						}
+					}
+				}
+			}
+
+			address = end;
+		}
+
+		log_line("camera search (try %d): %d places hold the player's eye followed by direction vectors", g_mp_cam_tries, found_count);
+		for (int i = 0; i < found_count && i < 9; ++i)
+		{
+			kSources[i + 1].address = found[i];
+			kSources[i + 1].kind = 0;
+			kSources[i + 1].angle_offset = 12;
+			log_line("   source %d at 0x%llX", i + 1, static_cast<unsigned long long>(found[i]));
+		}
+
+		if (found_count > 0)
+		{
+			g_mp_cam_found = found_count;
+			g_source = 1;
+		}
+	}
+
 	DWORD WINAPI worker(LPVOID)
 	{
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.40, multiplayer support - first version) ----");
+		log_line("---- add-on loaded (version 0.41, multiplayer camera search) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
@@ -4477,6 +4661,11 @@ namespace
 			if (g_is_mp && !g_mp_calibrated && seconds_with_data >= 3 && tick % 20 == 0)
 			{
 				g_mp_calibrated = calibrate_mp_layout();
+			}
+
+			if (g_is_mp && g_mp_calibrated && g_overlay_on && g_mp_cam_found == 0 && g_mp_cam_tries < 12 && tick % 30 == 0)
+			{
+				mp_camera_search();
 			}
 
 			if (!command_tried && seconds_with_data >= 5)

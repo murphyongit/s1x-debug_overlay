@@ -19,3 +19,5 @@ v0.38: triggers whose flag is on the known end list (see KNOWN_END_TRIGGERS.txt)
 v0.39: invisible barriers (brush models named clip/blocker/collision) are drawn hot pink within about 100 m even with Home off, and the top-right list says WALL REMOVED when one disappears. Triggers that set "player_leaving_map" or a death/kill/fail flag are drawn as rainbow warning boxes at any range.
 
 v0.40: first multiplayer version. The add-on now also loads in the multiplayer program (s1_mp64_ship.exe). It works out the multiplayer entity layout itself (see "multiplayer layout" lines in the log). Start a private match with bots, press F8, then press F9 a few times while looking in different directions and send the log and the client_*.txt files.
+
+v0.41: multiplayer camera search. In a multiplayer match press F8; the add-on looks for the game camera by itself (log line "camera search"). If boxes still do not line up, press F3 to try the other camera sources it found.
