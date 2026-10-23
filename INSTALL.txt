@@ -27,3 +27,5 @@ v0.42: multiplayer layout is re-checked and recalibrated when the map changes.
 v0.44: multiplayer boxes now use the correct world positions, and the camera search keeps only the camera copies that follow you after you walk about 3 steps.
 
 v0.45: the log now starts with a big "VERSION NUMBER" banner and the screen shows "OVERLAY v0.45" at the top left when the overlay is on. In multiplayer F9 also writes mp_player_N.txt (raw data about your player) so the camera can be worked out.
+
+v0.46: multiplayer camera now read from the real player data (position and view angles), so boxes should stay in the world.

@@ -60,7 +60,7 @@ namespace
 	}
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
-	#define ADDON_VERSION "0.45"
+	#define ADDON_VERSION "0.46"
 	constexpr int MAX_TABLES = 6;
 
 	volatile LONG g_started = 0;
@@ -4562,23 +4562,18 @@ namespace
 			memcpy(&ptr, ents[g_player_slot] + client_off, 8);
 			float origin0[3];
 			memcpy(origin0, ents[g_player_slot] + OFF_ORIGIN, 12);
-			// find the player's position inside the client block
-			unsigned char block[0x400];
-			if (read_bytes(static_cast<uintptr_t>(ptr), block, sizeof(block)))
+			// Worked out from the saved player data: in the playerState the position is at +0x78 and the
+			// view angles (pitch, yaw) at +0x90 / +0x94.
+			float ps_origin[3] = {};
+			if (read_bytes(static_cast<uintptr_t>(ptr) + 0x78, ps_origin, sizeof(ps_origin)))
 			{
-				for (size_t off = 0; off + 12 <= sizeof(block); off += 4)
-				{
-					float v[3];
-					memcpy(v, block + off, 12);
-					if (std::fabs(v[0] - origin0[0]) < 1.0f && std::fabs(v[1] - origin0[1]) < 1.0f && std::fabs(v[2] - origin0[2]) < 1.0f)
-					{
-						OFF_CAM_ORIGIN = off;
-						OFF_CAM_PITCH = off + (0x10C - 0x80);
-						OFF_CAM_YAW = off + (0x110 - 0x80);
-						log_line("multiplayer layout: player position in client block at +0x%zX (view angles guessed at +0x%zX / +0x%zX)", off, OFF_CAM_PITCH, OFF_CAM_YAW);
-						break;
-					}
-				}
+				const bool same = std::fabs(ps_origin[0] - origin0[0]) < 1.0f && std::fabs(ps_origin[1] - origin0[1]) < 1.0f &&
+					std::fabs(ps_origin[2] - origin0[2]) < 1.0f;
+				OFF_CAM_ORIGIN = 0x78;
+				OFF_CAM_PITCH = 0x90;
+				OFF_CAM_YAW = 0x94;
+				g_source = 0;
+				log_line("multiplayer layout: playerState position +0x78, pitch +0x90, yaw +0x94 (position matches entity: %s)", same ? "yes" : "NO");
 			}
 		}
 		else
@@ -4758,7 +4753,7 @@ namespace
 		log_line("################################################################");
 		log_line("########   VERSION NUMBER:  %s   (S1x debug overlay)   ########", ADDON_VERSION);
 		log_line("################################################################");
-		log_line("---- add-on loaded (version %s, multiplayer player data dump) ----", ADDON_VERSION);
+		log_line("---- add-on loaded (version %s, multiplayer camera from player data) ----", ADDON_VERSION);
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
@@ -4831,6 +4826,10 @@ namespace
 			if (g_is_mp && !g_mp_calibrated && seconds_with_data >= 3 && tick % 20 == 0)
 			{
 				g_mp_calibrated = calibrate_mp_layout();
+				if (g_mp_calibrated && OFF_CAM_ORIGIN == 0x78)
+				{
+					g_mp_cam_tries = 99;   // the camera is known, no memory search needed
+				}
 			}
 
 			if (g_is_mp && g_mp_calibrated && g_overlay_on && g_mp_cam_found > 0 && !g_cand_final && tick % 5 == 0)
