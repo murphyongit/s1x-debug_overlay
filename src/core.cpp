@@ -23,17 +23,20 @@
 namespace
 {
 	// Addresses for the campaign (single-player), from the S1x source files.
-	constexpr uintptr_t SP_G_ENTITIES = 0x143C26DC0;
-	constexpr uintptr_t SP_SL_CONVERT_TO_STRING = 0x140314850;
+	// (Names say SP, but they are filled in for multiplayer too by choose_game_layout().)
+	uintptr_t SP_G_ENTITIES = 0x143C26DC0;
+	uintptr_t SP_SL_CONVERT_TO_STRING = 0x140314850;
+	bool g_is_mp = false;
 
 	// Entity layout worked out from your dump files.
-	constexpr size_t ENTITY_SIZE = 0x2F8;
+	constexpr size_t ENTITY_SIZE = 0x2F8;   // largest size, used for buffers
+	size_t g_stride = 0x2F8;                // real distance between entities
 	constexpr int MAX_ENTITIES = 2048;
-	constexpr size_t OFF_NUMBER = 0x7C;   // 16-bit entity number
-	constexpr size_t OFF_ORIGIN = 0x1C;   // 3 floats
-	constexpr size_t OFF_BOUNDS = 0xDC;   // 6 floats: midpoint xyz, half-size xyz
-	constexpr size_t OFF_CLASSNAME = 0x14C; // 16-bit script string id
-	constexpr size_t OFF_CLIENT = 0x118;    // 64-bit pointer to the player's client block
+	size_t OFF_NUMBER = 0x7C;   // 16-bit entity number
+	size_t OFF_ORIGIN = 0x1C;   // 3 floats
+	size_t OFF_BOUNDS = 0xDC;   // 6 floats: midpoint xyz, half-size xyz
+	size_t OFF_CLASSNAME = 0x14C; // 16-bit script string id
+	size_t OFF_CLIENT = 0x118;    // 64-bit pointer to the player's client block
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	constexpr int MAX_TABLES = 6;
@@ -214,7 +217,7 @@ namespace
 
 		for (int index = 0; index < MAX_ENTITIES; ++index)
 		{
-			const uintptr_t address = SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE;
+			const uintptr_t address = SP_G_ENTITIES + static_cast<uintptr_t>(index) * g_stride;
 			if (!read_bytes(address, entity, sizeof(entity)))
 			{
 				++unreadable;
@@ -386,11 +389,11 @@ namespace
 	// Drawing: we paint our own lines on top of the finished picture, using the graphics
 	// system (Direct3D 11) directly, just before the picture is shown on screen.
 	// ------------------------------------------------------------------------------
-	constexpr uintptr_t SP_DVAR_FIND_VAR = 0x140370860;
+	uintptr_t SP_DVAR_FIND_VAR = 0x140370860;
 
-	constexpr size_t OFF_CAM_ORIGIN = 0x80;  // 3 floats, found in your snapshots
-	constexpr size_t OFF_CAM_PITCH = 0x10C;  // degrees, positive = looking down
-	constexpr size_t OFF_CAM_YAW = 0x110;    // degrees
+	size_t OFF_CAM_ORIGIN = 0x80;  // 3 floats, found in your snapshots
+	size_t OFF_CAM_PITCH = 0x10C;  // degrees, positive = looking down
+	size_t OFF_CAM_YAW = 0x110;    // degrees
 	constexpr size_t DVAR_CURRENT_OFFSET = 0x18;
 
 	constexpr float EYE_HEIGHT = 60.0f;
@@ -911,7 +914,7 @@ namespace
 	// ---- script events (what the map scripts are being told) -------------------------------
 	// Hooks the game's "notify" function. Every time a script sends a message such as "trigger" or
 	// "death", we remember its name and show the newest ones in the top-right corner.
-	constexpr uintptr_t SP_SCR_NOTIFY_ID = 0x14031CB80;
+	uintptr_t SP_SCR_NOTIFY_ID = 0x14031CB80;
 	constexpr int EVENT_SLOTS = 16;
 
 	struct script_event
@@ -1108,8 +1111,8 @@ namespace
 		int rows = 0;
 		for (int index = 0; index < MAX_ENTITIES && rows < 500; ++index)
 		{
-			unsigned char buffer[0x170];
-			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE, buffer, sizeof(buffer)))
+			unsigned char buffer[0x1C0];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * g_stride, buffer, sizeof(buffer)))
 			{
 				break;
 			}
@@ -1207,7 +1210,7 @@ namespace
 		for (int index = 0; index < MAX_ENTITIES; ++index)
 		{
 			unsigned char current[ENTITY_SIZE];
-			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE, current, sizeof(current)))
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * g_stride, current, g_stride))
 			{
 				break;
 			}
@@ -1224,7 +1227,7 @@ namespace
 				char name[48] = {};
 				char kind[48] = {};
 				unsigned int name_id = 0;
-				memcpy(&name_id, (class_id == 0 ? before : current) + 0x160, sizeof(name_id));
+				memcpy(&name_id, (class_id == 0 ? before : current) + OFF_CLASSNAME + 0x14, sizeof(name_id));
 				if (name_id > 1 && name_id < 0x10000)
 				{
 					class_name(name_id, name, sizeof(name));
@@ -1245,7 +1248,7 @@ namespace
 				}
 				else if (class_id != 0 && now - g_watch_last[index] > 1.5)
 				{
-					for (size_t offset = 0; offset < ENTITY_SIZE; offset += 4)
+					for (size_t offset = 0; offset < g_stride; offset += 4)
 					{
 						if (watch_skips_offset(offset) || memcmp(current + offset, before + offset, 4) == 0)
 						{
@@ -1280,7 +1283,7 @@ namespace
 			}
 
 			g_watch_class[index] = class_id;
-			memcpy(before, current, ENTITY_SIZE);
+			memcpy(before, current, g_stride);
 		}
 
 		g_watch_primed = true;
@@ -1947,14 +1950,14 @@ namespace
 	int find_triggers(const vec3& player, const float max_distance, hit* out, const int capacity)
 	{
 		int count = 0;
-		unsigned char buffer[0x170];
+		unsigned char buffer[0x1C0];
 
 		for (int index = 0; index < MAX_ENTITIES; ++index)
 		{
 			bool ok = true;
 			__try
 			{
-				memcpy(buffer, reinterpret_cast<const void*>(SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE),
+				memcpy(buffer, reinterpret_cast<const void*>(SP_G_ENTITIES + static_cast<uintptr_t>(index) * g_stride),
 				       sizeof(buffer));
 			}
 			__except (EXCEPTION_EXECUTE_HANDLER)
@@ -1976,7 +1979,7 @@ namespace
 
 			const unsigned char kind = classify(class_id);
 			unsigned int early_name = 0;
-			memcpy(&early_name, buffer + 0x160, sizeof(early_name));
+			memcpy(&early_name, buffer + OFF_CLASSNAME + 0x14, sizeof(early_name));
 			const bool barrier = kind == 7 && barrier_name(early_name);
 			if (kind < 2 || (kind == 7 && !g_brushes_on && !barrier))
 			{
@@ -2008,7 +2011,7 @@ namespace
 			const float ez = oz > 0.0f ? oz : 0.0f;
 			const float dist = std::sqrt(ex * ex + ey * ey + ez * ez);
 			unsigned int name_id_value = 0;
-			memcpy(&name_id_value, buffer + 0x160, sizeof(name_id_value));
+			memcpy(&name_id_value, buffer + OFF_CLASSNAME + 0x14, sizeof(name_id_value));
 			const bool end_candidate = kind != 7 && (name_flag(name_id_value) == 2 || is_known_end_flag(index) || is_fail_flag(index));
 			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f) && !(barrier && dist < 4000.0f))
 			{
@@ -2020,11 +2023,11 @@ namespace
 			h.key = end_candidate ? dist - 1.0e9f : dist;
 			h.flag = end_candidate ? 1 : 0;
 			h.barrier = barrier;
-			memcpy(&h.state, buffer + 0xD8, sizeof(h.state));
+			memcpy(&h.state, buffer + OFF_BOUNDS - 4, sizeof(h.state));
 			h.slot = index;
 			h.class_id = class_id;
-			memcpy(&h.name_id, buffer + 0x160, sizeof(h.name_id));
-			memcpy(&h.type_id, buffer + 0x150, sizeof(h.type_id));
+			memcpy(&h.name_id, buffer + OFF_CLASSNAME + 0x14, sizeof(h.name_id));
+			memcpy(&h.type_id, buffer + OFF_CLASSNAME + 4, sizeof(h.type_id));
 			h.kind = kind;
 			h.inside = ox <= 0.0f && oy <= 0.0f && oz <= 0.0f;
 			h.mid = {b[0], b[1], b[2]};
@@ -3110,8 +3113,8 @@ namespace
 		int last_taken = -100;
 		for (int index = 0; index < MAX_ENTITIES && target_count < GEO_TARGETS; ++index)
 		{
-			unsigned char buffer[OFF_CLASSNAME + 2];
-			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * ENTITY_SIZE, buffer, sizeof(buffer)))
+			unsigned char buffer[0x1C0];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(index) * g_stride, buffer, sizeof(buffer)))
 			{
 				break;
 			}
@@ -3321,7 +3324,7 @@ namespace
 	// Asks the game for its loaded "clipmap" (the level's collision data) and saves what it looks like
 	// so the layout can be worked out.
 	constexpr int ASSET_TYPE_CLIPMAP_INDEX = 24;
-	constexpr uintptr_t SP_DB_ENUM_XASSETS = 0x14017D7C0;
+	uintptr_t SP_DB_ENUM_XASSETS = 0x14017D7C0;
 	void* g_found_assets[16];
 	int g_found_count = 0;
 
@@ -3589,17 +3592,17 @@ namespace
 		{
 			types[i][0] = '\0';
 			names[i] = 0;
-			unsigned char buffer[0x170];
-			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(i) * ENTITY_SIZE, buffer, sizeof(buffer)))
+			unsigned char buffer[0x1C0];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(i) * g_stride, buffer, sizeof(buffer)))
 			{
 				continue;
 			}
 
 			unsigned int type_id = 0;
-			memcpy(&type_id, buffer + 0x150, sizeof(type_id));
+			memcpy(&type_id, buffer + OFF_CLASSNAME + 4, sizeof(type_id));
 			memcpy(origins[i], buffer + 0x1C, 12);
 			memcpy(origins[i] + 3, buffer + 0xDC, 12);
-			memcpy(&names[i], buffer + 0x160, sizeof(unsigned int));
+			memcpy(&names[i], buffer + OFF_CLASSNAME + 0x14, sizeof(unsigned int));
 			if (type_id > 1 && type_id < 0x10000)
 			{
 				class_name(type_id, types[i], sizeof(types[i]));
@@ -4118,7 +4121,7 @@ namespace
 		}
 
 		g_command_added = true;
-		constexpr uintptr_t SP_CMD_ADD_INTERNAL = 0x1402EDDB0;
+		const uintptr_t SP_CMD_ADD_INTERNAL = g_is_mp ? 0x1403AF2C0 : 0x1402EDDB0;
 		using add_t = void (*)(const char*, void (*)(), console_command*);
 		g_help_command.name = "overlay_help";
 		g_help_command.function = &help_command_function;
@@ -4207,7 +4210,215 @@ namespace
 			if (*c >= 'A' && *c <= 'Z') *c = static_cast<char>(*c + 32);
 		}
 
-		return strstr(exe, "s1_sp64_ship") != nullptr;
+		return strstr(exe, "s1_sp64_ship") != nullptr || strstr(exe, "s1_mp64_ship") != nullptr;
+	}
+
+
+	// ---- single-player vs multiplayer -------------------------------------------------------
+	bool exe_contains(const char* word)
+	{
+		char exe[MAX_PATH] = {};
+		GetModuleFileNameA(nullptr, exe, MAX_PATH);
+		for (char* c = exe; *c; ++c)
+		{
+			if (*c >= 'A' && *c <= 'Z') *c = static_cast<char>(*c + 32);
+		}
+
+		return strstr(exe, word) != nullptr;
+	}
+
+	// Addresses come from the S1x source files (second number of each pair is multiplayer).
+	void choose_game_layout()
+	{
+		if (!exe_contains("s1_mp64_ship"))
+		{
+			return;
+		}
+
+		g_is_mp = true;
+		SP_G_ENTITIES = 0x144758C70;
+		SP_SL_CONVERT_TO_STRING = 0x1403F0F10;
+		SP_DVAR_FIND_VAR = 0x1404BF8B0;
+		SP_SCR_NOTIFY_ID = 0x1403F92D0;
+		SP_DB_ENUM_XASSETS = 0x14026EC10;
+		g_stride = 0x2E0;
+		g_source = 0;     // the single-player camera addresses do not exist here
+	}
+
+	bool mp_class_ok(const unsigned short id)
+	{
+		char name[48];
+		if (id < 2 || !class_name(id, name, sizeof(name)))
+		{
+			return false;
+		}
+
+		static const char* const kStarts[] = {"player", "script_", "trigger_", "actor", "misc_", "info_", "mp_", "scriptable", "agent", "dog", "vehicle", "light", "worldspawn", "node_"};
+		for (const char* start : kStarts)
+		{
+			if (strncmp(name, start, strlen(start)) == 0)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	// The multiplayer entity layout is not known, so find the field positions by looking at the data.
+	// Returns true once everything has been worked out.
+	bool g_mp_calibrated = false;
+
+	bool calibrate_mp_layout()
+	{
+		const int slots = 600;
+		static unsigned char ents[600][0x300];
+		int readable = 0;
+		for (int i = 0; i < slots; ++i)
+		{
+			if (read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(i) * g_stride, ents[i], 0x300))
+			{
+				++readable;
+			}
+			else
+			{
+				memset(ents[i], 0, 0x300);
+			}
+		}
+
+		if (readable < slots / 2)
+		{
+			return false;
+		}
+
+		// 1. which 16-bit field holds a class name
+		size_t best_class = 0;
+		int best_score = 0;
+		for (size_t off = 0x40; off < 0x2F0; off += 2)
+		{
+			int score = 0;
+			for (int i = 0; i < slots; ++i)
+			{
+				unsigned short id = 0;
+				memcpy(&id, ents[i] + off, 2);
+				if (id != 0 && mp_class_ok(id))
+				{
+					++score;
+				}
+			}
+
+			if (score > best_score)
+			{
+				best_score = score;
+				best_class = off;
+			}
+		}
+
+		if (best_score < 8)
+		{
+			log_line("multiplayer layout: no class-name field found yet (best score %d); will retry", best_score);
+			return false;
+		}
+
+		log_line("multiplayer layout: class name field at +0x%zX (%d entities with a sensible class)", best_class, best_score);
+		OFF_CLASSNAME = best_class;
+
+		// 2. origin + bounds: triggers have their origin equal to the middle of their bounds
+		struct pair_score { size_t origin, bounds; int score; };
+		pair_score best = {0, 0, 0};
+		for (size_t bo = 0x40; bo + 24 <= 0x2F0; bo += 4)
+		{
+			for (size_t oo = 0x08; oo + 12 <= 0x100; oo += 4)
+			{
+				int score = 0;
+				for (int i = 0; i < slots; ++i)
+				{
+					unsigned short id = 0;
+					memcpy(&id, ents[i] + best_class, 2);
+					if (id == 0) continue;
+					char name[48];
+					if (!class_name(id, name, sizeof(name)) || strncmp(name, "trigger_", 8) != 0) continue;
+					float o[3], b[6];
+					memcpy(o, ents[i] + oo, 12);
+					memcpy(b, ents[i] + bo, 24);
+					bool sane = true;
+					for (int k = 0; k < 6; ++k) if (!(std::fabs(b[k]) < 200000.0f)) sane = false;
+					for (int k = 0; k < 3; ++k) if (!(std::fabs(o[k]) < 200000.0f)) sane = false;
+					if (!sane || b[3] < 0.5f || b[4] < 0.5f || b[5] < 0.5f) continue;
+					if (std::fabs(o[0] - b[0]) < 2.0f && std::fabs(o[1] - b[1]) < 2.0f && std::fabs(o[2] - b[2]) < 2.0f) ++score;
+				}
+
+				if (score > best.score)
+				{
+					best.score = score;
+					best.origin = oo;
+					best.bounds = bo;
+				}
+			}
+		}
+
+		if (best.score < 3)
+		{
+			// maybe there are no triggers in this mode; fall back to a fixed shift of the single-player layout
+			const size_t shift = best_class >= 0x14C ? best_class - 0x14C : 0;
+			OFF_ORIGIN = 0x1C;
+			OFF_BOUNDS = 0xDC + shift;
+			log_line("multiplayer layout: no triggers to calibrate bounds from (best %d); guessing bounds at +0x%zX", best.score, OFF_BOUNDS);
+		}
+		else
+		{
+			OFF_ORIGIN = best.origin;
+			OFF_BOUNDS = best.bounds;
+			log_line("multiplayer layout: origin +0x%zX, bounds +0x%zX (%d triggers agree)", OFF_ORIGIN, OFF_BOUNDS, best.score);
+		}
+
+		// 3. client pointer of the local player (entity 0): near the class field in the single-player layout, +0x158 per the headers
+		size_t client_off = 0;
+		const size_t candidates[] = {0x158, OFF_CLIENT + (best_class > 0x14C ? best_class - 0x14C : 0), 0x118};
+		for (const size_t cand : candidates)
+		{
+			unsigned long long ptr = 0;
+			memcpy(&ptr, ents[0] + cand, 8);
+			if (ptr > 0x140000000ull && ptr < 0x7FFFFFFE0000ull)
+			{
+				client_off = cand;
+				break;
+			}
+		}
+
+		if (client_off)
+		{
+			OFF_CLIENT = client_off;
+			log_line("multiplayer layout: client pointer at +0x%zX", client_off);
+			unsigned long long ptr = 0;
+			memcpy(&ptr, ents[0] + client_off, 8);
+			float origin0[3];
+			memcpy(origin0, ents[0] + OFF_ORIGIN, 12);
+			// find the player's position inside the client block
+			unsigned char block[0x400];
+			if (read_bytes(static_cast<uintptr_t>(ptr), block, sizeof(block)))
+			{
+				for (size_t off = 0; off + 12 <= sizeof(block); off += 4)
+				{
+					float v[3];
+					memcpy(v, block + off, 12);
+					if (std::fabs(v[0] - origin0[0]) < 1.0f && std::fabs(v[1] - origin0[1]) < 1.0f && std::fabs(v[2] - origin0[2]) < 1.0f)
+					{
+						OFF_CAM_ORIGIN = off;
+						OFF_CAM_PITCH = off + (0x10C - 0x80);
+						OFF_CAM_YAW = off + (0x110 - 0x80);
+						log_line("multiplayer layout: player position in client block at +0x%zX (view angles guessed at +0x%zX / +0x%zX)", off, OFF_CAM_PITCH, OFF_CAM_YAW);
+						break;
+					}
+				}
+			}
+		}
+		else
+		{
+			log_line("multiplayer layout: no client pointer found in entity 0");
+		}
+
+		return true;
 	}
 
 	DWORD WINAPI worker(LPVOID)
@@ -4215,11 +4426,13 @@ namespace
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);
 
-		log_line("---- add-on loaded (version 0.39, barriers and leave-area triggers) ----");
+		log_line("---- add-on loaded (version 0.40, multiplayer support - first version) ----");
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
 		bool hook_done = false;
+		choose_game_layout();
+		log_line("game mode: %s", g_is_mp ? "multiplayer (layout is being worked out from the data)" : "campaign");
 		reserve_hook_memory();
 		int notify_tries = 0;
 
@@ -4246,7 +4459,7 @@ namespace
 				}
 				else
 				{
-					log_line("not the campaign program, drawing not installed");
+					log_line("not a game program, drawing not installed");
 				}
 			}
 
@@ -4259,6 +4472,11 @@ namespace
 			if (tick % 10 == 0)
 			{
 				seconds_with_data = entity_list_has_data() ? seconds_with_data + 1 : 0;
+			}
+
+			if (g_is_mp && !g_mp_calibrated && seconds_with_data >= 3 && tick % 20 == 0)
+			{
+				g_mp_calibrated = calibrate_mp_layout();
 			}
 
 			if (!command_tried && seconds_with_data >= 5)
