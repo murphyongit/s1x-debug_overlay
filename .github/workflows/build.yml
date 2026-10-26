@@ -39,3 +39,15 @@ jobs:
           if ($LASTEXITCODE -eq 0) { gh release delete latest --yes --cleanup-tag }
           $notes = "Build of commit ${{ github.sha }}. Download version.dll and put it in your game folder."
           gh release create latest dist/try_this_first/version.dll --title "Latest build" --notes $notes --target ${{ github.sha }}
+
+      # The separate runner-only recorder:
+      # https://github.com/murphyongit/s1x-debug_overlay/releases/download/recorder/version.dll
+      - name: Publish recorder release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view recorder *> $null
+          if ($LASTEXITCODE -eq 0) { gh release delete recorder --yes --cleanup-tag }
+          $notes = "Speed run recorder (no overlay). Download version.dll and put it in your game folder."
+          gh release create recorder dist/speedrun_recorder/version.dll dist/speedrun_recorder/FOR_RUNNERS.txt --title "Speed run recorder" --notes $notes --target ${{ github.sha }}

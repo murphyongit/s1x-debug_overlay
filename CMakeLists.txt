@@ -27,9 +27,17 @@ add_library(overlay_dinput8 SHARED src/core.cpp src/proxy_dinput8.cpp)
 set_target_properties(overlay_dinput8 PROPERTIES OUTPUT_NAME "dinput8" PREFIX "")
 target_compile_definitions(overlay_dinput8 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 
+# The separate recorder: same engine, no overlay, only records runs.
+add_library(recorder_version SHARED src/core.cpp src/proxy_version.cpp)
+set_target_properties(recorder_version PROPERTIES OUTPUT_NAME "version" PREFIX "")
+target_compile_definitions(recorder_version PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX RECORDER_ONLY)
+target_link_libraries(recorder_version PRIVATE minhook)
+
 target_link_libraries(overlay_version PRIVATE minhook)
 target_link_libraries(overlay_dinput8 PRIVATE minhook)
 
 install(TARGETS overlay_version RUNTIME DESTINATION "try_this_first")
 install(TARGETS overlay_dinput8 RUNTIME DESTINATION "try_this_if_first_does_nothing")
+install(TARGETS recorder_version RUNTIME DESTINATION "speedrun_recorder")
+install(FILES FOR_RUNNERS.txt DESTINATION "speedrun_recorder")
 install(FILES INSTALL.txt DESTINATION ".")

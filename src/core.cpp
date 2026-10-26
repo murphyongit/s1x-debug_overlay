@@ -67,7 +67,11 @@ namespace
 	}
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
+	#ifdef RECORDER_ONLY
+	#define ADDON_VERSION "0.50 RECORDER"
+	#else
 	#define ADDON_VERSION "0.50"
+	#endif
 	constexpr int MAX_TABLES = 6;
 
 	volatile LONG g_started = 0;
@@ -5388,6 +5392,13 @@ namespace
 			if (!hook_done && tick >= 150)
 			{
 				hook_done = true;
+#ifdef RECORDER_ONLY
+				// the recorder build never draws anything on screen
+				if (!is_campaign_exe())
+				{
+					log_line("not a game program");
+				}
+#else
 				if (is_campaign_exe())
 				{
 					install_hook();
@@ -5396,6 +5407,7 @@ namespace
 				{
 					log_line("not a game program, drawing not installed");
 				}
+#endif
 			}
 
 			if (hook_done && !g_notify_hooked && notify_tries < 24 && tick % 50 == 0)
@@ -5549,7 +5561,11 @@ void overlay_start(HMODULE self)
 		*(slash + 1) = '\0';
 	}
 
+	#ifdef RECORDER_ONLY
+	make_path(g_log_path, "speedrun_recorder.log");
+#else
 	make_path(g_log_path, "s1x_debug_overlay.log");
+#endif
 
 	// Do the real work on a separate thread so loading the game is never held up.
 	HANDLE thread = CreateThread(nullptr, 0, worker, nullptr, 0, nullptr);
