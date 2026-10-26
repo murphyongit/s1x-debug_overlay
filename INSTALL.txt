@@ -34,3 +34,7 @@ v0.47: multiplayer camera tuning keys on the number pad (Num1 flips up/down, Num
 
 v0.50 - SPEED RUN RECORDER. Records every campaign mission you play into the "speedrun_data" folder
         (positions, triggers entered, events, entities) and saves the game's scripts. See FOR_RUNNERS.txt.
+
+v0.51 - GHOST REPLAY. Put a runner's run file in the game folder as ghost.txt (and optionally a proposed
+        route as route.txt). With the overlay on (F8) press Num5 to watch them. Num6 pause, Num7/Num8 slower/faster,
+        Num9 restart, Num0 whole path, Num+ / Num- jump 10 seconds. Recorder now saves 10 positions per second.

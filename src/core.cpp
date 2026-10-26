@@ -26,6 +26,16 @@
 #define VK_NUMPAD3 0x63
 #define VK_NUMPAD4 0x64
 #endif
+#ifndef VK_NUMPAD5
+#define VK_NUMPAD0 0x60
+#define VK_NUMPAD5 0x65
+#define VK_NUMPAD6 0x66
+#define VK_NUMPAD7 0x67
+#define VK_NUMPAD8 0x68
+#define VK_NUMPAD9 0x69
+#define VK_ADD 0x6B
+#define VK_SUBTRACT 0x6D
+#endif
 
 namespace
 {
@@ -68,9 +78,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.50 RECORDER"
+	#define ADDON_VERSION "0.51 RECORDER"
 	#else
-	#define ADDON_VERSION "0.50"
+	#define ADDON_VERSION "0.51"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2327,6 +2337,286 @@ namespace
 	volatile int g_yaw_turn = 0;       // times 90 degrees
 	volatile bool g_smooth_on = true;
 
+	// ---- ghost replay: watch a recorded run (ghost.txt) and a proposed route (route.txt) in the world ----
+	constexpr int GHOST_MAX = 120000;
+	struct ghost_track
+	{
+		int count = 0;
+		float* data = nullptr;    // time, x, y, z, pitch, yaw per point
+		float color[4] = {1, 1, 1, 1};
+		const char* label = "";
+		char status[80] = {};
+	};
+
+	ghost_track g_ghost[2];
+	volatile bool g_ghost_on = false;
+	volatile bool g_ghost_pause = false;
+	volatile bool g_ghost_full = false;
+	double g_ghost_time = 0.0;
+	double g_ghost_last_now = 0.0;
+	float g_ghost_speed = 1.0f;
+	volatile bool g_ghost_restart = false;
+	volatile float g_ghost_jump = 0.0f;
+
+	void load_ghost(ghost_track& track, const char* file_name)
+	{
+		if (!track.data)
+		{
+			track.data = static_cast<float*>(malloc(sizeof(float) * 6 * GHOST_MAX));
+		}
+
+		track.count = 0;
+		if (!track.data)
+		{
+			return;
+		}
+
+		char path[MAX_PATH];
+		make_path(path, file_name);
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "rb") != 0 || !f)
+		{
+			snprintf(track.status, sizeof(track.status), "%s: file not found", file_name);
+			return;
+		}
+
+		char line[512];
+		while (fgets(line, sizeof(line), f) && track.count < GHOST_MAX)
+		{
+			char* p = line;
+			char* end = nullptr;
+			const float t = strtof(p, &end);
+			if (end == p)
+			{
+				continue;
+			}
+
+			p = end;
+			while (*p == ' ') ++p;
+			if (p[0] != 'P' || p[1] != ' ')
+			{
+				continue;
+			}
+
+			p += 2;
+			float v[5];
+			bool ok = true;
+			for (int i = 0; i < 5; ++i)
+			{
+				v[i] = strtof(p, &end);
+				if (end == p) { ok = false; break; }
+				p = end;
+			}
+
+			if (!ok)
+			{
+				continue;
+			}
+
+			float* d = track.data + track.count * 6;
+			d[0] = t; d[1] = v[0]; d[2] = v[1]; d[3] = v[2]; d[4] = v[3]; d[5] = v[4];
+			++track.count;
+		}
+
+		fclose(f);
+		snprintf(track.status, sizeof(track.status), "%s: %d points, %.0f seconds", file_name, track.count,
+		         track.count > 0 ? track.data[(track.count - 1) * 6] : 0.0f);
+		log_line("ghost: %s", track.status);
+	}
+
+	void ghost_keys()
+	{
+		static bool was5, was6, was7, was8, was9, was0, wasp, wasm;
+		if (key_pressed(VK_NUMPAD5, &was5))
+		{
+			g_ghost_on = !g_ghost_on;
+			if (g_ghost_on)
+			{
+				g_ghost[0].color[0] = 1.0f; g_ghost[0].color[1] = 0.55f; g_ghost[0].color[2] = 0.1f; g_ghost[0].color[3] = 1.0f;
+				g_ghost[1].color[0] = 0.2f; g_ghost[1].color[1] = 1.0f; g_ghost[1].color[2] = 0.3f; g_ghost[1].color[3] = 1.0f;
+				g_ghost[0].label = "RUNNER";
+				g_ghost[1].label = "ROUTE";
+				load_ghost(g_ghost[0], "ghost.txt");
+				load_ghost(g_ghost[1], "route.txt");
+				g_ghost_time = 0.0;
+				g_ghost_last_now = now_seconds();
+			}
+		}
+
+		if (key_pressed(VK_NUMPAD6, &was6)) g_ghost_pause = !g_ghost_pause;
+		if (key_pressed(VK_NUMPAD7, &was7) && g_ghost_speed > 0.13f) g_ghost_speed *= 0.5f;
+		if (key_pressed(VK_NUMPAD8, &was8) && g_ghost_speed < 7.9f) g_ghost_speed *= 2.0f;
+		if (key_pressed(VK_NUMPAD9, &was9)) g_ghost_restart = true;
+		if (key_pressed(VK_NUMPAD0, &was0)) g_ghost_full = !g_ghost_full;
+		if (key_pressed(VK_ADD, &wasp)) g_ghost_jump = 10.0f;
+		if (key_pressed(VK_SUBTRACT, &wasm)) g_ghost_jump = -10.0f;
+	}
+
+	bool ghost_sample(const ghost_track& tr, const double t, float* out)   // out: x y z pitch yaw
+	{
+		if (tr.count < 2)
+		{
+			return false;
+		}
+
+		const float* d = tr.data;
+		int lo = 0, hi = tr.count - 1;
+		if (t <= d[0])
+		{
+			for (int i = 0; i < 5; ++i) out[i] = d[1 + i];
+			return true;
+		}
+
+		if (t >= d[hi * 6])
+		{
+			for (int i = 0; i < 5; ++i) out[i] = d[hi * 6 + 1 + i];
+			return true;
+		}
+
+		while (hi - lo > 1)
+		{
+			const int mid = (lo + hi) / 2;
+			if (d[mid * 6] <= t) lo = mid; else hi = mid;
+		}
+
+		const float* a = d + lo * 6;
+		const float* b = d + hi * 6;
+		const float span = b[0] - a[0];
+		const float f = span > 0.0001f ? static_cast<float>((t - a[0]) / span) : 0.0f;
+		for (int i = 0; i < 3; ++i) out[i] = a[1 + i] + (b[1 + i] - a[1 + i]) * f;
+		out[3] = a[4] + (b[4] - a[4]) * f;
+		float dy = b[5] - a[5];
+		while (dy > 180.0f) dy -= 360.0f;
+		while (dy < -180.0f) dy += 360.0f;
+		out[4] = a[5] + dy * f;
+		return true;
+	}
+
+	void ghost_box(const vec3& base, const float yaw, const float half, const float z0, const float z1, const float* color)
+	{
+		const float rad = 3.14159265f / 180.0f;
+		const float c = std::cos(yaw * rad);
+		const float s = std::sin(yaw * rad);
+		vec3 p[8];
+		for (int i = 0; i < 8; ++i)
+		{
+			const float lx = (i & 1) ? half : -half;
+			const float ly = (i & 2) ? half : -half;
+			p[i] = {base.x + lx * c - ly * s, base.y + lx * s + ly * c, base.z + ((i & 4) ? z1 : z0)};
+		}
+
+		for (int i = 0; i < 8; ++i)
+		{
+			for (int bit = 1; bit <= 4; bit <<= 1)
+			{
+				if ((i & bit) == 0) edge(p[i], p[i | bit], color);
+			}
+		}
+	}
+
+	void ghost_draw(const double now, const float* viewer)
+	{
+		if (!g_ghost_on)
+		{
+			return;
+		}
+
+		double dt = now - g_ghost_last_now;
+		g_ghost_last_now = now;
+		if (dt < 0.0 || dt > 0.25) dt = 0.0;
+		float length = 0.0f;
+		for (int i = 0; i < 2; ++i)
+		{
+			if (g_ghost[i].count > 1)
+			{
+				const float e = g_ghost[i].data[(g_ghost[i].count - 1) * 6];
+				if (e > length) length = e;
+			}
+		}
+
+		if (!g_ghost_pause) g_ghost_time += dt * g_ghost_speed;
+		if (g_ghost_restart) { g_ghost_restart = false; g_ghost_time = 0.0; }
+		if (g_ghost_jump != 0.0f) { g_ghost_time += g_ghost_jump; g_ghost_jump = 0.0f; if (g_ghost_time < 0.0) g_ghost_time = 0.0; }
+		if (length > 0.0f && g_ghost_time > length + 3.0) g_ghost_time = 0.0;
+
+		const float white[4] = {1, 1, 1, 1};
+		char text[160];
+		snprintf(text, sizeof(text), "GHOST %.1f / %.1f  SPEED %.2f %s", g_ghost_time, length, g_ghost_speed, g_ghost_pause ? "PAUSED" : "");
+		draw_text(40.0f, g_h >= 1200.0f ? 28.0f : 16.0f, text, g_h >= 1200.0f ? 2.0f : 1.0f, white);
+		float row = g_h >= 1200.0f ? 52.0f : 28.0f;
+		for (int i = 0; i < 2; ++i)
+		{
+			if (g_ghost[i].status[0])
+			{
+				draw_text(40.0f, row, g_ghost[i].status, 1.0f, g_ghost[i].color);
+				row += 12.0f;
+			}
+		}
+
+		for (int i = 0; i < 2; ++i)
+		{
+			const ghost_track& tr = g_ghost[i];
+			if (tr.count < 2)
+			{
+				continue;
+			}
+
+			// the path: the last few seconds always, the whole route when asked (Num 0)
+			const float* d = tr.data;
+			const int step = tr.count > 3000 && g_ghost_full ? tr.count / 3000 : 1;
+			int drawn = 0;
+			for (int k = 0; k + step < tr.count && drawn < 1500; k += step)
+			{
+				const float* a = d + k * 6;
+				const float* b = d + (k + step) * 6;
+				const bool recent = a[0] <= g_ghost_time && a[0] >= g_ghost_time - 6.0;
+				if (!g_ghost_full && !recent)
+				{
+					continue;
+				}
+
+				const float dx = a[1] - viewer[0], dy = a[2] - viewer[1];
+				if (dx * dx + dy * dy > 4000.0f * 4000.0f)
+				{
+					continue;
+				}
+
+				const vec3 pa = {a[1], a[2], a[3] + 4.0f};
+				const vec3 pb = {b[1], b[2], b[3] + 4.0f};
+				edge(pa, pb, tr.color);
+				++drawn;
+			}
+
+			float s[5];
+			if (!ghost_sample(tr, g_ghost_time, s))
+			{
+				continue;
+			}
+
+			const vec3 feet = {s[0], s[1], s[2]};
+			ghost_box(feet, s[4], 14.0f, 0.0f, 58.0f, tr.color);
+			ghost_box({s[0], s[1], s[2]}, s[4], 7.0f, 58.0f, 74.0f, tr.color);
+			const float rad = 3.14159265f / 180.0f;
+			const float cp = std::cos(s[3] * rad), sp = std::sin(s[3] * rad);
+			const float cy = std::cos(s[4] * rad), sy = std::sin(s[4] * rad);
+			const vec3 eye = {s[0], s[1], s[2] + 66.0f};
+			const vec3 tip = {eye.x + cp * cy * 70.0f, eye.y + cp * sy * 70.0f, eye.z - sp * 70.0f};
+			edge(eye, tip, white);
+			edge(feet, {s[0], s[1], s[2] + 400.0f}, tr.color);
+
+			const vec3 c = to_camera({s[0], s[1], s[2] + 90.0f});
+			if (c.z >= 8.0f)
+			{
+				float sx, sy2;
+				to_screen(c, &sx, &sy2);
+				if (sx >= 0.0f && sy2 >= 0.0f && sx <= g_w && sy2 <= g_h)
+				{
+					draw_text(sx - 20.0f, sy2, tr.label, 1.5f, tr.color);
+				}
+			}
+		}
+	}
+
 	void poll_keys()
 	{
 		static bool was_pagedown, was_delete, was_end, was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
@@ -2342,6 +2632,7 @@ namespace
 		const bool f6 = key_pressed(VK_F6, &was_f6);
 		const bool f7 = key_pressed(VK_F7, &was_f7);
 		const bool f8 = key_pressed(VK_F8, &was_f8);
+		ghost_keys();
 		static bool was_n1, was_n2, was_n3, was_n4;
 		if (key_pressed(VK_NUMPAD1, &was_n1)) { g_pitch_sign = -g_pitch_sign; log_line("numpad 1: pitch sign now %d", static_cast<int>(g_pitch_sign)); }
 		if (key_pressed(VK_NUMPAD2, &was_n2)) { g_yaw_sign = -g_yaw_sign; log_line("numpad 2: yaw sign now %d", static_cast<int>(g_yaw_sign)); }
@@ -2639,12 +2930,14 @@ namespace
 			draw_events();
 		}
 
+		ghost_draw(now_seconds(), origin);
+
 		if (g_help_until > now_seconds())
 		{
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
 				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "F9 save data files",
-				"Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "End this help (or console: overlay_help)"};
+				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
 			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));
@@ -5323,7 +5616,6 @@ namespace
 			return;
 		}
 
-		if (tick % 3 == 0)
 		{
 			float origin[3], pitch, yaw;
 			if (rec_player_state(origin, &pitch, &yaw))
