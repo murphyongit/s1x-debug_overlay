@@ -67,7 +67,7 @@ namespace
 	}
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
-	#define ADDON_VERSION "0.47"
+	#define ADDON_VERSION "0.50"
 	constexpr int MAX_TABLES = 6;
 
 	volatile LONG g_started = 0;
@@ -75,9 +75,16 @@ namespace
 	char g_dir[MAX_PATH] = {};
 	char g_log_path[MAX_PATH] = {};
 
+	thread_local const char* g_subdir = nullptr;   // set by the recorder so its files land in speedrun_data
+
 	void make_path(char* out, const char* file_name)
 	{
 		strcpy_s(out, MAX_PATH, g_dir);
+		if (g_subdir)
+		{
+			strcat_s(out, MAX_PATH, g_subdir);
+		}
+
 		strcat_s(out, MAX_PATH, file_name);
 	}
 
@@ -1409,6 +1416,8 @@ namespace
 
 	void push_recent(const char* name, double now);
 
+	void rec_event(const char* name, unsigned int entity);
+
 	void record_event(const unsigned int entity, const unsigned int string_id)
 	{
 		char name[44];
@@ -1419,6 +1428,7 @@ namespace
 
 		const double now = now_seconds();
 		count_event(name, entity, now);
+		rec_event(name, entity);
 		if (!is_always_noise(name))
 		{
 			push_recent(name, now);
@@ -4766,6 +4776,569 @@ namespace
 		}
 	}
 
+
+	// ===========================================================================================
+	// Speed run recorder: writes everything useful about a run into the speedrun_data folder.
+	// ===========================================================================================
+	CRITICAL_SECTION g_rec_lock;
+	bool g_rec_lock_ready = false;
+	FILE* g_rec = nullptr;
+	double g_rec_start = 0.0;
+	char g_rec_map[64] = {};
+	bool g_rec_flag_cache_ready = false;
+
+	void rec_line(const char* fmt, ...)
+	{
+		if (!g_rec_lock_ready || !g_rec)
+		{
+			return;
+		}
+
+		char text[400];
+		va_list args;
+		va_start(args, fmt);
+		vsnprintf(text, sizeof(text), fmt, args);
+		va_end(args);
+
+		EnterCriticalSection(&g_rec_lock);
+		if (g_rec)
+		{
+			fprintf(g_rec, "%.2f %s\n", now_seconds() - g_rec_start, text);
+		}
+
+		LeaveCriticalSection(&g_rec_lock);
+	}
+
+	// every script message, one line each (very quick repeats of the same message are thinned out)
+	void rec_event(const char* name, const unsigned int entity)
+	{
+		if (!g_rec)
+		{
+			return;
+		}
+
+		static double last_time[256];
+		unsigned int h = 5381;
+		for (const char* c = name; *c; ++c) h = h * 33 + static_cast<unsigned char>(*c);
+		const double now = now_seconds();
+		if (now - last_time[h & 255] < 0.05)
+		{
+			return;
+		}
+
+		last_time[h & 255] = now;
+		rec_line("EVENT %s ent=%u", name, entity);
+	}
+
+	void rec_flush()
+	{
+		if (g_rec_lock_ready && g_rec)
+		{
+			EnterCriticalSection(&g_rec_lock);
+			if (g_rec) fflush(g_rec);
+			LeaveCriticalSection(&g_rec_lock);
+		}
+	}
+
+	void rec_close(const char* why)
+	{
+		if (!g_rec)
+		{
+			return;
+		}
+
+		rec_line("END %s", why);
+		EnterCriticalSection(&g_rec_lock);
+		fclose(g_rec);
+		g_rec = nullptr;
+		LeaveCriticalSection(&g_rec_lock);
+		log_line("recorder: closed the run file (%s)", why);
+	}
+
+	// ---- scripts and other game data ------------------------------------------------------
+	void* g_assets_big[6000];
+	int g_assets_big_count = 0;
+
+	void big_asset_callback(void* header, void*)
+	{
+		if (g_assets_big_count < 6000)
+		{
+			g_assets_big[g_assets_big_count++] = header;
+		}
+	}
+
+	unsigned int g_dumped_hash[16384];
+	int g_dumped_count = 0;
+
+	bool already_dumped(const char* name)
+	{
+		unsigned int h = 5381;
+		for (const char* c = name; *c; ++c) h = h * 33 + static_cast<unsigned char>(*c);
+		if (h == 0) h = 1;
+		for (int i = 0; i < g_dumped_count; ++i)
+		{
+			if (g_dumped_hash[i] == h) return true;
+		}
+
+		if (g_dumped_count < 16384) g_dumped_hash[g_dumped_count++] = h;
+		return false;
+	}
+
+	void sanitize_name(const char* in, char* out, const size_t capacity)
+	{
+		size_t n = 0;
+		for (; *in && n + 1 < capacity; ++in)
+		{
+			const char c = *in;
+			out[n++] = ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-') ? c : '_';
+		}
+
+		out[n] = '\0';
+	}
+
+	bool enum_assets(const int type)
+	{
+		g_assets_big_count = 0;
+		using enum_t = void (*)(int, void (*)(void*, void*), void*, bool);
+		__try
+		{
+			reinterpret_cast<enum_t>(SP_DB_ENUM_XASSETS)(type, &big_asset_callback, nullptr, false);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	bool write_bytes_from_game(FILE* f, const uintptr_t address, const long long length)
+	{
+		static unsigned char chunk[65536];
+		for (long long done = 0; done < length; done += sizeof(chunk))
+		{
+			const size_t n = static_cast<size_t>(length - done < static_cast<long long>(sizeof(chunk)) ? length - done : static_cast<long long>(sizeof(chunk)));
+			if (!read_bytes(address + static_cast<uintptr_t>(done), chunk, n))
+			{
+				return false;
+			}
+
+			fwrite(chunk, 1, n, f);
+		}
+
+		return true;
+	}
+
+	// Saves every script file the game has loaded (the level logic) plus an index of raw files.
+	void dump_scripts()
+	{
+		char path[MAX_PATH];
+		if (!enum_assets(50))   // ASSET_TYPE_SCRIPTFILE
+		{
+			log_line("scripts: could not list the script files");
+			return;
+		}
+
+		log_line("scripts: the game has %d script files loaded", g_assets_big_count);
+		make_path(path, "scripts_index.txt");
+		FILE* index = nullptr;
+		fopen_s(&index, path, "ab");
+		int written = 0;
+		long long total = 0;
+		void* headers[6000];
+		const int count = g_assets_big_count;
+		memcpy(headers, g_assets_big, sizeof(void*) * static_cast<size_t>(count));
+		for (int i = 0; i < count; ++i)
+		{
+			const uintptr_t base = reinterpret_cast<uintptr_t>(headers[i]);
+			unsigned long long name_ptr = 0, buffer_ptr = 0, bytecode_ptr = 0;
+			int compressed = 0, length = 0, bytecode_len = 0;
+			read_bytes(base, &name_ptr, 8);
+			read_bytes(base + 8, &compressed, 4);
+			read_bytes(base + 12, &length, 4);
+			read_bytes(base + 16, &bytecode_len, 4);
+			read_bytes(base + 24, &buffer_ptr, 8);
+			read_bytes(base + 32, &bytecode_ptr, 8);
+			char name[160] = {};
+			if (!name_ptr || !safe_copy_string(reinterpret_cast<const char*>(name_ptr), name, sizeof(name)))
+			{
+				continue;
+			}
+
+			if (already_dumped(name))
+			{
+				continue;
+			}
+
+			if (compressed < 0 || compressed > 16 * 1024 * 1024 || bytecode_len < 0 || bytecode_len > 16 * 1024 * 1024)
+			{
+				if (index) fprintf(index, "%s  (odd sizes %d %d %d, skipped)\n", name, compressed, length, bytecode_len);
+				continue;
+			}
+
+			char clean[200];
+			sanitize_name(name, clean, sizeof(clean));
+			char file[260];
+			snprintf(file, sizeof(file), "scripts\\%s.gscbin", clean);
+			make_path(path, file);
+			FILE* f = nullptr;
+			if (fopen_s(&f, path, "wb") != 0 || !f)
+			{
+				continue;
+			}
+
+			// header as found in the game: three sizes, then the packed script, then the bytecode
+			fwrite(&compressed, 4, 1, f);
+			fwrite(&length, 4, 1, f);
+			fwrite(&bytecode_len, 4, 1, f);
+			bool ok = write_bytes_from_game(f, static_cast<uintptr_t>(buffer_ptr), compressed);
+			ok = ok && write_bytes_from_game(f, static_cast<uintptr_t>(bytecode_ptr), bytecode_len);
+			fclose(f);
+			if (index)
+			{
+				fprintf(index, "%s  file=%s packed=%d size=%d bytecode=%d %s\n", name, file, compressed, length, bytecode_len, ok ? "ok" : "PARTIAL");
+			}
+
+			++written;
+			total += compressed + bytecode_len;
+		}
+
+		if (index) fclose(index);
+		log_line("scripts: saved %d new script files (%lld bytes)", written, total);
+
+		// raw files: names and sizes, and the small text-like ones in full
+		if (enum_assets(49))   // ASSET_TYPE_RAWFILE
+		{
+			const int raw_count = g_assets_big_count;
+			make_path(path, "rawfiles_index.txt");
+			FILE* ri = nullptr;
+			fopen_s(&ri, path, "ab");
+			int saved = 0;
+			for (int i = 0; i < raw_count; ++i)
+			{
+				const uintptr_t base = reinterpret_cast<uintptr_t>(g_assets_big[i]);
+				unsigned long long name_ptr = 0, buffer_ptr = 0;
+				int compressed = 0, length = 0;
+				read_bytes(base, &name_ptr, 8);
+				read_bytes(base + 8, &compressed, 4);
+				read_bytes(base + 12, &length, 4);
+				read_bytes(base + 16, &buffer_ptr, 8);
+				char name[160] = {};
+				if (!name_ptr || !safe_copy_string(reinterpret_cast<const char*>(name_ptr), name, sizeof(name)) || already_dumped(name))
+				{
+					continue;
+				}
+
+				if (ri) fprintf(ri, "%s packed=%d size=%d\n", name, compressed, length);
+				const size_t nl = strlen(name);
+				const bool texty = nl > 4 && (strcmp(name + nl - 4, ".gsc") == 0 || strcmp(name + nl - 4, ".csv") == 0 || strcmp(name + nl - 4, ".txt") == 0 ||
+					strcmp(name + nl - 4, ".cfg") == 0 || strcmp(name + nl - 4, ".gsx") == 0);
+				if (texty && compressed > 0 && compressed < 2 * 1024 * 1024 && saved < 400)
+				{
+					char clean[200];
+					sanitize_name(name, clean, sizeof(clean));
+					char file[260];
+					snprintf(file, sizeof(file), "rawfiles\\%s.bin", clean);
+					make_path(path, file);
+					FILE* f = nullptr;
+					if (fopen_s(&f, path, "wb") == 0 && f)
+					{
+						write_bytes_from_game(f, static_cast<uintptr_t>(buffer_ptr), compressed);
+						fclose(f);
+						++saved;
+					}
+				}
+			}
+
+			if (ri) fclose(ri);
+			log_line("rawfiles: %d listed, %d saved", raw_count, saved);
+		}
+	}
+
+	// ---- the live recording ------------------------------------------------------------------
+	struct rec_slot
+	{
+		unsigned short class_id;
+		unsigned int name_id;
+		bool inside;
+		unsigned int state;
+		double state_time;
+	};
+
+	rec_slot g_rs[MAX_ENTITIES];
+	char g_rec_class_cache[65536];   // 0 unknown, 1 other, 2 actor, 3 vehicle
+	int g_rec_last_actors = -1, g_rec_last_vehicles = -1;
+	double g_rec_gone_burst_time = 0.0;
+
+	bool rec_player_alive()
+	{
+		unsigned short id = 0;
+		if (!read_bytes(player_entity() + OFF_CLASSNAME, &id, sizeof(id)) || id == 0)
+		{
+			return false;
+		}
+
+		char name[32];
+		return class_name(id, name, sizeof(name)) && strcmp(name, "player") == 0;
+	}
+
+	bool rec_player_state(float* origin, float* pitch, float* yaw)
+	{
+		unsigned long long client = 0;
+		if (!read_bytes(player_entity() + OFF_CLIENT, &client, sizeof(client)) || client < 0x140000000ull || client > 0x7FFFFFFE0000ull)
+		{
+			return false;
+		}
+
+		return read_bytes(static_cast<uintptr_t>(client) + OFF_CAM_ORIGIN, origin, 12) &&
+			read_bytes(static_cast<uintptr_t>(client) + OFF_CAM_PITCH, pitch, 4) &&
+			read_bytes(static_cast<uintptr_t>(client) + OFF_CAM_YAW, yaw, 4);
+	}
+
+	void rec_describe(const int slot, const unsigned char* buffer, char* out, const size_t capacity)
+	{
+		unsigned short class_id = 0;
+		memcpy(&class_id, buffer + OFF_CLASSNAME, 2);
+		unsigned int type_id = 0, name_id = 0;
+		memcpy(&type_id, buffer + OFF_TYPE, 4);
+		memcpy(&name_id, buffer + OFF_NAME, 4);
+		char cls[64] = {}, type[64] = {}, name[64] = {};
+		class_name(class_id, cls, sizeof(cls));
+		if (type_id > 1 && type_id < 0x10000) class_name(type_id, type, sizeof(type));
+		if (name_id > 1 && name_id < 0x10000) class_name(name_id, name, sizeof(name));
+		char flags[100] = {};
+		learned_flags(slot, flags, sizeof(flags));
+		float b[6];
+		memcpy(b, buffer + OFF_BOUNDS, sizeof(b));
+		make_world_bounds(b, buffer);
+		snprintf(out, capacity, "#%d %s/%s name=%s%s%s at %.0f %.0f %.0f size %.0f %.0f %.0f", slot, cls[0] ? cls : "?", type[0] ? type : "-",
+			name[0] ? name : "-", flags[0] ? " flags=" : "", flags, b[0], b[1], b[2], b[3] * 2, b[4] * 2, b[5] * 2);
+	}
+
+	void rec_open()
+	{
+		// map name from the map entities asset
+		char map[64] = "unknown";
+		if (enum_assets(29) && g_assets_big_count > 0)
+		{
+			unsigned long long name_ptr = 0;
+			char full[128] = {};
+			if (read_bytes(reinterpret_cast<uintptr_t>(g_assets_big[0]), &name_ptr, 8) && name_ptr &&
+				safe_copy_string(reinterpret_cast<const char*>(name_ptr), full, sizeof(full)))
+			{
+				const char* slash = strrchr(full, '/');
+				const char* base = slash ? slash + 1 : full;
+				sanitize_name(base, map, sizeof(map));
+				char* dot = strchr(map, '.');
+				if (dot) *dot = '\0';
+			}
+		}
+
+		snprintf(g_rec_map, sizeof(g_rec_map), "%s", map);
+		SYSTEMTIME t;
+		GetLocalTime(&t);
+		char file[200];
+		snprintf(file, sizeof(file), "%s_%04d%02d%02d_%02d%02d%02d.txt", map, t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
+		char path[MAX_PATH];
+		make_path(path, file);
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "wb") != 0 || !f)
+		{
+			log_line("recorder: could not create %s", path);
+			return;
+		}
+
+		g_rec_start = now_seconds();
+		memset(g_rs, 0, sizeof(g_rs));
+		g_rec_last_actors = g_rec_last_vehicles = -1;
+		EnterCriticalSection(&g_rec_lock);
+		g_rec = f;
+		LeaveCriticalSection(&g_rec_lock);
+		rec_line("RUN FILE  tool version %s  map %s  mode %s", ADDON_VERSION, map, g_is_mp ? "multiplayer" : "campaign");
+		rec_line("COLUMNS  P x y z pitch yaw | ENTER/EXIT #slot class/type name flags | SPAWN/REMOVED/STATE | EVENT name | ACTORS n | TRIG (all triggers at start)");
+		log_line("recorder: started %s", file);
+
+		// the map's entity text (flag names) and the game's scripts
+		dump_map_ents();
+		rebuild_slot_flags();
+		dump_scripts();
+
+		// every trigger and solid-brush entity as it is at the start
+		for (int slot = 0; slot < MAX_ENTITIES; ++slot)
+		{
+			unsigned char buffer[0x1C0];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer)))
+			{
+				break;
+			}
+
+			unsigned short class_id = 0;
+			memcpy(&class_id, buffer + OFF_CLASSNAME, 2);
+			if (class_id == 0 || classify(class_id) < 2)
+			{
+				continue;
+			}
+
+			char text[300];
+			rec_describe(slot, buffer, text, sizeof(text));
+			rec_line("TRIG %s", text);
+		}
+	}
+
+	void rec_scan()
+	{
+		float origin[3] = {}, pitch = 0, yaw = 0;
+		const bool have_player = rec_player_state(origin, &pitch, &yaw);
+		int gone = 0, spawned = 0, actors = 0, vehicles = 0;
+		for (int slot = 0; slot < MAX_ENTITIES; ++slot)
+		{
+			unsigned char buffer[0x1C0];
+			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer)))
+			{
+				break;
+			}
+
+			unsigned short class_id = 0;
+			memcpy(&class_id, buffer + OFF_CLASSNAME, 2);
+			rec_slot& r = g_rs[slot];
+			if (class_id != 0)
+			{
+				if (g_rec_class_cache[class_id] == 0)
+				{
+					char name[64] = {};
+					class_name(class_id, name, sizeof(name));
+					g_rec_class_cache[class_id] = strncmp(name, "actor", 5) == 0 ? 2 : (strncmp(name, "script_vehicle", 14) == 0 ? 3 : 1);
+				}
+
+				if (g_rec_class_cache[class_id] == 2) ++actors;
+				if (g_rec_class_cache[class_id] == 3) ++vehicles;
+			}
+
+			const unsigned char kind = class_id ? classify(class_id) : (r.class_id ? classify(r.class_id) : 1);
+			if (kind >= 2)
+			{
+				unsigned int name_id = 0, state = 0;
+				memcpy(&name_id, buffer + OFF_NAME, 4);
+				memcpy(&state, buffer + OFF_BOUNDS - 4, 4);
+				if (class_id != 0 && r.class_id == 0)
+				{
+					char text[300];
+					rec_describe(slot, buffer, text, sizeof(text));
+					rec_line("SPAWN %s", text);
+					++spawned;
+				}
+				else if (class_id == 0 && r.class_id != 0)
+				{
+					char name[64] = {}, cls[64] = {};
+					if (r.name_id > 1 && r.name_id < 0x10000) class_name(r.name_id, name, sizeof(name));
+					class_name(r.class_id, cls, sizeof(cls));
+					rec_line("REMOVED #%d %s name=%s", slot, cls, name[0] ? name : "-");
+					++gone;
+					r.inside = false;
+				}
+				else if (class_id != 0 && state != r.state && now_seconds() - r.state_time > 0.5)
+				{
+					char name[64] = {}, cls[64] = {};
+					if (name_id > 1 && name_id < 0x10000) class_name(name_id, name, sizeof(name));
+					class_name(class_id, cls, sizeof(cls));
+					rec_line("STATE #%d %s name=%s contents %08X -> %08X", slot, cls, name[0] ? name : "-", r.state, state);
+					r.state_time = now_seconds();
+				}
+
+				r.state = state;
+				r.name_id = name_id;
+
+				if (class_id != 0 && have_player && kind != 7)
+				{
+					float b[6];
+					memcpy(b, buffer + OFF_BOUNDS, sizeof(b));
+					make_world_bounds(b, buffer);
+					const bool sane = std::fabs(b[0]) < 200000.0f && std::fabs(b[1]) < 200000.0f && std::fabs(b[2]) < 200000.0f && b[3] > 0.0f && b[4] > 0.0f && b[5] > 0.0f;
+					const bool inside = sane && std::fabs(origin[0] - b[0]) <= b[3] && std::fabs(origin[1] - b[1]) <= b[4] &&
+						origin[2] + 30.0f >= b[2] - b[5] && origin[2] + 30.0f <= b[2] + b[5];
+					if (inside != r.inside)
+					{
+						char text[300];
+						rec_describe(slot, buffer, text, sizeof(text));
+						rec_line("%s %s", inside ? "ENTER" : "EXIT", text);
+						r.inside = inside;
+					}
+				}
+			}
+			else if (class_id == 0 && r.class_id != 0)
+			{
+				++gone;
+			}
+
+			r.class_id = class_id;
+		}
+
+		if (actors != g_rec_last_actors || vehicles != g_rec_last_vehicles)
+		{
+			rec_line("ACTORS %d VEHICLES %d", actors, vehicles);
+			g_rec_last_actors = actors;
+			g_rec_last_vehicles = vehicles;
+		}
+
+		if (gone >= 20)
+		{
+			rec_close("many entities vanished (level ending or reloading)");
+		}
+	}
+
+	// Runs from the worker loop every 100 ms.
+	void recorder_tick(const int tick)
+	{
+		static int alive_ticks = 0;
+		static int dead_ticks = 0;
+		if (!g_rec_lock_ready)
+		{
+			return;
+		}
+
+		const bool alive = tick % 5 == 0 ? rec_player_alive() : (alive_ticks > 0);
+		if (tick % 5 == 0)
+		{
+			alive_ticks = alive ? alive_ticks + 1 : 0;
+			dead_ticks = alive ? 0 : dead_ticks + 1;
+		}
+
+		if (!g_rec)
+		{
+			if (alive_ticks >= 4 && tick % 5 == 0)     // about two seconds in the mission
+			{
+				rec_open();
+			}
+
+			return;
+		}
+
+		if (dead_ticks >= 6)
+		{
+			rec_close("player gone");
+			return;
+		}
+
+		if (tick % 3 == 0)
+		{
+			float origin[3], pitch, yaw;
+			if (rec_player_state(origin, &pitch, &yaw))
+			{
+				rec_line("P %.1f %.1f %.1f %.1f %.1f", origin[0], origin[1], origin[2], pitch, yaw);
+			}
+		}
+
+		if (tick % 2 == 0)
+		{
+			rec_scan();
+		}
+
+		if (tick % 10 == 0)
+		{
+			rec_flush();
+		}
+	}
+
 	DWORD WINAPI worker(LPVOID)
 	{
 		char exe[MAX_PATH] = {};
@@ -4774,11 +5347,25 @@ namespace
 		log_line("################################################################");
 		log_line("########   VERSION NUMBER:  %s   (S1x debug overlay)   ########", ADDON_VERSION);
 		log_line("################################################################");
-		log_line("---- add-on loaded (version %s, multiplayer camera tuning keys) ----", ADDON_VERSION);
+		log_line("---- add-on loaded (version %s, speed run recorder) ----", ADDON_VERSION);
 		log_line("host program: %s", exe);
 		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
 		bool hook_done = false;
+		InitializeCriticalSection(&g_rec_lock);
+		g_rec_lock_ready = true;
+		{
+			char dir[MAX_PATH];
+			strcpy_s(dir, MAX_PATH, g_dir);
+			strcat_s(dir, MAX_PATH, "speedrun_data");
+			CreateDirectoryA(dir, nullptr);
+			strcat_s(dir, MAX_PATH, "\\scripts");
+			CreateDirectoryA(dir, nullptr);
+			strcpy_s(dir, MAX_PATH, g_dir);
+			strcat_s(dir, MAX_PATH, "speedrun_data\\rawfiles");
+			CreateDirectoryA(dir, nullptr);
+		}
+
 		choose_game_layout();
 		log_line("game mode: %s", g_is_mp ? "multiplayer (layout is being worked out from the data)" : "campaign");
 		reserve_hook_memory();
@@ -4820,6 +5407,13 @@ namespace
 			if (tick % 10 == 0)
 			{
 				seconds_with_data = entity_list_has_data() ? seconds_with_data + 1 : 0;
+			}
+
+			if (hook_done && !g_is_mp)
+			{
+				g_subdir = "speedrun_data\\";
+				recorder_tick(tick);
+				g_subdir = nullptr;
 			}
 
 			if (g_is_mp && g_mp_calibrated && tick % 50 == 0)

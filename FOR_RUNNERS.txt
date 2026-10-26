@@ -1,0 +1,8 @@
+SPEED RUN RECORDER - INSTRUCTIONS FOR RUNNERS
+
+1. Close the game.
+2. Put "version.dll" in your game folder, next to s1x.exe (replace the old one if asked).
+3. Start the game and play campaign missions normally. You do not need to press anything.
+   Recording starts about 2 seconds after a mission loads and stops when it ends.
+4. A folder called "speedrun_data" appears in the game folder. Zip the whole folder and send it.
+   It contains one text file per run, a "scripts" folder (the game's level scripts), and index files.
