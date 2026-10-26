@@ -78,9 +78,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.51 RECORDER"
+	#define ADDON_VERSION "0.52 RECORDER"
 	#else
-	#define ADDON_VERSION "0.51"
+	#define ADDON_VERSION "0.52"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5083,6 +5083,7 @@ namespace
 	double g_rec_start = 0.0;
 	char g_rec_map[64] = {};
 	bool g_rec_flag_cache_ready = false;
+	bool g_prev_reset = true;
 
 	void rec_line(const char* fmt, ...)
 	{
@@ -5091,7 +5092,7 @@ namespace
 			return;
 		}
 
-		char text[400];
+		char text[3000];
 		va_list args;
 		va_start(args, fmt);
 		vsnprintf(text, sizeof(text), fmt, args);
@@ -5448,6 +5449,7 @@ namespace
 		g_rec_start = now_seconds();
 		memset(g_rs, 0, sizeof(g_rs));
 		g_rec_last_actors = g_rec_last_vehicles = -1;
+		g_prev_reset = true;
 		EnterCriticalSection(&g_rec_lock);
 		g_rec = f;
 		LeaveCriticalSection(&g_rec_lock);
@@ -5583,9 +5585,62 @@ namespace
 		}
 	}
 
+	// Stance discovery: write every changed 4-byte value of the player's data blocks (R lines) so the
+	// jump / crouch / slide / hover fields can be found afterwards by comparing with the MARK lines (F10).
+	unsigned int g_prev_client[256];
+	unsigned int g_prev_entity[112];
+
+	void rec_raw_changes()
+	{
+		unsigned long long client = 0;
+		if (!read_bytes(player_entity() + OFF_CLIENT, &client, sizeof(client)) || client < 0x140000000ull || client > 0x7FFFFFFE0000ull)
+		{
+			return;
+		}
+
+		unsigned int now_c[256];
+		unsigned int now_e[112];
+		if (!read_bytes(static_cast<uintptr_t>(client), now_c, sizeof(now_c)) || !read_bytes(player_entity(), now_e, sizeof(now_e)))
+		{
+			return;
+		}
+
+		if (g_prev_reset)
+		{
+			memset(g_prev_client, 0, sizeof(g_prev_client));
+			memset(g_prev_entity, 0, sizeof(g_prev_entity));
+			g_prev_reset = false;
+		}
+
+		for (int block = 0; block < 2; ++block)
+		{
+			const unsigned int* now = block == 0 ? now_c : now_e;
+			unsigned int* prev = block == 0 ? g_prev_client : g_prev_entity;
+			const int n = block == 0 ? 256 : 112;
+			char text[2800];
+			int used = snprintf(text, sizeof(text), "R%c", block == 0 ? 'c' : 'e');
+			int changed = 0;
+			for (int i = 0; i < n && used < 2700; ++i)
+			{
+				if (now[i] != prev[i])
+				{
+					used += snprintf(text + used, sizeof(text) - static_cast<size_t>(used), " %X:%X", i * 4, now[i]);
+					prev[i] = now[i];
+					++changed;
+				}
+			}
+
+			if (changed)
+			{
+				rec_line("%s", text);
+			}
+		}
+	}
+
 	// Runs from the worker loop every 100 ms.
 	void recorder_tick(const int tick)
 	{
+		static bool was_mark = false;
 		static int alive_ticks = 0;
 		static int dead_ticks = 0;
 		if (!g_rec_lock_ready)
@@ -5613,8 +5668,23 @@ namespace
 		if (dead_ticks >= 6)
 		{
 			rec_close("player gone");
+			g_prev_reset = true;
 			return;
 		}
+
+		{
+			static int mark_number = 0;
+			const bool down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+			if (down && !was_mark)
+			{
+				rec_line("MARK %d", ++mark_number);
+				Beep(900, 60);
+			}
+
+			was_mark = down;
+		}
+
+		rec_raw_changes();
 
 		{
 			float origin[3], pitch, yaw;

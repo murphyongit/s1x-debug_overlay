@@ -38,3 +38,6 @@ v0.50 - SPEED RUN RECORDER. Records every campaign mission you play into the "sp
 v0.51 - GHOST REPLAY. Put a runner's run file in the game folder as ghost.txt (and optionally a proposed
         route as route.txt). With the overlay on (F8) press Num5 to watch them. Num6 pause, Num7/Num8 slower/faster,
         Num9 restart, Num0 whole path, Num+ / Num- jump 10 seconds. Recorder now saves 10 positions per second.
+
+v0.52 - STANCE DISCOVERY. The recorder now also saves the raw player data (R lines) and a MARK line each time
+        you press F10, so the crouch / jump / slide / hover fields can be found. See the test in the chat.
