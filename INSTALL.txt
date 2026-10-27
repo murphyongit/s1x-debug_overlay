@@ -63,3 +63,5 @@ v0.59 - Ghost is now a wireframe person (head, torso, walking legs, arms holding
 v0.60 - Recorder keeps ONE file per mission across checkpoint restarts (RELOAD / GAP lines) and records the game clock.
         Ghost: failed attempts are cut out automatically (the game clock going back), all ghost info is top middle with
         GAME and REAL clocks, Num. makes the ghost follow your own game clock.
+
+v0.61 - Ignore the all-zero player reading that appears for one moment during a checkpoint reload (it wrongly cut the whole ghost).

@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.60 RECORDER"
+	#define ADDON_VERSION "0.61 RECORDER"
 	#else
-	#define ADDON_VERSION "0.60"
+	#define ADDON_VERSION "0.61"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2406,9 +2406,9 @@ namespace
 				p = end;
 			}
 
-			if (!ok)
+			if (!ok || (v[0] == 0.0f && v[1] == 0.0f && v[2] == 0.0f))
 			{
-				continue;
+				continue;   // a reload moment where the game reported all zeros
 			}
 
 			float gt_axis = t;
@@ -6103,7 +6103,8 @@ namespace
 
 		{
 			float origin[3], pitch, yaw;
-			if (rec_player_state(origin, &pitch, &yaw))
+			// while a level reloads the player data reads as all zero for a moment: ignore that sample
+			if (rec_player_state(origin, &pitch, &yaw) && !(origin[0] == 0.0f && origin[1] == 0.0f && origin[2] == 0.0f))
 			{
 				{
 					static unsigned int last_gt = 0;
