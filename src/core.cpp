@@ -34,6 +34,7 @@
 #define VK_NUMPAD8 0x68
 #define VK_NUMPAD9 0x69
 #define VK_MULTIPLY 0x6A
+#define VK_DIVIDE 0x6F
 #define VK_ADD 0x6B
 #define VK_SUBTRACT 0x6D
 #endif
@@ -79,9 +80,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.58 RECORDER"
+	#define ADDON_VERSION "0.59 RECORDER"
 	#else
-	#define ADDON_VERSION "0.58"
+	#define ADDON_VERSION "0.59"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2343,6 +2344,7 @@ namespace
 	volatile bool g_ghost_on = false;
 	volatile bool g_ghost_pause = false;
 	volatile bool g_ghost_full = false;
+	volatile bool g_ghost_only = false;   // hide all trigger / collision drawing
 	double g_ghost_time = 0.0;
 	double g_ghost_last_now = 0.0;
 	float g_ghost_speed = 1.0f;
@@ -2438,7 +2440,7 @@ namespace
 
 	void ghost_keys()
 	{
-		static bool was5, was6, was7, was8, was9, was0, wasp, wasm;
+		static bool was5, was6, was7, was8, was9, was0, wasp, wasm, wasd;
 		if (key_pressed(VK_NUMPAD5, &was5))
 		{
 			g_ghost_on = !g_ghost_on;
@@ -2460,6 +2462,12 @@ namespace
 		if (key_pressed(VK_NUMPAD8, &was8) && g_ghost_speed < 7.9f) g_ghost_speed *= 2.0f;
 		if (key_pressed(VK_NUMPAD9, &was9)) g_ghost_restart = true;
 		if (key_pressed(VK_NUMPAD0, &was0)) g_ghost_full = !g_ghost_full;
+		if (key_pressed(VK_DIVIDE, &wasd))
+		{
+			g_ghost_only = !g_ghost_only;
+			log_line("ghost only mode %s", g_ghost_only ? "ON" : "OFF");
+		}
+
 		if (key_pressed(VK_ADD, &wasp)) g_ghost_jump = 10.0f;
 		if (key_pressed(VK_SUBTRACT, &wasm)) g_ghost_jump = -10.0f;
 	}
@@ -2525,6 +2533,98 @@ namespace
 				if ((i & bit) == 0) edge(p[i], p[i | bit], color);
 			}
 		}
+	}
+
+	// a box around the straight line between two points (a limb), r = half thickness
+	void ghost_limb(const vec3& a, const vec3& b, const float r, const float* color)
+	{
+		vec3 d = {b.x - a.x, b.y - a.y, b.z - a.z};
+		const float len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+		if (len < 0.01f)
+		{
+			return;
+		}
+
+		d = {d.x / len, d.y / len, d.z / len};
+		// any vector not parallel to d
+		vec3 helper = std::fabs(d.z) < 0.9f ? vec3{0.0f, 0.0f, 1.0f} : vec3{1.0f, 0.0f, 0.0f};
+		vec3 u = {d.y * helper.z - d.z * helper.y, d.z * helper.x - d.x * helper.z, d.x * helper.y - d.y * helper.x};
+		const float ul = std::sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+		u = {u.x / ul * r, u.y / ul * r, u.z / ul * r};
+		vec3 v = {(d.y * u.z - d.z * u.y), (d.z * u.x - d.x * u.z), (d.x * u.y - d.y * u.x)};
+		vec3 c[8];
+		for (int i = 0; i < 8; ++i)
+		{
+			const vec3& end = (i & 4) ? b : a;
+			const float su = (i & 1) ? 1.0f : -1.0f;
+			const float sv = (i & 2) ? 1.0f : -1.0f;
+			c[i] = {end.x + u.x * su + v.x * sv, end.y + u.y * su + v.y * sv, end.z + u.z * su + v.z * sv};
+		}
+
+		for (int i = 0; i < 8; ++i)
+		{
+			for (int bit = 1; bit <= 4; bit <<= 1)
+			{
+				if ((i & bit) == 0) edge(c[i], c[i | bit], color);
+			}
+		}
+	}
+
+	// A simple wireframe person: head, torso, arms holding a weapon where the runner looks, legs that walk.
+	void ghost_person(const vec3& feet, const float yaw, const float pitch, const float vh, const bool prone, const bool air,
+	                  const float speed, const double t, const float* color)
+	{
+		const float rad = 3.14159265f / 180.0f;
+		const float cy = std::cos(yaw * rad), sy = std::sin(yaw * rad);
+		const vec3 f = {cy, sy, 0.0f};          // forward
+		const vec3 r = {sy, -cy, 0.0f};         // right
+		auto at = [&](const float fwd, const float right, const float up) -> vec3 {
+			return {feet.x + f.x * fwd + r.x * right, feet.y + f.y * fwd + r.y * right, feet.z + up};
+		};
+
+		if (prone)
+		{
+			// lying / sliding, head forward, legs trailing behind
+			ghost_limb(at(22.0f, 0.0f, 12.0f), at(26.0f, 0.0f, 14.0f), 6.0f, color);            // head
+			ghost_limb(at(14.0f, 0.0f, 12.0f), at(-14.0f, 0.0f, 10.0f), 9.0f, color);            // torso
+			ghost_limb(at(-14.0f, 4.0f, 8.0f), at(-52.0f, 5.0f, 6.0f), 4.5f, color);             // legs
+			ghost_limb(at(-14.0f, -4.0f, 8.0f), at(-52.0f, -5.0f, 6.0f), 4.5f, color);
+			ghost_limb(at(12.0f, 9.0f, 10.0f), at(36.0f, 6.0f, 10.0f), 3.5f, color);             // arms forward
+			ghost_limb(at(12.0f, -9.0f, 10.0f), at(36.0f, -6.0f, 10.0f), 3.5f, color);
+			return;
+		}
+
+		const float k = vh / 60.0f < 0.5f ? 0.5f : (vh / 60.0f > 1.0f ? 1.0f : vh / 60.0f);   // squat when crouching
+		const float hip = 34.0f * k, shoulder = 56.0f * k + (1.0f - k) * 6.0f, neck = shoulder + 4.0f;
+		const float amp = air ? 0.0f : (speed > 200.0f ? 1.0f : speed / 200.0f);
+		const float swing = std::sin(static_cast<float>(t) * (6.0f + speed * 0.012f)) * 16.0f * amp;
+		const float lift = air ? 10.0f : 0.0f;
+
+		// legs: hip -> knee -> foot, swinging forward and back
+		for (int side = -1; side <= 1; side += 2)
+		{
+			const float sw = swing * static_cast<float>(side);
+			const vec3 h = at(0.0f, 5.0f * side, hip);
+			const vec3 knee = at(sw * 0.6f + (1.0f - k) * 14.0f + lift * 0.4f, 5.5f * side, hip * 0.5f + lift);
+			const vec3 foot = at(sw + lift * 0.6f, 6.0f * side, (side * swing > 6.0f ? 4.0f : 0.0f) + lift);
+			ghost_limb(h, knee, 4.0f, color);
+			ghost_limb(knee, foot, 3.2f, color);
+		}
+
+		// torso and head
+		ghost_limb(at(0.0f, 0.0f, hip), at(0.0f, 0.0f, shoulder), 8.0f, color);
+		ghost_limb(at(0.0f, 0.0f, shoulder), at(0.0f, 0.0f, neck), 3.0f, color);
+		ghost_box({feet.x, feet.y, feet.z}, yaw, 5.5f, neck + 1.0f, neck + 12.0f, color);
+
+		// arms hold the weapon out in front, in the direction the runner is looking
+		const float cp = std::cos(pitch * rad), sp = std::sin(pitch * rad);
+		const vec3 aim = {cp * cy, cp * sy, -sp};
+		const vec3 eye = {feet.x, feet.y, feet.z + vh + 6.0f};
+		const vec3 grip = {eye.x + aim.x * 24.0f, eye.y + aim.y * 24.0f, eye.z + aim.z * 24.0f - 8.0f};
+		const vec3 grip2 = {eye.x + aim.x * 38.0f, eye.y + aim.y * 38.0f, eye.z + aim.z * 38.0f - 9.0f};
+		ghost_limb(at(0.0f, 9.0f, shoulder - 2.0f), grip, 3.0f, color);
+		ghost_limb(at(0.0f, -9.0f, shoulder - 2.0f), grip2, 3.0f, color);
+		ghost_limb(grip, grip2, 2.5f, color);   // the weapon
 	}
 
 	// a box with its own length (along the facing direction) and width, centred ahead of the feet
@@ -2650,19 +2750,8 @@ namespace
 			else if (air) state = "AIR";
 			else if (crouch) state = "CROUCH";
 			else if (f54 & 0x4000u) state = "SPRINT";
-			float eye_z = vh + 6.0f;
-			if (prone)
-			{
-				// lying down / sliding: a flat body stretched out behind the head
-				ghost_slab(feet, s[4], -20.0f, 36.0f, 14.0f, 0.0f, 18.0f, tr.color);
-				ghost_slab(feet, s[4], 24.0f, 8.0f, 8.0f, 0.0f, 16.0f, tr.color);
-				eye_z = 16.0f;
-			}
-			else
-			{
-				ghost_box(feet, s[4], 14.0f, 0.0f, vh - 2.0f, tr.color);
-				ghost_box(feet, s[4], 7.0f, vh - 2.0f, vh + 14.0f, tr.color);
-			}
+			float eye_z = prone ? 16.0f : vh + 6.0f;
+			ghost_person(feet, s[4], s[3], vh, prone, air, s[8], g_ghost_time, tr.color);
 
 			if (air)
 			{
@@ -2987,6 +3076,19 @@ namespace
 			add_rect(10.0f + static_cast<float>(i) * 18.0f, 10.0f + 3 * 18.0f, 12.0f, 12.0f, kColors[5]);
 		}
 
+		if (g_ghost_only && g_ghost_on)
+		{
+			ghost_draw(now_seconds(), origin);
+			{
+				const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+				char tag[48];
+				snprintf(tag, sizeof(tag), "OVERLAY v%s GHOST ONLY", ADDON_VERSION);
+				draw_text(40.0f, 4.0f, tag, g_h >= 1200.0f ? 2.0f : 1.0f, white);
+			}
+
+			return g_vert_count > 0;
+		}
+
 		hit hits[MAX_BOXES];
 		const int count = find_triggers({origin[0], origin[1], origin[2] + 30.0f - (eye_height == 0.0f ? EYE_HEIGHT : 0.0f)}, kDistances[g_dist_level], hits, MAX_BOXES);
 
@@ -3012,7 +3114,7 @@ namespace
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
 				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "F9 save data files",
-				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "End this help (or console: overlay_help)"};
+				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
 			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));
