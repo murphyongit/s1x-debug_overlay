@@ -49,3 +49,6 @@ v0.54 - Marker key is now the NUMPAD * key (Insert is the geometry search key). 
 
 v0.55 - Recorder: the entity scan now runs on its own thread (it was taking 10 seconds per pass and blocking the
         position recording and the marker key). PERF lines now say where the time goes.
+
+v0.56 - Stance: recorded positions now include movement flags, stance and view height; the ghost crouches, lies/slides,
+        shows AIR/DASH/SPRINT. Recorder reads memory much faster (the 10 second scan stalls were Windows memory queries).

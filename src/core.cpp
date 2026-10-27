@@ -79,9 +79,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.55 RECORDER"
+	#define ADDON_VERSION "0.56 RECORDER"
 	#else
-	#define ADDON_VERSION "0.55"
+	#define ADDON_VERSION "0.56"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2340,6 +2340,7 @@ namespace
 
 	// ---- ghost replay: watch a recorded run (ghost.txt) and a proposed route (route.txt) in the world ----
 	constexpr int GHOST_MAX = 120000;
+	constexpr int GS = 9;   // time x y z pitch yaw flags54 flags58 viewheight
 	struct ghost_track
 	{
 		int count = 0;
@@ -2363,7 +2364,7 @@ namespace
 	{
 		if (!track.data)
 		{
-			track.data = static_cast<float*>(malloc(sizeof(float) * 6 * GHOST_MAX));
+			track.data = static_cast<float*>(malloc(sizeof(float) * GS * GHOST_MAX));
 		}
 
 		track.count = 0;
@@ -2414,14 +2415,35 @@ namespace
 				continue;
 			}
 
-			float* d = track.data + track.count * 6;
+			float* d = track.data + track.count * GS;
 			d[0] = t; d[1] = v[0]; d[2] = v[1]; d[3] = v[2]; d[4] = v[3]; d[5] = v[4];
+			d[6] = 0.0f; d[7] = 0.0f; d[8] = 60.0f;
+			// newer recordings add: movement flags (hex), stance flags, view height
+			while (*p == ' ') ++p;
+			if (*p)
+			{
+				const unsigned long f54 = strtoul(p, &end, 16);
+				if (end != p)
+				{
+					p = end;
+					const unsigned long f58 = strtoul(p, &end, 10);
+					if (end != p)
+					{
+						p = end;
+						const float vh = strtof(p, &end);
+						d[6] = static_cast<float>(f54);
+						d[7] = static_cast<float>(f58);
+						if (end != p) d[8] = vh;
+					}
+				}
+			}
+
 			++track.count;
 		}
 
 		fclose(f);
 		snprintf(track.status, sizeof(track.status), "%s: %d points, %.0f seconds", file_name, track.count,
-		         track.count > 0 ? track.data[(track.count - 1) * 6] : 0.0f);
+		         track.count > 0 ? track.data[(track.count - 1) * GS] : 0.0f);
 		log_line("ghost: %s", track.status);
 	}
 
@@ -2453,7 +2475,8 @@ namespace
 		if (key_pressed(VK_SUBTRACT, &wasm)) g_ghost_jump = -10.0f;
 	}
 
-	bool ghost_sample(const ghost_track& tr, const double t, float* out)   // out: x y z pitch yaw
+	// out: x y z pitch yaw flags54 flags58 viewheight horizontal-speed
+	bool ghost_sample(const ghost_track& tr, const double t, float* out)
 	{
 		if (tr.count < 2)
 		{
@@ -2462,26 +2485,22 @@ namespace
 
 		const float* d = tr.data;
 		int lo = 0, hi = tr.count - 1;
-		if (t <= d[0])
+		if (t <= d[0] || t >= d[hi * GS])
 		{
-			for (int i = 0; i < 5; ++i) out[i] = d[1 + i];
-			return true;
-		}
-
-		if (t >= d[hi * 6])
-		{
-			for (int i = 0; i < 5; ++i) out[i] = d[hi * 6 + 1 + i];
+			const float* e = t <= d[0] ? d : d + hi * GS;
+			for (int i = 0; i < 5; ++i) out[i] = e[1 + i];
+			out[5] = e[6]; out[6] = e[7]; out[7] = e[8]; out[8] = 0.0f;
 			return true;
 		}
 
 		while (hi - lo > 1)
 		{
 			const int mid = (lo + hi) / 2;
-			if (d[mid * 6] <= t) lo = mid; else hi = mid;
+			if (d[mid * GS] <= t) lo = mid; else hi = mid;
 		}
 
-		const float* a = d + lo * 6;
-		const float* b = d + hi * 6;
+		const float* a = d + lo * GS;
+		const float* b = d + hi * GS;
 		const float span = b[0] - a[0];
 		const float f = span > 0.0001f ? static_cast<float>((t - a[0]) / span) : 0.0f;
 		for (int i = 0; i < 3; ++i) out[i] = a[1 + i] + (b[1 + i] - a[1 + i]) * f;
@@ -2490,6 +2509,10 @@ namespace
 		while (dy > 180.0f) dy -= 360.0f;
 		while (dy < -180.0f) dy += 360.0f;
 		out[4] = a[5] + dy * f;
+		out[5] = a[6];
+		out[6] = a[7];
+		out[7] = a[8] + (b[8] - a[8]) * f;
+		out[8] = span > 0.0001f ? std::sqrt((b[1] - a[1]) * (b[1] - a[1]) + (b[2] - a[2]) * (b[2] - a[2])) / span : 0.0f;
 		return true;
 	}
 
@@ -2503,6 +2526,29 @@ namespace
 		{
 			const float lx = (i & 1) ? half : -half;
 			const float ly = (i & 2) ? half : -half;
+			p[i] = {base.x + lx * c - ly * s, base.y + lx * s + ly * c, base.z + ((i & 4) ? z1 : z0)};
+		}
+
+		for (int i = 0; i < 8; ++i)
+		{
+			for (int bit = 1; bit <= 4; bit <<= 1)
+			{
+				if ((i & bit) == 0) edge(p[i], p[i | bit], color);
+			}
+		}
+	}
+
+	// a box with its own length (along the facing direction) and width, centred ahead of the feet
+	void ghost_slab(const vec3& base, const float yaw, const float ahead, const float half_len, const float half_wid, const float z0, const float z1, const float* color)
+	{
+		const float rad = 3.14159265f / 180.0f;
+		const float c = std::cos(yaw * rad);
+		const float s = std::sin(yaw * rad);
+		vec3 p[8];
+		for (int i = 0; i < 8; ++i)
+		{
+			const float lx = ahead + ((i & 1) ? half_len : -half_len);
+			const float ly = (i & 2) ? half_wid : -half_wid;
 			p[i] = {base.x + lx * c - ly * s, base.y + lx * s + ly * c, base.z + ((i & 4) ? z1 : z0)};
 		}
 
@@ -2530,7 +2576,7 @@ namespace
 		{
 			if (g_ghost[i].count > 1)
 			{
-				const float e = g_ghost[i].data[(g_ghost[i].count - 1) * 6];
+				const float e = g_ghost[i].data[(g_ghost[i].count - 1) * GS];
 				if (e > length) length = e;
 			}
 		}
@@ -2568,8 +2614,8 @@ namespace
 			int drawn = 0;
 			for (int k = 0; k + step < tr.count && drawn < 1500; k += step)
 			{
-				const float* a = d + k * 6;
-				const float* b = d + (k + step) * 6;
+				const float* a = d + k * GS;
+				const float* b = d + (k + step) * GS;
 				const bool recent = a[0] <= g_ghost_time && a[0] >= g_ghost_time - 6.0;
 				if (!g_ghost_full && !recent)
 				{
@@ -2588,19 +2634,47 @@ namespace
 				++drawn;
 			}
 
-			float s[5];
+			float s[9];
 			if (!ghost_sample(tr, g_ghost_time, s))
 			{
 				continue;
 			}
 
 			const vec3 feet = {s[0], s[1], s[2]};
-			ghost_box(feet, s[4], 14.0f, 0.0f, 58.0f, tr.color);
-			ghost_box({s[0], s[1], s[2]}, s[4], 7.0f, 58.0f, 74.0f, tr.color);
+			const unsigned int f54 = static_cast<unsigned int>(s[5]);
+			const unsigned int f58 = static_cast<unsigned int>(s[6]);
+			const float vh = s[7];
+			const bool prone = f58 == 8 || vh < 25.0f;
+			const bool crouch = !prone && (f58 == 4 || vh < 52.0f);
+			const bool air = (f54 & 0x2000u) != 0;
+			const char* state = "";
+			if (prone) state = s[8] > 150.0f ? "SLIDE" : "PRONE";
+			else if (air) state = s[8] > 300.0f ? "DASH" : "AIR";
+			else if (crouch) state = "CROUCH";
+			else if (f54 & 0x4000u) state = "SPRINT";
+			float eye_z = vh + 6.0f;
+			if (prone)
+			{
+				// lying down / sliding: a flat body stretched out behind the head
+				ghost_slab(feet, s[4], -20.0f, 36.0f, 14.0f, 0.0f, 18.0f, tr.color);
+				ghost_slab(feet, s[4], 24.0f, 8.0f, 8.0f, 0.0f, 16.0f, tr.color);
+				eye_z = 16.0f;
+			}
+			else
+			{
+				ghost_box(feet, s[4], 14.0f, 0.0f, vh - 2.0f, tr.color);
+				ghost_box(feet, s[4], 7.0f, vh - 2.0f, vh + 14.0f, tr.color);
+			}
+
+			if (air)
+			{
+				ghost_box(feet, s[4], 20.0f, -2.0f, 2.0f, white);   // a flat white plate under the feet while airborne
+			}
+
 			const float rad = 3.14159265f / 180.0f;
 			const float cp = std::cos(s[3] * rad), sp = std::sin(s[3] * rad);
 			const float cy = std::cos(s[4] * rad), sy = std::sin(s[4] * rad);
-			const vec3 eye = {s[0], s[1], s[2] + 66.0f};
+			const vec3 eye = {s[0], s[1], s[2] + eye_z};
 			const vec3 tip = {eye.x + cp * cy * 70.0f, eye.y + cp * sy * 70.0f, eye.z - sp * 70.0f};
 			edge(eye, tip, white);
 			edge(feet, {s[0], s[1], s[2] + 400.0f}, tr.color);
@@ -2612,7 +2686,9 @@ namespace
 				to_screen(c, &sx, &sy2);
 				if (sx >= 0.0f && sy2 >= 0.0f && sx <= g_w && sy2 <= g_h)
 				{
-					draw_text(sx - 20.0f, sy2, tr.label, 1.5f, tr.color);
+					char label[48];
+					snprintf(label, sizeof(label), "%s %s", tr.label, state);
+					draw_text(sx - 20.0f, sy2, label, 1.5f, tr.color);
 				}
 			}
 		}
@@ -5078,6 +5154,26 @@ namespace
 	// ===========================================================================================
 	// Speed run recorder: writes everything useful about a run into the speedrun_data folder.
 	// ===========================================================================================
+	// The ordinary read_bytes asks Windows about the memory first, which was taking ~19 ms per read while the
+	// game is streaming. This one just reads and catches a failure.
+	bool read_fast(const uintptr_t address, void* out, const size_t count)
+	{
+		if (address < 0x10000)
+		{
+			return false;
+		}
+
+		__try
+		{
+			memcpy(out, reinterpret_cast<const void*>(address), count);
+			return true;
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return false;
+		}
+	}
+
 	CRITICAL_SECTION g_rec_lock;
 	bool g_rec_lock_ready = false;
 	FILE* g_rec = nullptr;
@@ -5219,7 +5315,7 @@ namespace
 		for (long long done = 0; done < length; done += sizeof(chunk))
 		{
 			const size_t n = static_cast<size_t>(length - done < static_cast<long long>(sizeof(chunk)) ? length - done : static_cast<long long>(sizeof(chunk)));
-			if (!read_bytes(address + static_cast<uintptr_t>(done), chunk, n))
+			if (!read_fast(address + static_cast<uintptr_t>(done), chunk, n))
 			{
 				return false;
 			}
@@ -5256,12 +5352,12 @@ namespace
 			const uintptr_t base = reinterpret_cast<uintptr_t>(headers[i]);
 			unsigned long long name_ptr = 0, buffer_ptr = 0, bytecode_ptr = 0;
 			int compressed = 0, length = 0, bytecode_len = 0;
-			read_bytes(base, &name_ptr, 8);
-			read_bytes(base + 8, &compressed, 4);
-			read_bytes(base + 12, &length, 4);
-			read_bytes(base + 16, &bytecode_len, 4);
-			read_bytes(base + 24, &buffer_ptr, 8);
-			read_bytes(base + 32, &bytecode_ptr, 8);
+			read_fast(base, &name_ptr, 8);
+			read_fast(base + 8, &compressed, 4);
+			read_fast(base + 12, &length, 4);
+			read_fast(base + 16, &bytecode_len, 4);
+			read_fast(base + 24, &buffer_ptr, 8);
+			read_fast(base + 32, &bytecode_ptr, 8);
 			char name[160] = {};
 			if (!name_ptr || !safe_copy_string(reinterpret_cast<const char*>(name_ptr), name, sizeof(name)))
 			{
@@ -5323,10 +5419,10 @@ namespace
 				const uintptr_t base = reinterpret_cast<uintptr_t>(g_assets_big[i]);
 				unsigned long long name_ptr = 0, buffer_ptr = 0;
 				int compressed = 0, length = 0;
-				read_bytes(base, &name_ptr, 8);
-				read_bytes(base + 8, &compressed, 4);
-				read_bytes(base + 12, &length, 4);
-				read_bytes(base + 16, &buffer_ptr, 8);
+				read_fast(base, &name_ptr, 8);
+				read_fast(base + 8, &compressed, 4);
+				read_fast(base + 12, &length, 4);
+				read_fast(base + 16, &buffer_ptr, 8);
 				char name[160] = {};
 				if (!name_ptr || !safe_copy_string(reinterpret_cast<const char*>(name_ptr), name, sizeof(name)) || already_dumped(name))
 				{
@@ -5389,7 +5485,7 @@ namespace
 	bool rec_player_alive()
 	{
 		unsigned short id = 0;
-		if (!read_bytes(player_entity() + OFF_CLASSNAME, &id, sizeof(id)) || id == 0)
+		if (!read_fast(player_entity() + OFF_CLASSNAME, &id, sizeof(id)) || id == 0)
 		{
 			return false;
 		}
@@ -5398,17 +5494,24 @@ namespace
 		return class_name(id, name, sizeof(name)) && strcmp(name, "player") == 0;
 	}
 
+	unsigned int g_rec_f54 = 0, g_rec_f58 = 0;
+	float g_rec_vh = 60.0f;
+
 	bool rec_player_state(float* origin, float* pitch, float* yaw)
 	{
 		unsigned long long client = 0;
-		if (!read_bytes(player_entity() + OFF_CLIENT, &client, sizeof(client)) || client < 0x140000000ull || client > 0x7FFFFFFE0000ull)
+		if (!read_fast(player_entity() + OFF_CLIENT, &client, sizeof(client)) || client < 0x140000000ull || client > 0x7FFFFFFE0000ull)
 		{
 			return false;
 		}
 
-		return read_bytes(static_cast<uintptr_t>(client) + OFF_CAM_ORIGIN, origin, 12) &&
-			read_bytes(static_cast<uintptr_t>(client) + OFF_CAM_PITCH, pitch, 4) &&
-			read_bytes(static_cast<uintptr_t>(client) + OFF_CAM_YAW, yaw, 4);
+		// stance data (campaign): 0x54 movement flags, 0x58 stance (0 stand, 4 crouch, 8 prone/slide), 0x120 view height
+		read_fast(static_cast<uintptr_t>(client) + 0x54, &g_rec_f54, 4);
+		read_fast(static_cast<uintptr_t>(client) + 0x58, &g_rec_f58, 4);
+		read_fast(static_cast<uintptr_t>(client) + 0x120, &g_rec_vh, 4);
+		return read_fast(static_cast<uintptr_t>(client) + OFF_CAM_ORIGIN, origin, 12) &&
+			read_fast(static_cast<uintptr_t>(client) + OFF_CAM_PITCH, pitch, 4) &&
+			read_fast(static_cast<uintptr_t>(client) + OFF_CAM_YAW, yaw, 4);
 	}
 
 	void rec_describe(const int slot, const unsigned char* buffer, char* out, const size_t capacity)
@@ -5440,7 +5543,7 @@ namespace
 		{
 			unsigned long long name_ptr = 0;
 			char full[128] = {};
-			if (read_bytes(reinterpret_cast<uintptr_t>(g_assets_big[0]), &name_ptr, 8) && name_ptr &&
+			if (read_fast(reinterpret_cast<uintptr_t>(g_assets_big[0]), &name_ptr, 8) && name_ptr &&
 				safe_copy_string(reinterpret_cast<const char*>(name_ptr), full, sizeof(full)))
 			{
 				const char* slash = strrchr(full, '/');
@@ -5490,7 +5593,7 @@ namespace
 		for (int slot = 0; slot < MAX_ENTITIES; ++slot)
 		{
 			unsigned char buffer[0x1C0];
-			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer)))
+			if (!read_fast(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer)))
 			{
 				break;
 			}
@@ -5525,7 +5628,7 @@ namespace
 		{
 			unsigned char buffer[0x1C0];
 			const double r0 = now_seconds();
-			const bool got = read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer));
+			const bool got = read_fast(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer));
 			g_t_read += now_seconds() - r0;
 			++g_n_read;
 			if (!got)
@@ -5653,14 +5756,14 @@ namespace
 	void rec_raw_changes()
 	{
 		unsigned long long client = 0;
-		if (!read_bytes(player_entity() + OFF_CLIENT, &client, sizeof(client)) || client < 0x140000000ull || client > 0x7FFFFFFE0000ull)
+		if (!read_fast(player_entity() + OFF_CLIENT, &client, sizeof(client)) || client < 0x140000000ull || client > 0x7FFFFFFE0000ull)
 		{
 			return;
 		}
 
 		unsigned int now_c[256];
 		unsigned int now_e[112];
-		if (!read_bytes(static_cast<uintptr_t>(client), now_c, sizeof(now_c)) || !read_bytes(player_entity(), now_e, sizeof(now_e)))
+		if (!read_fast(static_cast<uintptr_t>(client), now_c, sizeof(now_c)) || !read_fast(player_entity(), now_e, sizeof(now_e)))
 		{
 			return;
 		}
@@ -5749,7 +5852,7 @@ namespace
 			float origin[3], pitch, yaw;
 			if (rec_player_state(origin, &pitch, &yaw))
 			{
-				rec_line("P %.1f %.1f %.1f %.1f %.1f", origin[0], origin[1], origin[2], pitch, yaw);
+				rec_line("P %.1f %.1f %.1f %.1f %.1f %X %u %.1f", origin[0], origin[1], origin[2], pitch, yaw, g_rec_f54, g_rec_f58, g_rec_vh);
 			}
 		}
 
