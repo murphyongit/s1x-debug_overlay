@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.61 RECORDER"
+	#define ADDON_VERSION "0.62 RECORDER"
 	#else
-	#define ADDON_VERSION "0.61"
+	#define ADDON_VERSION "0.62"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5669,6 +5669,7 @@ namespace
 		bool inside;
 		unsigned int state;
 		double state_time;
+		float pos[3];
 	};
 
 	rec_slot g_rs[MAX_ENTITIES];
@@ -5791,7 +5792,7 @@ namespace
 		g_rec = f;
 		LeaveCriticalSection(&g_rec_lock);
 		rec_line("RUN FILE  tool version %s  map %s  mode %s", ADDON_VERSION, map, g_is_mp ? "multiplayer" : "campaign");
-		rec_line("COLUMNS  P x y z pitch yaw | ENTER/EXIT #slot class/type name flags | SPAWN/REMOVED/STATE | EVENT name | ACTORS n | TRIG (all triggers at start)");
+		rec_line("COLUMNS  P x y z pitch yaw | ENTER/EXIT #slot class/type name flags | SPAWN/REMOVED/STATE | EVENT name | ACTOR+/ACTOR- #slot type name at x y z | ACTORS n | TRIG (all triggers at start)");
 		log_line("recorder: started %s", file);
 
 		// the map's entity text (flag names) and the game's scripts
@@ -5868,6 +5869,26 @@ namespace
 
 				if (g_rec_class_cache[class_id] == 2) ++actors;
 				if (g_rec_class_cache[class_id] == 3) ++vehicles;
+			}
+
+			// enemies / allies appearing and disappearing, with name and position (so spawn groups can be matched to triggers)
+			if (class_id != 0 && g_rec_class_cache[class_id] == 2)
+			{
+				memcpy(r.pos, buffer + OFF_ORIGIN, sizeof(r.pos));
+				if (r.class_id == 0 && !g_rs_silent)
+				{
+					unsigned int type_id = 0, nid = 0;
+					memcpy(&type_id, buffer + OFF_TYPE, 4);
+					memcpy(&nid, buffer + OFF_NAME, 4);
+					char type[64] = {}, nm[64] = {};
+					if (type_id > 1 && type_id < 0x10000) class_name(type_id, type, sizeof(type));
+					if (nid > 1 && nid < 0x10000) class_name(nid, nm, sizeof(nm));
+					rec_line("ACTOR+ #%d type=%s name=%s at %.0f %.0f %.0f", slot, type[0] ? type : "-", nm[0] ? nm : "-", r.pos[0], r.pos[1], r.pos[2]);
+				}
+			}
+			else if (class_id == 0 && r.class_id != 0 && g_rec_class_cache[r.class_id] == 2 && !g_rs_silent)
+			{
+				rec_line("ACTOR- #%d at %.0f %.0f %.0f", slot, r.pos[0], r.pos[1], r.pos[2]);
 			}
 
 			const unsigned char kind = class_id ? classify(class_id) : (r.class_id ? classify(r.class_id) : 1);

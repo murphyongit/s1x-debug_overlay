@@ -65,3 +65,5 @@ v0.60 - Recorder keeps ONE file per mission across checkpoint restarts (RELOAD /
         GAME and REAL clocks, Num. makes the ghost follow your own game clock.
 
 v0.61 - Ignore the all-zero player reading that appears for one moment during a checkpoint reload (it wrongly cut the whole ghost).
+
+v0.62 - The recorder now writes a line for every enemy/ally that appears (ACTOR+) or disappears (ACTOR-), with its name and exact position, so spawn groups can be matched to the trigger that caused them.
