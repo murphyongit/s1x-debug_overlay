@@ -51,7 +51,7 @@ namespace
 	// Entity layout worked out from your dump files.
 	constexpr size_t ENTITY_SIZE = 0x2F8;   // largest size, used for buffers
 	size_t g_stride = 0x2F8;                // real distance between entities
-	constexpr int MAX_ENTITIES = 6144;   // the real table is longer than 2048
+	constexpr int MAX_ENTITIES = 10240;   // the real table is longer than 2048
 	size_t OFF_NUMBER = 0x7C;   // 16-bit entity number
 	size_t OFF_ORIGIN = 0x1C;   // 3 floats
 	size_t OFF_BOUNDS = 0xDC;   // 6 floats: midpoint xyz, half-size xyz
@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.67 RECORDER"
+	#define ADDON_VERSION "0.68 RECORDER"
 	#else
-	#define ADDON_VERSION "0.67"
+	#define ADDON_VERSION "0.68"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5969,6 +5969,33 @@ namespace
 			if (class_id != 0 && g_rec_class_cache[class_id] == 2)
 			{
 				memcpy(r.pos, buffer + OFF_ORIGIN, sizeof(r.pos));
+
+				// the squad (Will, Cormack, Jackson ...): where they are twice a second
+				{
+					static unsigned char hero_cache[65536];   // 0 unknown, 1 no, 2 hero
+					static double hero_time[MAX_ENTITIES];
+					unsigned int type_id = 0;
+					memcpy(&type_id, buffer + OFF_TYPE, 4);
+					if (type_id > 1 && type_id < 0x10000)
+					{
+						if (hero_cache[type_id] == 0)
+						{
+							char tname[64] = {};
+							class_name(type_id, tname, sizeof(tname));
+							hero_cache[type_id] = strstr(tname, "hero") ? 2 : 1;
+						}
+
+						const double hnow = now_seconds();
+						if (hero_cache[type_id] == 2 && hnow - hero_time[slot] >= 0.5)
+						{
+							hero_time[slot] = hnow;
+							char tname[64] = {};
+							class_name(type_id, tname, sizeof(tname));
+							rec_line("HERO #%d %s at %.0f %.0f %.0f", slot, tname, r.pos[0], r.pos[1], r.pos[2]);
+						}
+					}
+				}
+
 				if (r.class_id == 0 && !g_rs_silent)
 				{
 					unsigned int type_id = 0, nid = 0;
