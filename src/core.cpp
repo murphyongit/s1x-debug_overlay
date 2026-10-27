@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.65 RECORDER"
+	#define ADDON_VERSION "0.66 RECORDER"
 	#else
-	#define ADDON_VERSION "0.65"
+	#define ADDON_VERSION "0.66"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5893,6 +5893,41 @@ namespace
 			char text[300];
 			rec_describe(slot, buffer, text, sizeof(text));
 			rec_line("TRIG %s", text);
+		}
+
+		// is the entity table longer than 2048? look for sensible entries past the end
+		{
+			int shown = 0;
+			for (int slot = MAX_ENTITIES; slot < MAX_ENTITIES + 2048 && shown < 300; ++slot)
+			{
+				unsigned char buffer[0x1C0];
+				if (!read_fast(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer)))
+				{
+					rec_line("XSLOTS stopped reading at slot %d", slot);
+					break;
+				}
+
+				unsigned short class_id = 0;
+				memcpy(&class_id, buffer + OFF_CLASSNAME, 2);
+				if (class_id == 0)
+				{
+					continue;
+				}
+
+				char cls[64] = {};
+				class_name(class_id, cls, sizeof(cls));
+				if (cls[0] == '\0')
+				{
+					continue;
+				}
+
+				char text[300];
+				rec_describe(slot, buffer, text, sizeof(text));
+				rec_line("XSLOT %s", text);
+				++shown;
+			}
+
+			rec_line("XSLOTS done, %d entries past slot %d", shown, MAX_ENTITIES);
 		}
 
 		g_scan_go = true;
