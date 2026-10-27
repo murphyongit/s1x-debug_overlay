@@ -71,3 +71,5 @@ v0.62 - The recorder now writes a line for every enemy/ally that appears (ACTOR+
 v0.63 - Overlay: press [ to cycle what boxes are shown: ALL, GREEN only (plain triggers), PINK only (invisible walls), MAGENTA only (flag-setting triggers), LEAVE-AREA only. Press ] to turn the rainbow leaving-area / mission-fail boxes on or off (they stay visible in every mode, from any distance). The current mode is written under the little squares in the top left. More fail flags are recognised (player_left_map, player_leaving_squad, player_left_squad).
 
 v0.64 - Overlay: leaving-area / mission-fail boxes that the game has switched off at the moment (it parks them 10000 units up) are now drawn where they will be when switched on, in a dimmer colour, so [ LEAVE-AREA ONLY shows them.
+
+v0.65 - Fixed: unnamed flag triggers (almost all of the "player_left_map" / "player_leaving_map" / "player_returning_to_map" / squad ones) were never paired with their flag, so they were not drawn as leaving-area boxes. They are now matched by position, so [ LEAVE-AREA ONLY and the rainbow boxes show all of them (the recorder also logs their flags= now).

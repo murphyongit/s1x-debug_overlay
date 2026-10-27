@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.64 RECORDER"
+	#define ADDON_VERSION "0.65 RECORDER"
 	#else
-	#define ADDON_VERSION "0.64"
+	#define ADDON_VERSION "0.65"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -4270,7 +4270,7 @@ namespace
 					if (slot < 0)
 					{
 						char nm[64] = {};
-						const bool is_origin = class_name(k, nm, sizeof(nm)) && strcmp(nm, "flankkills") == 0;
+						const bool is_origin = k == 742 || (class_name(k, nm, sizeof(nm)) && strcmp(nm, "flankkills") == 0);   // 742 is the origin key in the map text
 						for (int z = 0; z < 64; ++z)
 						{
 							if (seen_verdict[z] == 0) { seen_key[z] = k; seen_verdict[z] = is_origin ? 1 : -1; slot = z; break; }
