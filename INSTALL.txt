@@ -54,3 +54,5 @@ v0.56 - Stance: recorded positions now include movement flags, stance and view h
         shows AIR/DASH/SPRINT. Recorder reads memory much faster (the 10 second scan stalls were Windows memory queries).
 
 v0.57 - All memory reads are now fast (the old safety check cost ~19 ms each and stalled the recorder for seconds).
+
+v0.58 - Ghost labels: JUMP, HOVER (slow steady sinking), FALL, DASH (fast while airborne), SLIDE, CROUCH, SPRINT.

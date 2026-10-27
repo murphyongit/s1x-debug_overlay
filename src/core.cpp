@@ -79,9 +79,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.57 RECORDER"
+	#define ADDON_VERSION "0.58 RECORDER"
 	#else
-	#define ADDON_VERSION "0.57"
+	#define ADDON_VERSION "0.58"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2631,14 +2631,23 @@ namespace
 
 			const vec3 feet = {s[0], s[1], s[2]};
 			const unsigned int f54 = static_cast<unsigned int>(s[5]);
-			const unsigned int f58 = static_cast<unsigned int>(s[6]);
+			const unsigned int f58 = static_cast<unsigned int>(s[6]) & 0xFu;
 			const float vh = s[7];
 			const bool prone = f58 == 8 || vh < 25.0f;
 			const bool crouch = !prone && (f58 == 4 || vh < 52.0f);
 			const bool air = (f54 & 0x2000u) != 0;
+			// vertical speed over half a second, to tell a hover (slow steady sinking) from a jump or a fall
+			float before[9] = {}, after[9] = {};
+			ghost_sample(tr, g_ghost_time - 0.25, before);
+			ghost_sample(tr, g_ghost_time + 0.25, after);
+			const float vz = (after[2] - before[2]) / 0.5f;
 			const char* state = "";
 			if (prone) state = s[8] > 150.0f ? "SLIDE" : "PRONE";
-			else if (air) state = s[8] > 300.0f ? "DASH" : "AIR";
+			else if (air && s[8] > 280.0f) state = "DASH";
+			else if (air && vz < -170.0f) state = "FALL";
+			else if (air && vz < -25.0f) state = "HOVER";
+			else if (air && vz > 25.0f) state = "JUMP";
+			else if (air) state = "AIR";
 			else if (crouch) state = "CROUCH";
 			else if (f54 & 0x4000u) state = "SPRINT";
 			float eye_z = vh + 6.0f;
