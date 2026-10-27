@@ -40,4 +40,6 @@ v0.51 - GHOST REPLAY. Put a runner's run file in the game folder as ghost.txt (a
         Num9 restart, Num0 whole path, Num+ / Num- jump 10 seconds. Recorder now saves 10 positions per second.
 
 v0.52 - STANCE DISCOVERY. The recorder now also saves the raw player data (R lines) and a MARK line each time
-        you press F10, so the crouch / jump / slide / hover fields can be found. See the test in the chat.
+        you press Insert, so the crouch / jump / slide / hover fields can be found. See the test in the chat.
+
+v0.53 - Marker key is now INSERT (F10 crashed the game). No beep any more.

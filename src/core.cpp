@@ -78,9 +78,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.52 RECORDER"
+	#define ADDON_VERSION "0.53 RECORDER"
 	#else
-	#define ADDON_VERSION "0.52"
+	#define ADDON_VERSION "0.53"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5674,11 +5674,10 @@ namespace
 
 		{
 			static int mark_number = 0;
-			const bool down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+			const bool down = (GetAsyncKeyState(VK_INSERT) & 0x8000) != 0;
 			if (down && !was_mark)
 			{
 				rec_line("MARK %d", ++mark_number);
-				Beep(900, 60);
 			}
 
 			was_mark = down;
