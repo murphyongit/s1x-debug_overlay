@@ -75,3 +75,5 @@ v0.64 - Overlay: leaving-area / mission-fail boxes that the game has switched of
 v0.65 - Fixed: unnamed flag triggers (almost all of the "player_left_map" / "player_leaving_map" / "player_returning_to_map" / squad ones) were never paired with their flag, so they were not drawn as leaving-area boxes. They are now matched by position, so [ LEAVE-AREA ONLY and the rainbow boxes show all of them (the recorder also logs their flags= now).
 
 v0.66 - Recorder: at the start of each file also looks for entities beyond slot 2047 (XSLOT lines), to find where the hidden leave-area triggers live.
+
+v0.67 - Found it: the game's entity list is longer than 2048 entries (the old tools only looked at the first 2048). Now reads up to 6144, so the hidden leave-area / mission-fail triggers and everything else past slot 2047 show up in the overlay and in the recorder. The recorder prints a line "ENTITY TABLE" with how many entries are really in use.

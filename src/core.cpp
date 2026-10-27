@@ -51,7 +51,7 @@ namespace
 	// Entity layout worked out from your dump files.
 	constexpr size_t ENTITY_SIZE = 0x2F8;   // largest size, used for buffers
 	size_t g_stride = 0x2F8;                // real distance between entities
-	constexpr int MAX_ENTITIES = 2048;
+	constexpr int MAX_ENTITIES = 6144;   // the real table is longer than 2048
 	size_t OFF_NUMBER = 0x7C;   // 16-bit entity number
 	size_t OFF_ORIGIN = 0x1C;   // 3 floats
 	size_t OFF_BOUNDS = 0xDC;   // 6 floats: midpoint xyz, half-size xyz
@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.66 RECORDER"
+	#define ADDON_VERSION "0.67 RECORDER"
 	#else
-	#define ADDON_VERSION "0.66"
+	#define ADDON_VERSION "0.67"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5895,39 +5895,29 @@ namespace
 			rec_line("TRIG %s", text);
 		}
 
-		// is the entity table longer than 2048? look for sensible entries past the end
+		// how long is the entity table?
 		{
-			int shown = 0;
-			for (int slot = MAX_ENTITIES; slot < MAX_ENTITIES + 2048 && shown < 300; ++slot)
+			int last_used = 0, used = 0, triggers = 0;
+			for (int slot = 0; slot < MAX_ENTITIES; ++slot)
 			{
 				unsigned char buffer[0x1C0];
 				if (!read_fast(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer)))
 				{
-					rec_line("XSLOTS stopped reading at slot %d", slot);
+					rec_line("ENTITY TABLE: reading stopped at slot %d", slot);
 					break;
 				}
 
 				unsigned short class_id = 0;
 				memcpy(&class_id, buffer + OFF_CLASSNAME, 2);
-				if (class_id == 0)
+				if (class_id != 0)
 				{
-					continue;
+					++used;
+					last_used = slot;
+					if (classify(class_id) >= 2) ++triggers;
 				}
-
-				char cls[64] = {};
-				class_name(class_id, cls, sizeof(cls));
-				if (cls[0] == '\0')
-				{
-					continue;
-				}
-
-				char text[300];
-				rec_describe(slot, buffer, text, sizeof(text));
-				rec_line("XSLOT %s", text);
-				++shown;
 			}
 
-			rec_line("XSLOTS done, %d entries past slot %d", shown, MAX_ENTITIES);
+			rec_line("ENTITY TABLE: %d slots in use, last used slot %d, %d triggers", used, last_used, triggers);
 		}
 
 		g_scan_go = true;
