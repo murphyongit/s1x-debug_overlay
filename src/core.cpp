@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.63 RECORDER"
+	#define ADDON_VERSION "0.64 RECORDER"
 	#else
-	#define ADDON_VERSION "0.63"
+	#define ADDON_VERSION "0.64"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -531,6 +531,7 @@ namespace
 		unsigned char flag;      // 0 = normal, 1 = might end the mission / leave the area
 		unsigned char kind;
 		bool barrier;
+		bool disabled;   // a leave-area box that is switched off right now (drawn dimmer)
 		bool inside;
 		vec3 mid;
 		vec3 half;
@@ -819,6 +820,14 @@ namespace
 			case 3: rainbow[0] = 0.0f; rainbow[1] = q; rainbow[2] = 1.0f; break;
 			case 4: rainbow[0] = f; rainbow[1] = 0.0f; rainbow[2] = 1.0f; break;
 			default: rainbow[0] = 1.0f; rainbow[1] = 0.0f; rainbow[2] = q; break;
+			}
+
+			if (h.disabled)
+			{
+				static float dim[4];
+				for (int i = 0; i < 3; ++i) dim[i] = rainbow[i] * 0.55f;
+				dim[3] = 1.0f;
+				return dim;
 			}
 
 			return rainbow;
@@ -2128,6 +2137,18 @@ namespace
 				continue;
 			}
 
+			unsigned int name_id_value = 0;
+			memcpy(&name_id_value, buffer + OFF_NAME, sizeof(name_id_value));
+			const bool end_candidate = kind != 7 && (name_flag(name_id_value) == 2 || is_known_end_flag(index) || is_fail_flag(index));
+
+			// The game moves a switched-off trigger 10000 units up. Draw those where they will be once switched on.
+			bool switched_off = false;
+			if (end_candidate && b[2] - player.z > 8000.0f && b[2] - player.z < 14000.0f)
+			{
+				b[2] -= 10000.0f;
+				switched_off = true;
+			}
+
 			// Distance from the player to the surface of the box (0 when inside).
 			const float ox = std::fabs(player.x - b[0]) - b[3];
 			const float oy = std::fabs(player.y - b[1]) - b[4];
@@ -2136,9 +2157,6 @@ namespace
 			const float ey = oy > 0.0f ? oy : 0.0f;
 			const float ez = oz > 0.0f ? oz : 0.0f;
 			const float dist = std::sqrt(ex * ex + ey * ey + ez * ez);
-			unsigned int name_id_value = 0;
-			memcpy(&name_id_value, buffer + OFF_NAME, sizeof(name_id_value));
-			const bool end_candidate = kind != 7 && (name_flag(name_id_value) == 2 || is_known_end_flag(index) || is_fail_flag(index));
 			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f) && !(barrier && dist < (g_show_mode == 2 ? 20000.0f : 4000.0f)))
 			{
 				continue;
@@ -2149,6 +2167,7 @@ namespace
 			h.key = end_candidate ? dist - 1.0e9f : dist;
 			h.flag = end_candidate ? 1 : 0;
 			h.barrier = barrier;
+			h.disabled = switched_off;
 			memcpy(&h.state, buffer + OFF_BOUNDS - 4, sizeof(h.state));
 			h.slot = index;
 			h.class_id = class_id;
