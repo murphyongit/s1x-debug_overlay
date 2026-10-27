@@ -33,6 +33,7 @@
 #define VK_NUMPAD7 0x67
 #define VK_NUMPAD8 0x68
 #define VK_NUMPAD9 0x69
+#define VK_MULTIPLY 0x6A
 #define VK_ADD 0x6B
 #define VK_SUBTRACT 0x6D
 #endif
@@ -78,9 +79,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.53 RECORDER"
+	#define ADDON_VERSION "0.54 RECORDER"
 	#else
-	#define ADDON_VERSION "0.53"
+	#define ADDON_VERSION "0.54"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5227,6 +5228,8 @@ namespace
 		return true;
 	}
 
+	volatile LONG g_script_thread_running = 0;
+
 	// Saves every script file the game has loaded (the level logic) plus an index of raw files.
 	void dump_scripts()
 	{
@@ -5299,6 +5302,7 @@ namespace
 
 			++written;
 			total += compressed + bytecode_len;
+			Sleep(15);   // go easy on the disk and the virus scanner so the game never stutters
 		}
 
 		if (index) fclose(index);
@@ -5333,6 +5337,7 @@ namespace
 					strcmp(name + nl - 4, ".cfg") == 0 || strcmp(name + nl - 4, ".gsx") == 0);
 				if (texty && compressed > 0 && compressed < 2 * 1024 * 1024 && saved < 400)
 				{
+					Sleep(15);
 					char clean[200];
 					sanitize_name(name, clean, sizeof(clean));
 					char file[260];
@@ -5351,6 +5356,17 @@ namespace
 			if (ri) fclose(ri);
 			log_line("rawfiles: %d listed, %d saved", raw_count, saved);
 		}
+	}
+
+	DWORD WINAPI script_thread(LPVOID)
+	{
+		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+		g_subdir = "speedrun_data\\";
+		Sleep(20000);   // let the mission settle first
+		dump_scripts();
+		g_subdir = nullptr;
+		InterlockedExchange(&g_script_thread_running, 0);
+		return 0;
 	}
 
 	// ---- the live recording ------------------------------------------------------------------
@@ -5460,7 +5476,11 @@ namespace
 		// the map's entity text (flag names) and the game's scripts
 		dump_map_ents();
 		rebuild_slot_flags();
-		dump_scripts();
+		if (InterlockedCompareExchange(&g_script_thread_running, 1, 0) == 0)
+		{
+			HANDLE t = CreateThread(nullptr, 0, script_thread, nullptr, 0, nullptr);
+			if (t) CloseHandle(t); else InterlockedExchange(&g_script_thread_running, 0);
+		}
 
 		// every trigger and solid-brush entity as it is at the start
 		for (int slot = 0; slot < MAX_ENTITIES; ++slot)
@@ -5483,6 +5503,9 @@ namespace
 			rec_line("TRIG %s", text);
 		}
 	}
+
+	double g_perf_scan_max = 0.0, g_perf_tick_max = 0.0, g_perf_last_tick = 0.0;
+	double g_perf_report = 0.0;
 
 	void rec_scan()
 	{
@@ -5674,7 +5697,7 @@ namespace
 
 		{
 			static int mark_number = 0;
-			const bool down = (GetAsyncKeyState(VK_INSERT) & 0x8000) != 0;
+			const bool down = (GetAsyncKeyState(VK_MULTIPLY) & 0x8000) != 0;
 			if (down && !was_mark)
 			{
 				rec_line("MARK %d", ++mark_number);
@@ -5695,7 +5718,22 @@ namespace
 
 		if (tick % 2 == 0)
 		{
+			const double t0 = now_seconds();
 			rec_scan();
+			const double took = now_seconds() - t0;
+			if (took > g_perf_scan_max) g_perf_scan_max = took;
+		}
+
+		{
+			const double n = now_seconds();
+			if (g_perf_last_tick > 0.0 && n - g_perf_last_tick > g_perf_tick_max) g_perf_tick_max = n - g_perf_last_tick;
+			g_perf_last_tick = n;
+			if (n - g_perf_report > 10.0)
+			{
+				rec_line("PERF longest gap between recorder ticks %.0f ms, longest entity scan %.0f ms", g_perf_tick_max * 1000.0, g_perf_scan_max * 1000.0);
+				g_perf_report = n;
+				g_perf_tick_max = g_perf_scan_max = 0.0;
+			}
 		}
 
 		if (tick % 10 == 0)
@@ -5745,7 +5783,11 @@ namespace
 		bool command_tried = false;
 
 		// 100 ms per tick; stop after about 30 minutes.
+		#ifdef RECORDER_ONLY
+		for (int tick = 1; tick < 2000000000; ++tick)
+#else
 		for (int tick = 1; tick <= 18000; ++tick)
+#endif
 		{
 			Sleep(100);
 
