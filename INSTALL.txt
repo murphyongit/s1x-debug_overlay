@@ -67,3 +67,5 @@ v0.60 - Recorder keeps ONE file per mission across checkpoint restarts (RELOAD /
 v0.61 - Ignore the all-zero player reading that appears for one moment during a checkpoint reload (it wrongly cut the whole ghost).
 
 v0.62 - The recorder now writes a line for every enemy/ally that appears (ACTOR+) or disappears (ACTOR-), with its name and exact position, so spawn groups can be matched to the trigger that caused them.
+
+v0.63 - Overlay: press [ to cycle what boxes are shown: ALL, GREEN only (plain triggers), PINK only (invisible walls), MAGENTA only (flag-setting triggers), LEAVE-AREA only. Press ] to turn the rainbow leaving-area / mission-fail boxes on or off (they stay visible in every mode, from any distance). The current mode is written under the little squares in the top left. More fail flags are recognised (player_left_map, player_leaving_squad, player_left_squad).

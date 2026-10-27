@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.62 RECORDER"
+	#define ADDON_VERSION "0.63 RECORDER"
 	#else
-	#define ADDON_VERSION "0.62"
+	#define ADDON_VERSION "0.63"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -864,6 +864,15 @@ namespace
 	// ---- tiny built-in text (5x7 letters drawn as little rectangles) ------------------------
 	volatile bool g_labels_on = true;   // F2
 	volatile bool g_brushes_on = false;   // Home
+#ifndef VK_OEM_4
+#define VK_OEM_4 0xDB
+#endif
+#ifndef VK_OEM_6
+#define VK_OEM_6 0xDD
+#endif
+	volatile int g_show_mode = 0;         // [ : 0 all, 1 green only, 2 pink walls only, 3 magenta flag setters only, 4 leave-area only
+	volatile bool g_leave_on = true;      // ] : leaving-area / mission-fail boxes (rainbow) shown
+	const char* const kShowModes[] = {"ALL", "GREEN ONLY", "PINK WALLS ONLY", "MAGENTA FLAG TRIGGERS ONLY", "LEAVE-AREA ONLY"};
 	double g_help_until = 0.0;            // keys help is shown until this time (End key toggles)
 	volatile bool g_help_requested = false;   // set by the console command
 
@@ -1545,7 +1554,8 @@ namespace
 		}
 
 		static const char* const kFail[] = {"player_leaving_map", "leaving_map", "_death", "kill", "fail", "out_of_bounds", "oob",
-		                                    "abandon", "mission_area", "leave_area"};
+		                                    "abandon", "mission_area", "leave_area",
+		                                    "left_map", "leaving_squad", "left_squad", "returning_to_map"};
 		for (const char* word : kFail)
 		{
 			if (strstr(g_slot_flags[slot], word))
@@ -2129,7 +2139,7 @@ namespace
 			unsigned int name_id_value = 0;
 			memcpy(&name_id_value, buffer + OFF_NAME, sizeof(name_id_value));
 			const bool end_candidate = kind != 7 && (name_flag(name_id_value) == 2 || is_known_end_flag(index) || is_fail_flag(index));
-			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f) && !(barrier && dist < 4000.0f))
+			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f) && !(barrier && dist < (g_show_mode == 2 ? 20000.0f : 4000.0f)))
 			{
 				continue;
 			}
@@ -2148,6 +2158,26 @@ namespace
 			h.inside = ox <= 0.0f && oy <= 0.0f && oz <= 0.0f;
 			h.mid = {b[0], b[1], b[2]};
 			h.half = {b[3], b[4], b[5]};
+
+			// [ cycles what is shown, ] turns the leaving-area boxes on / off
+			{
+				const bool leave = h.flag == 1;
+				if (leave && !g_leave_on)
+				{
+					continue;
+				}
+
+				const unsigned char special = type_special(h.type_id);
+				const bool pink = kind == 7 && barrier;
+				const bool magenta = !leave && kind != 7 && special == 2;
+				const bool green = !leave && kind == 2 && special == 1;
+				const int mode = g_show_mode;
+				if ((mode == 1 && !green && !leave) || (mode == 2 && !pink && !leave) ||
+					(mode == 3 && !magenta && !leave) || (mode == 4 && !leave))
+				{
+					continue;
+				}
+			}
 
 			// Keep the list sorted, nearest first, and only the closest `capacity`.
 			int position = count < capacity ? count : capacity - 1;
@@ -2871,7 +2901,7 @@ namespace
 
 	void poll_keys()
 	{
-		static bool was_pagedown, was_delete, was_end, was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
+		static bool was_lbracket, was_rbracket, was_pagedown, was_delete, was_end, was_home, was_f11, was_f2, was_f3, was_f4, was_f5, was_f6, was_f7, was_f8;
 		const bool pagedown = key_pressed(VK_NEXT, &was_pagedown);
 		const bool delete_key = key_pressed(VK_DELETE, &was_delete);
 		const bool end_key = key_pressed(VK_END, &was_end);
@@ -2919,6 +2949,18 @@ namespace
 			g_collision_on = !g_collision_on;
 			g_collision_refresh = g_collision_on;
 			log_line("Delete: level collision blocks %s", g_collision_on ? "ON" : "OFF");
+		}
+
+		if (key_pressed(VK_OEM_4, &was_lbracket))
+		{
+			g_show_mode = (g_show_mode + 1) % 5;
+			log_line("[: showing %s", kShowModes[g_show_mode]);
+		}
+
+		if (key_pressed(VK_OEM_6, &was_rbracket))
+		{
+			g_leave_on = !g_leave_on;
+			log_line("]: leaving-area boxes %s", g_leave_on ? "ON" : "OFF");
 		}
 
 		if (home)
@@ -3165,6 +3207,14 @@ namespace
 			add_rect(10.0f + static_cast<float>(i) * 18.0f, 10.0f + 3 * 18.0f, 12.0f, 12.0f, kColors[5]);
 		}
 
+		if (g_show_mode != 0 || !g_leave_on)
+		{
+			char mode_text[96];
+			snprintf(mode_text, sizeof(mode_text), "SHOWING: %s%s", kShowModes[g_show_mode], g_leave_on ? "" : "  (LEAVE-AREA OFF)");
+			const float cyan[4] = {0.2f, 1.0f, 1.0f, 1.0f};
+			draw_text(10.0f, 84.0f, mode_text, g_h >= 1200.0f ? 2.0f : 1.0f, cyan);
+		}
+
 		if (g_ghost_only && g_ghost_on)
 		{
 			ghost_draw(now_seconds(), origin);
@@ -3202,7 +3252,7 @@ namespace
 		{
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
-				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "F9 save data files",
+				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "[ show all/green/pink/magenta/leave-area", "] leave-area boxes on/off", "F9 save data files",
 				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
@@ -6183,7 +6233,7 @@ namespace
 		log_line("################################################################");
 		log_line("---- add-on loaded (version %s, speed run recorder) ----", ADDON_VERSION);
 		log_line("host program: %s", exe);
-		log_line("F8 on/off | F2 labels | F11 events | Home brush models | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
+		log_line("F8 on/off | F2 labels | F11 events | Home brush models | [ show filter | ] leave-area boxes | F7 distance | F6 thickness | F5 fov style | F4 event filter on/off | Insert geometry search | F3 camera source");
 
 		bool hook_done = false;
 		InitializeCriticalSection(&g_rec_lock);
