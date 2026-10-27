@@ -52,3 +52,5 @@ v0.55 - Recorder: the entity scan now runs on its own thread (it was taking 10 s
 
 v0.56 - Stance: recorded positions now include movement flags, stance and view height; the ghost crouches, lies/slides,
         shows AIR/DASH/SPRINT. Recorder reads memory much faster (the 10 second scan stalls were Windows memory queries).
+
+v0.57 - All memory reads are now fast (the old safety check cost ~19 ms each and stalled the recorder for seconds).

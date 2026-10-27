@@ -79,9 +79,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.56 RECORDER"
+	#define ADDON_VERSION "0.57 RECORDER"
 	#else
-	#define ADDON_VERSION "0.56"
+	#define ADDON_VERSION "0.57"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -127,19 +127,9 @@ namespace
 	// Copies bytes out of the game's memory, but only if it is safe to do so.
 	bool read_bytes(const uintptr_t address, void* out, const size_t count)
 	{
-		MEMORY_BASIC_INFORMATION mbi;
-		if (VirtualQuery(reinterpret_cast<const void*>(address), &mbi, sizeof(mbi)) == 0)
-		{
-			return false;
-		}
-
-		if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0)
-		{
-			return false;
-		}
-
-		const auto region_end = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
-		if (address + count > region_end)
+		// No VirtualQuery here: asking Windows about the memory first took ~19 ms per read while the game was
+		// streaming, which stalled everything. Just read it and catch a failure.
+		if (address < 0x10000)
 		{
 			return false;
 		}
@@ -147,13 +137,12 @@ namespace
 		__try
 		{
 			memcpy(out, reinterpret_cast<const void*>(address), count);
+			return true;
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
 		{
 			return false;
 		}
-
-		return true;
 	}
 
 	// Copies a short plain-text string out of game memory.
@@ -6060,7 +6049,11 @@ namespace
 			const bool f9_pressed = f9_down && !f9_was_down;
 			f9_was_down = f9_down;
 
+			#ifdef RECORDER_ONLY
+			const bool auto_table = false;   // the recorder writes its own files
+#else
 			const bool auto_table = !auto_done && seconds_with_data >= 10;
+#endif
 			if ((auto_table || f9_pressed) && tables < MAX_TABLES)
 			{
 				if (auto_table)
