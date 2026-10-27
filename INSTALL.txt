@@ -46,3 +46,6 @@ v0.53 - Marker key is now INSERT (F10 crashed the game). No beep any more.
 
 v0.54 - Marker key is now the NUMPAD * key (Insert is the geometry search key). Recorder: scripts are saved slowly
         in the background (no more stutter at the start), no 30 minute limit, and PERF lines show any slowdowns.
+
+v0.55 - Recorder: the entity scan now runs on its own thread (it was taking 10 seconds per pass and blocking the
+        position recording and the marker key). PERF lines now say where the time goes.

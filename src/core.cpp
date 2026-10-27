@@ -79,9 +79,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.54 RECORDER"
+	#define ADDON_VERSION "0.55 RECORDER"
 	#else
-	#define ADDON_VERSION "0.54"
+	#define ADDON_VERSION "0.55"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5085,6 +5085,7 @@ namespace
 	char g_rec_map[64] = {};
 	bool g_rec_flag_cache_ready = false;
 	bool g_prev_reset = true;
+	volatile bool g_scan_go = false;
 
 	void rec_line(const char* fmt, ...)
 	{
@@ -5146,6 +5147,7 @@ namespace
 			return;
 		}
 
+		g_scan_go = false;
 		rec_line("END %s", why);
 		EnterCriticalSection(&g_rec_lock);
 		fclose(g_rec);
@@ -5431,6 +5433,7 @@ namespace
 
 	void rec_open()
 	{
+		g_scan_go = false;
 		// map name from the map entities asset
 		char map[64] = "unknown";
 		if (enum_assets(29) && g_assets_big_count > 0)
@@ -5482,6 +5485,7 @@ namespace
 			if (t) CloseHandle(t); else InterlockedExchange(&g_script_thread_running, 0);
 		}
 
+		g_scan_go = false;
 		// every trigger and solid-brush entity as it is at the start
 		for (int slot = 0; slot < MAX_ENTITIES; ++slot)
 		{
@@ -5502,20 +5506,29 @@ namespace
 			rec_describe(slot, buffer, text, sizeof(text));
 			rec_line("TRIG %s", text);
 		}
+
+		g_scan_go = true;
 	}
 
+	double g_t_read = 0.0, g_t_name = 0.0, g_t_line = 0.0, g_t_all = 0.0;
+	int g_n_read = 0, g_n_name = 0, g_n_scans = 0;
 	double g_perf_scan_max = 0.0, g_perf_tick_max = 0.0, g_perf_last_tick = 0.0;
 	double g_perf_report = 0.0;
 
 	void rec_scan()
 	{
 		float origin[3] = {}, pitch = 0, yaw = 0;
+		const double scan_start = now_seconds();
 		const bool have_player = rec_player_state(origin, &pitch, &yaw);
 		int gone = 0, spawned = 0, actors = 0, vehicles = 0;
 		for (int slot = 0; slot < MAX_ENTITIES; ++slot)
 		{
 			unsigned char buffer[0x1C0];
-			if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer)))
+			const double r0 = now_seconds();
+			const bool got = read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, buffer, sizeof(buffer));
+			g_t_read += now_seconds() - r0;
+			++g_n_read;
+			if (!got)
 			{
 				break;
 			}
@@ -5528,7 +5541,10 @@ namespace
 				if (g_rec_class_cache[class_id] == 0)
 				{
 					char name[64] = {};
+					const double n0 = now_seconds();
 					class_name(class_id, name, sizeof(name));
+					g_t_name += now_seconds() - n0;
+					++g_n_name;
 					g_rec_class_cache[class_id] = strncmp(name, "actor", 5) == 0 ? 2 : (strncmp(name, "script_vehicle", 14) == 0 ? 3 : 1);
 				}
 
@@ -5602,10 +5618,31 @@ namespace
 			g_rec_last_vehicles = vehicles;
 		}
 
+		g_t_all += now_seconds() - scan_start;
+		++g_n_scans;
 		if (gone >= 20)
 		{
 			rec_close("many entities vanished (level ending or reloading)");
 		}
+	}
+
+	// The entity scan runs on its own thread so a slow scan can never delay the position recording.
+	DWORD WINAPI scan_thread(LPVOID)
+	{
+		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+		for (;;)
+		{
+			Sleep(200);
+			if (g_rec && g_scan_go)
+			{
+				const double t0 = now_seconds();
+				rec_scan();
+				const double took = now_seconds() - t0;
+				if (took > g_perf_scan_max) g_perf_scan_max = took;
+			}
+		}
+
+		return 0;
 	}
 
 	// Stance discovery: write every changed 4-byte value of the player's data blocks (R lines) so the
@@ -5716,12 +5753,14 @@ namespace
 			}
 		}
 
-		if (tick % 2 == 0)
 		{
-			const double t0 = now_seconds();
-			rec_scan();
-			const double took = now_seconds() - t0;
-			if (took > g_perf_scan_max) g_perf_scan_max = took;
+			static bool scan_started = false;
+			if (!scan_started)
+			{
+				scan_started = true;
+				HANDLE t = CreateThread(nullptr, 0, scan_thread, nullptr, 0, nullptr);
+				if (t) CloseHandle(t);
+			}
 		}
 
 		{
@@ -5730,7 +5769,9 @@ namespace
 			g_perf_last_tick = n;
 			if (n - g_perf_report > 10.0)
 			{
-				rec_line("PERF longest gap between recorder ticks %.0f ms, longest entity scan %.0f ms", g_perf_tick_max * 1000.0, g_perf_scan_max * 1000.0);
+				rec_line("PERF longest gap between recorder ticks %.0f ms, longest entity scan %.0f ms | %d scans: total %.0f ms, reading %.0f ms (%d reads), names %.0f ms (%d lookups)",
+					g_perf_tick_max * 1000.0, g_perf_scan_max * 1000.0, g_n_scans, g_t_all * 1000.0, g_t_read * 1000.0, g_n_read, g_t_name * 1000.0, g_n_name);
+				g_t_read = g_t_name = g_t_all = 0.0; g_n_read = g_n_name = g_n_scans = 0;
 				g_perf_report = n;
 				g_perf_tick_max = g_perf_scan_max = 0.0;
 			}
