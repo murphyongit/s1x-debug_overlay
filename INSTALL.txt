@@ -59,3 +59,7 @@ v0.58 - Ghost labels: JUMP, HOVER (slow steady sinking), FALL, DASH (fast while 
 
 v0.59 - Ghost is now a wireframe person (head, torso, walking legs, arms holding a weapon where they look).
         Num/ (numpad divide) = ghost only: hides all triggers, collision and labels.
+
+v0.60 - Recorder keeps ONE file per mission across checkpoint restarts (RELOAD / GAP lines) and records the game clock.
+        Ghost: failed attempts are cut out automatically (the game clock going back), all ghost info is top middle with
+        GAME and REAL clocks, Num. makes the ghost follow your own game clock.

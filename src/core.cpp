@@ -35,6 +35,7 @@
 #define VK_NUMPAD9 0x69
 #define VK_MULTIPLY 0x6A
 #define VK_DIVIDE 0x6F
+#define VK_DECIMAL 0x6E
 #define VK_ADD 0x6B
 #define VK_SUBTRACT 0x6D
 #endif
@@ -80,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.59 RECORDER"
+	#define ADDON_VERSION "0.60 RECORDER"
 	#else
-	#define ADDON_VERSION "0.59"
+	#define ADDON_VERSION "0.60"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2330,7 +2331,7 @@ namespace
 
 	// ---- ghost replay: watch a recorded run (ghost.txt) and a proposed route (route.txt) in the world ----
 	constexpr int GHOST_MAX = 120000;
-	constexpr int GS = 9;   // time x y z pitch yaw flags54 flags58 viewheight
+	constexpr int GS = 10;   // game-time x y z pitch yaw flags54 flags58 viewheight real-time
 	struct ghost_track
 	{
 		int count = 0;
@@ -2344,7 +2345,11 @@ namespace
 	volatile bool g_ghost_on = false;
 	volatile bool g_ghost_pause = false;
 	volatile bool g_ghost_full = false;
-	volatile bool g_ghost_only = false;   // hide all trigger / collision drawing
+	volatile bool g_ghost_only = false;
+	volatile bool g_ghost_sync = false;    // follow my own game clock
+	unsigned int g_self_gt = 0;            // my game clock in ms (set by the camera code)
+	unsigned int g_self_gt0 = 0;
+	volatile bool g_self_zero = false;   // hide all trigger / collision drawing
 	double g_ghost_time = 0.0;
 	double g_ghost_last_now = 0.0;
 	float g_ghost_speed = 1.0f;
@@ -2406,9 +2411,10 @@ namespace
 				continue;
 			}
 
+			float gt_axis = t;
 			float* d = track.data + track.count * GS;
 			d[0] = t; d[1] = v[0]; d[2] = v[1]; d[3] = v[2]; d[4] = v[3]; d[5] = v[4];
-			d[6] = 0.0f; d[7] = 0.0f; d[8] = 60.0f;
+			d[6] = 0.0f; d[7] = 0.0f; d[8] = 60.0f; d[9] = t;
 			// newer recordings add: movement flags (hex), stance flags, view height
 			while (*p == ' ') ++p;
 			if (*p)
@@ -2425,14 +2431,41 @@ namespace
 						d[6] = static_cast<float>(f54);
 						d[7] = static_cast<float>(f58);
 						if (end != p) d[8] = vh;
+						p = end;
+						const unsigned long gt = strtoul(p, &end, 10);
+						if (end != p) gt_axis = static_cast<float>(gt) / 1000.0f;
 					}
 				}
 			}
 
-			++track.count;
+			d[0] = gt_axis;
+			// a checkpoint restart sets the game clock back: forget everything recorded after that moment
+			while (track.count > 0 && track.data[(track.count - 1) * GS] >= gt_axis)
+			{
+				--track.count;
+			}
+
+			if (track.count < GHOST_MAX)
+			{
+				float* dst = track.data + track.count * GS;
+				if (dst != d) memmove(dst, d, sizeof(float) * GS);
+				++track.count;
+			}
 		}
 
 		fclose(f);
+
+		// start both clocks at zero
+		if (track.count > 0)
+		{
+			const float g0 = track.data[0];
+			const float r0 = track.data[9];
+			for (int i = 0; i < track.count; ++i)
+			{
+				track.data[i * GS] -= g0;
+				track.data[i * GS + 9] -= r0;
+			}
+		}
 		snprintf(track.status, sizeof(track.status), "%s: %d points, %.0f seconds", file_name, track.count,
 		         track.count > 0 ? track.data[(track.count - 1) * GS] : 0.0f);
 		log_line("ghost: %s", track.status);
@@ -2440,7 +2473,7 @@ namespace
 
 	void ghost_keys()
 	{
-		static bool was5, was6, was7, was8, was9, was0, wasp, wasm, wasd;
+		static bool was5, was6, was7, was8, was9, was0, wasp, wasm, wasd, wasdec;
 		if (key_pressed(VK_NUMPAD5, &was5))
 		{
 			g_ghost_on = !g_ghost_on;
@@ -2453,6 +2486,7 @@ namespace
 				load_ghost(g_ghost[0], "ghost.txt");
 				load_ghost(g_ghost[1], "route.txt");
 				g_ghost_time = 0.0;
+				g_self_zero = true;
 				g_ghost_last_now = now_seconds();
 			}
 		}
@@ -2462,6 +2496,13 @@ namespace
 		if (key_pressed(VK_NUMPAD8, &was8) && g_ghost_speed < 7.9f) g_ghost_speed *= 2.0f;
 		if (key_pressed(VK_NUMPAD9, &was9)) g_ghost_restart = true;
 		if (key_pressed(VK_NUMPAD0, &was0)) g_ghost_full = !g_ghost_full;
+		if (key_pressed(VK_DECIMAL, &wasdec))
+		{
+			g_ghost_sync = !g_ghost_sync;
+			g_self_zero = true;
+			log_line("ghost follows my game clock: %s", g_ghost_sync ? "ON" : "OFF");
+		}
+
 		if (key_pressed(VK_DIVIDE, &wasd))
 		{
 			g_ghost_only = !g_ghost_only;
@@ -2486,7 +2527,7 @@ namespace
 		{
 			const float* e = t <= d[0] ? d : d + hi * GS;
 			for (int i = 0; i < 5; ++i) out[i] = e[1 + i];
-			out[5] = e[6]; out[6] = e[7]; out[7] = e[8]; out[8] = 0.0f;
+			out[5] = e[6]; out[6] = e[7]; out[7] = e[8]; out[8] = 0.0f; out[9] = e[9];
 			return true;
 		}
 
@@ -2510,6 +2551,7 @@ namespace
 		out[6] = a[7];
 		out[7] = a[8] + (b[8] - a[8]) * f;
 		out[8] = span > 0.0001f ? std::sqrt((b[1] - a[1]) * (b[1] - a[1]) + (b[2] - a[2]) * (b[2] - a[2])) / span : 0.0f;
+		out[9] = a[9] + (b[9] - a[9]) * f;
 		return true;
 	}
 
@@ -2670,21 +2712,67 @@ namespace
 			}
 		}
 
-		if (!g_ghost_pause) g_ghost_time += dt * g_ghost_speed;
-		if (g_ghost_restart) { g_ghost_restart = false; g_ghost_time = 0.0; }
-		if (g_ghost_jump != 0.0f) { g_ghost_time += g_ghost_jump; g_ghost_jump = 0.0f; if (g_ghost_time < 0.0) g_ghost_time = 0.0; }
-		if (length > 0.0f && g_ghost_time > length + 3.0) g_ghost_time = 0.0;
+		if (g_self_zero) { g_self_zero = false; g_self_gt0 = g_self_gt; g_ghost_time = 0.0; }
+		if (g_ghost_sync && g_self_gt0 != 0)
+		{
+			// follow my own game clock, so a checkpoint restart sends the ghost back too
+			g_ghost_time = (static_cast<double>(g_self_gt) - static_cast<double>(g_self_gt0)) / 1000.0;
+			if (g_ghost_time < 0.0) g_ghost_time = 0.0;
+		}
+		else
+		{
+			if (!g_ghost_pause) g_ghost_time += dt * g_ghost_speed;
+			if (g_ghost_restart) { g_ghost_restart = false; g_ghost_time = 0.0; g_self_gt0 = g_self_gt; }
+			if (g_ghost_jump != 0.0f) { g_ghost_time += g_ghost_jump; g_ghost_jump = 0.0f; if (g_ghost_time < 0.0) g_ghost_time = 0.0; }
+			if (length > 0.0f && g_ghost_time > length + 3.0) g_ghost_time = 0.0;
+		}
 
+		g_ghost_restart = false;
+
+		// ---- all ghost information, top middle of the screen ----
 		const float white[4] = {1, 1, 1, 1};
-		char text[160];
-		snprintf(text, sizeof(text), "GHOST %.1f / %.1f  SPEED %.2f %s", g_ghost_time, length, g_ghost_speed, g_ghost_pause ? "PAUSED" : "");
-		draw_text(40.0f, g_h >= 1200.0f ? 28.0f : 16.0f, text, g_h >= 1200.0f ? 2.0f : 1.0f, white);
-		float row = g_h >= 1200.0f ? 52.0f : 28.0f;
+		const float big = g_h >= 1200.0f ? 2.0f : 1.0f;
+		auto clock_text = [](const double sec, char* out, const size_t cap) {
+			const double v = sec < 0.0 ? 0.0 : sec;
+			const int minutes = static_cast<int>(v / 60.0);
+			snprintf(out, cap, "%02d:%04.1f", minutes, v - minutes * 60.0);
+		};
+		auto centered = [&](const float y, const char* text, const float scale, const float* color) {
+			const float width = static_cast<float>(strlen(text)) * 6.0f * scale;
+			draw_text((g_w - width) * 0.5f, y, text, scale, color);
+		};
+
+		float runner[10] = {};
+		const bool have_runner = ghost_sample(g_ghost[0], g_ghost_time, runner);
+		const double real_total = g_ghost[0].count > 0 ? g_ghost[0].data[(g_ghost[0].count - 1) * GS + 9] : 0.0;
+		char c1[16], c2[16], c3[16], c4[16], c5[16];
+		clock_text(g_ghost_time, c1, sizeof(c1));
+		clock_text(length, c2, sizeof(c2));
+		clock_text(have_runner ? runner[9] : 0.0, c3, sizeof(c3));
+		clock_text(real_total, c4, sizeof(c4));
+		char text[200];
+		snprintf(text, sizeof(text), "GHOST  GAME %s / %s    REAL %s / %s", c1, c2, c3, c4);
+		float row = 6.0f;
+		centered(row, text, big, white);
+		row += 12.0f * big;
+		if (g_self_gt0 != 0)
+		{
+			clock_text((static_cast<double>(g_self_gt) - static_cast<double>(g_self_gt0)) / 1000.0, c5, sizeof(c5));
+			snprintf(text, sizeof(text), "YOU  GAME %s    SPEED x%.2f %s%s%s", c5, g_ghost_speed, g_ghost_pause ? "PAUSED " : "",
+			         g_ghost_sync ? "SYNCED TO MY CLOCK " : "", g_ghost_full ? "FULL PATH" : "");
+		}
+		else
+		{
+			snprintf(text, sizeof(text), "SPEED x%.2f %s%s%s", g_ghost_speed, g_ghost_pause ? "PAUSED " : "", g_ghost_sync ? "SYNCED " : "", g_ghost_full ? "FULL PATH" : "");
+		}
+
+		centered(row, text, big, white);
+		row += 12.0f * big;
 		for (int i = 0; i < 2; ++i)
 		{
 			if (g_ghost[i].status[0])
 			{
-				draw_text(40.0f, row, g_ghost[i].status, 1.0f, g_ghost[i].color);
+				centered(row, g_ghost[i].status, 1.0f, g_ghost[i].color);
 				row += 12.0f;
 			}
 		}
@@ -2723,7 +2811,7 @@ namespace
 				++drawn;
 			}
 
-			float s[9];
+			float s[10];
 			if (!ghost_sample(tr, g_ghost_time, s))
 			{
 				continue;
@@ -2737,7 +2825,7 @@ namespace
 			const bool crouch = !prone && (f58 == 4 || vh < 52.0f);
 			const bool air = (f54 & 0x2000u) != 0;
 			// vertical speed over half a second, to tell a hover (slow steady sinking) from a jump or a fall
-			float before[9] = {}, after[9] = {};
+			float before[10] = {}, after[10] = {};
 			ghost_sample(tr, g_ghost_time - 0.25, before);
 			ghost_sample(tr, g_ghost_time + 0.25, after);
 			const float vz = (after[2] - before[2]) / 0.5f;
@@ -2978,6 +3066,7 @@ namespace
 		int source_index = g_source;
 		bool have_camera = false;
 		float eye_height = EYE_HEIGHT;
+		read_bytes(static_cast<uintptr_t>(pointer) + 0x4C, &g_self_gt, sizeof(g_self_gt));
 
 		if (source_index == 0)
 		{
@@ -3114,7 +3203,7 @@ namespace
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
 				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "F9 save data files",
-				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "End this help (or console: overlay_help)"};
+				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
 			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));
@@ -5282,6 +5371,9 @@ namespace
 	bool g_rec_flag_cache_ready = false;
 	bool g_prev_reset = true;
 	volatile bool g_scan_go = false;
+	volatile bool g_rs_silent = false;      // after a reload: re-learn the entities without writing hundreds of SPAWN lines
+	bool g_rec_gap = false;
+	int g_rec_gap_ticks = 0;
 
 	void rec_line(const char* fmt, ...)
 	{
@@ -5344,6 +5436,8 @@ namespace
 		}
 
 		g_scan_go = false;
+		g_rec_gap = false;
+		g_rec_gap_ticks = 0;
 		rec_line("END %s", why);
 		EnterCriticalSection(&g_rec_lock);
 		fclose(g_rec);
@@ -5353,8 +5447,8 @@ namespace
 	}
 
 	// ---- scripts and other game data ------------------------------------------------------
-	void* g_assets_big[6000];
-	int g_assets_big_count = 0;
+	thread_local void* g_assets_big[6000];
+	thread_local int g_assets_big_count = 0;
 
 	void big_asset_callback(void* header, void*)
 	{
@@ -5594,7 +5688,7 @@ namespace
 		return class_name(id, name, sizeof(name)) && strcmp(name, "player") == 0;
 	}
 
-	unsigned int g_rec_f54 = 0, g_rec_f58 = 0;
+	unsigned int g_rec_f54 = 0, g_rec_f58 = 0, g_rec_gt = 0;
 	float g_rec_vh = 60.0f;
 
 	bool rec_player_state(float* origin, float* pitch, float* yaw)
@@ -5609,6 +5703,7 @@ namespace
 		read_fast(static_cast<uintptr_t>(client) + 0x54, &g_rec_f54, 4);
 		read_fast(static_cast<uintptr_t>(client) + 0x58, &g_rec_f58, 4);
 		read_fast(static_cast<uintptr_t>(client) + 0x120, &g_rec_vh, 4);
+		read_fast(static_cast<uintptr_t>(client) + 0x4C, &g_rec_gt, 4);   // the game clock in milliseconds
 		return read_fast(static_cast<uintptr_t>(client) + OFF_CAM_ORIGIN, origin, 12) &&
 			read_fast(static_cast<uintptr_t>(client) + OFF_CAM_PITCH, pitch, 4) &&
 			read_fast(static_cast<uintptr_t>(client) + OFF_CAM_YAW, yaw, 4);
@@ -5632,6 +5727,26 @@ namespace
 		make_world_bounds(b, buffer);
 		snprintf(out, capacity, "#%d %s/%s name=%s%s%s at %.0f %.0f %.0f size %.0f %.0f %.0f", slot, cls[0] ? cls : "?", type[0] ? type : "-",
 			name[0] ? name : "-", flags[0] ? " flags=" : "", flags, b[0], b[1], b[2], b[3] * 2, b[4] * 2, b[5] * 2);
+	}
+
+	bool rec_current_map(char* map, const size_t capacity)
+	{
+		if (enum_assets(29) && g_assets_big_count > 0)
+		{
+			unsigned long long name_ptr = 0;
+			char full[128] = {};
+			if (read_fast(reinterpret_cast<uintptr_t>(g_assets_big[0]), &name_ptr, 8) && name_ptr &&
+				safe_copy_string(reinterpret_cast<const char*>(name_ptr), full, sizeof(full)))
+			{
+				const char* slash = strrchr(full, '/');
+				sanitize_name(slash ? slash + 1 : full, map, capacity);
+				char* dot = strchr(map, '.');
+				if (dot) *dot = '\0';
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	void rec_open()
@@ -5763,9 +5878,13 @@ namespace
 				memcpy(&state, buffer + OFF_BOUNDS - 4, 4);
 				if (class_id != 0 && r.class_id == 0)
 				{
-					char text[300];
-					rec_describe(slot, buffer, text, sizeof(text));
-					rec_line("SPAWN %s", text);
+					if (!g_rs_silent)
+					{
+						char text[300];
+						rec_describe(slot, buffer, text, sizeof(text));
+						rec_line("SPAWN %s", text);
+					}
+
 					++spawned;
 				}
 				else if (class_id == 0 && r.class_id != 0)
@@ -5773,7 +5892,7 @@ namespace
 					char name[64] = {}, cls[64] = {};
 					if (r.name_id > 1 && r.name_id < 0x10000) class_name(r.name_id, name, sizeof(name));
 					class_name(r.class_id, cls, sizeof(cls));
-					rec_line("REMOVED #%d %s name=%s", slot, cls, name[0] ? name : "-");
+					if (!g_rs_silent) rec_line("REMOVED #%d %s name=%s", slot, cls, name[0] ? name : "-");
 					++gone;
 					r.inside = false;
 				}
@@ -5823,9 +5942,12 @@ namespace
 
 		g_t_all += now_seconds() - scan_start;
 		++g_n_scans;
+		g_rs_silent = false;
 		if (gone >= 20)
 		{
-			rec_close("many entities vanished (level ending or reloading)");
+			// the level is reloading or ending: keep the file open, the next mission / restart is handled in recorder_tick
+			rec_line("VANISHED %d entities (level reloading or ending)", gone);
+			g_rs_silent = true;
 		}
 	}
 
@@ -5928,10 +6050,41 @@ namespace
 			return;
 		}
 
-		if (dead_ticks >= 6)
+		if (dead_ticks >= 6 && !g_rec_gap)
 		{
-			rec_close("player gone");
-			g_prev_reset = true;
+			g_rec_gap = true;
+			g_rec_gap_ticks = 0;
+			g_scan_go = false;
+			rec_line("GAP the player is gone (loading screen, restart or menu)");
+		}
+
+		if (g_rec_gap)
+		{
+			++g_rec_gap_ticks;
+			if (alive_ticks >= 4 && tick % 5 == 0)
+			{
+				char now_map[64];
+				if (!rec_current_map(now_map, sizeof(now_map)) || strcmp(now_map, g_rec_map) == 0)
+				{
+					g_rec_gap = false;
+					g_rec_gap_ticks = 0;
+					g_rs_silent = true;
+					g_prev_reset = true;
+					memset(g_rs, 0, sizeof(g_rs));
+					rec_line("RELOAD same mission again");
+					g_scan_go = true;
+				}
+				else
+				{
+					rec_close("a different mission started");
+					rec_open();
+				}
+			}
+			else if (g_rec_gap_ticks > 900)
+			{
+				rec_close("left the mission (90 seconds without a player)");
+			}
+
 			return;
 		}
 
@@ -5952,7 +6105,19 @@ namespace
 			float origin[3], pitch, yaw;
 			if (rec_player_state(origin, &pitch, &yaw))
 			{
-				rec_line("P %.1f %.1f %.1f %.1f %.1f %X %u %.1f", origin[0], origin[1], origin[2], pitch, yaw, g_rec_f54, g_rec_f58, g_rec_vh);
+				{
+					static unsigned int last_gt = 0;
+					if (last_gt > 1000 && g_rec_gt + 500 < last_gt)
+					{
+						rec_line("RELOAD the game clock went back from %u to %u (checkpoint restart)", last_gt, g_rec_gt);
+						g_rs_silent = true;
+						g_prev_reset = true;
+					}
+
+					last_gt = g_rec_gt;
+				}
+
+				rec_line("P %.1f %.1f %.1f %.1f %.1f %X %u %.1f %u", origin[0], origin[1], origin[2], pitch, yaw, g_rec_f54, g_rec_f58, g_rec_vh, g_rec_gt);
 			}
 		}
 
