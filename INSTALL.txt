@@ -85,3 +85,5 @@ v0.69 - Recorder: SWITCH ON / SWITCH OFF lines whenever a script turns a trigger
 v0.70 - Recorder: HERO lines also for squad members whose type name id is large (after a checkpoint restart they vanished from the log).
 
 v0.71 - Recorder: after a checkpoint restart the game renumbers its names, which made the squad (HERO) lines wrong; the name caches are now cleared on every restart.
+
+v0.72 - Writes console_commands.txt (every console command the game has), to find out whether the game can save and load by itself.

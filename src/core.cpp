@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.71 RECORDER"
+	#define ADDON_VERSION "0.72 RECORDER"
 	#else
-	#define ADDON_VERSION "0.71"
+	#define ADDON_VERSION "0.72"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -4875,6 +4875,109 @@ namespace
 		g_help_requested = true;
 	}
 
+
+	// Finds the game's list of console commands (our own command was just put at the head of it, so the
+	// pointer to it is the list head) and writes every command name to console_commands.txt.
+	void dump_console_commands()
+	{
+		const auto base = reinterpret_cast<uintptr_t>(GetModuleHandleA(nullptr));
+		unsigned char header[0x400];
+		if (!read_bytes(base, header, sizeof(header)))
+		{
+			return;
+		}
+
+		unsigned int nt = 0, image_size = 0;
+		memcpy(&nt, header + 0x3C, 4);
+		if (nt == 0 || nt > 0x300)
+		{
+			return;
+		}
+
+		memcpy(&image_size, header + nt + 24 + 56, 4);
+		const uintptr_t mine = reinterpret_cast<uintptr_t>(&g_help_command);
+		uintptr_t head_address = 0;
+		static unsigned char chunk[0x10000];
+		for (uintptr_t offset = 0; offset < image_size && !head_address; offset += sizeof(chunk))
+		{
+			if (!read_bytes(base + offset, chunk, sizeof(chunk)))
+			{
+				continue;
+			}
+
+			for (size_t i = 0; i + 8 <= sizeof(chunk); i += 8)
+			{
+				uintptr_t value;
+				memcpy(&value, chunk + i, 8);
+				if (value == mine)
+				{
+					head_address = base + offset + i;
+					break;
+				}
+			}
+		}
+
+		char path[MAX_PATH];
+		make_path(path, "console_commands.txt");
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "w") != 0 || !f)
+		{
+			return;
+		}
+
+		fprintf(f, "list head variable at %p (module base %p)\\n", reinterpret_cast<void*>(head_address), reinterpret_cast<void*>(base));
+		// our node's own fields show where the game keeps the name and the function
+		{
+			unsigned char* own = reinterpret_cast<unsigned char*>(&g_help_command);
+			fprintf(f, "our node as the game filled it:");
+			for (int i = 0; i < 8; ++i)
+			{
+				uintptr_t v;
+				memcpy(&v, own + i * 8, 8);
+				fprintf(f, " %p", reinterpret_cast<void*>(v));
+			}
+			fprintf(f, "\\n");
+		}
+
+		int shown = 0;
+		if (head_address)
+		{
+			uintptr_t node = 0;
+			read_bytes(head_address, &node, 8);
+			while (node && shown < 3000)
+			{
+				unsigned char data[0x40];
+				if (!read_bytes(node, data, sizeof(data)))
+				{
+					break;
+				}
+
+				uintptr_t q[8];
+				memcpy(q, data, sizeof(q));
+				char name[96] = {};
+				for (int field = 1; field < 4; ++field)
+				{
+					char tmp[96] = {};
+					if (q[field] > 0x10000 && read_bytes(q[field], tmp, 64) && tmp[0] >= 'A' && tmp[0] <= 'z')
+					{
+						tmp[63] = 0;
+						strcpy_s(name, sizeof(name), tmp);
+						break;
+					}
+				}
+
+				fprintf(f, "%s | node %p fn %p %p %p\\n", name, reinterpret_cast<void*>(node), reinterpret_cast<void*>(q[2]),
+				        reinterpret_cast<void*>(q[3]), reinterpret_cast<void*>(q[4]));
+				++shown;
+				node = q[0];
+			}
+		}
+
+		fprintf(f, "%d commands\\n", shown);
+		fclose(f);
+		log_line("console commands: %d written to console_commands.txt", shown);
+	}
+
 	void try_add_console_command()
 	{
 		if (g_command_added)
@@ -4898,6 +5001,10 @@ namespace
 		}
 
 		log_line("console command overlay_help %s", ok ? "added" : "could not be added");
+		if (ok)
+		{
+			dump_console_commands();
+		}
 	}
 
 	bool g_notify_hooked = false;
