@@ -87,3 +87,5 @@ v0.70 - Recorder: HERO lines also for squad members whose type name id is large 
 v0.71 - Recorder: after a checkpoint restart the game renumbers its names, which made the squad (HERO) lines wrong; the name caches are now cleared on every restart.
 
 v0.72 - Writes console_commands.txt (every console command the game has), to find out whether the game can save and load by itself.
+
+v0.73 - Writes module_dump.bin and module_sections.txt once (a copy of the game code, used to find its save functions). console_commands.txt now has proper lines.

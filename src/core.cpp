@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.72 RECORDER"
+	#define ADDON_VERSION "0.73 RECORDER"
 	#else
-	#define ADDON_VERSION "0.72"
+	#define ADDON_VERSION "0.73"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -4925,7 +4925,7 @@ namespace
 			return;
 		}
 
-		fprintf(f, "list head variable at %p (module base %p)\\n", reinterpret_cast<void*>(head_address), reinterpret_cast<void*>(base));
+		fprintf(f, "list head variable at %p (module base %p)\n", reinterpret_cast<void*>(head_address), reinterpret_cast<void*>(base));
 		// our node's own fields show where the game keeps the name and the function
 		{
 			unsigned char* own = reinterpret_cast<unsigned char*>(&g_help_command);
@@ -4936,7 +4936,7 @@ namespace
 				memcpy(&v, own + i * 8, 8);
 				fprintf(f, " %p", reinterpret_cast<void*>(v));
 			}
-			fprintf(f, "\\n");
+			fprintf(f, "\n");
 		}
 
 		int shown = 0;
@@ -4966,16 +4966,70 @@ namespace
 					}
 				}
 
-				fprintf(f, "%s | node %p fn %p %p %p\\n", name, reinterpret_cast<void*>(node), reinterpret_cast<void*>(q[2]),
+				fprintf(f, "%s | node %p fn %p %p %p\n", name, reinterpret_cast<void*>(node), reinterpret_cast<void*>(q[2]),
 				        reinterpret_cast<void*>(q[3]), reinterpret_cast<void*>(q[4]));
 				++shown;
 				node = q[0];
 			}
 		}
 
-		fprintf(f, "%d commands\\n", shown);
+		fprintf(f, "%d commands\n", shown);
 		fclose(f);
 		log_line("console commands: %d written to console_commands.txt", shown);
+
+		// copy the game's unpacked code and read-only data to a file so its save functions can be studied
+		{
+			char dump_path[MAX_PATH], info_path[MAX_PATH];
+			make_path(dump_path, "module_dump.bin");
+			make_path(info_path, "module_sections.txt");
+			FILE* probe = nullptr;
+			if (fopen_s(&probe, dump_path, "rb") == 0 && probe)
+			{
+				fclose(probe);   // already done once
+			}
+			else
+			{
+				unsigned short section_count = 0, optional_size = 0;
+				memcpy(&section_count, header + nt + 6, 2);
+				memcpy(&optional_size, header + nt + 20, 2);
+				FILE* dump = nullptr;
+				FILE* info = nullptr;
+				if (section_count > 0 && section_count < 40 && fopen_s(&dump, dump_path, "wb") == 0 && dump &&
+				    fopen_s(&info, info_path, "w") == 0 && info)
+				{
+					unsigned long long file_offset = 0;
+					for (int i = 0; i < section_count; ++i)
+					{
+						const unsigned char* sec = header + nt + 24 + optional_size + i * 40;
+						char name[9] = {};
+						memcpy(name, sec, 8);
+						unsigned int vsize = 0, vaddr = 0;
+						memcpy(&vsize, sec + 8, 4);
+						memcpy(&vaddr, sec + 12, 4);
+						const bool wanted = strcmp(name, ".text") == 0 || strcmp(name, ".rdata") == 0;
+						fprintf(info, "%s virtual_address 0x%X size 0x%X file_offset %llu %s\n", name, vaddr, vsize, file_offset, wanted ? "DUMPED" : "skipped");
+						if (!wanted)
+						{
+							continue;
+						}
+
+						static unsigned char buf[0x10000];
+						for (unsigned int off = 0; off < vsize; off += sizeof(buf))
+						{
+							const unsigned int n = vsize - off < sizeof(buf) ? vsize - off : static_cast<unsigned int>(sizeof(buf));
+							memset(buf, 0, n);
+							read_bytes(base + vaddr + off, buf, n);
+							fwrite(buf, 1, n, dump);
+							file_offset += n;
+						}
+					}
+				}
+
+				if (dump) fclose(dump);
+				if (info) fclose(info);
+				log_line("module dump written");
+			}
+		}
 	}
 
 	void try_add_console_command()
