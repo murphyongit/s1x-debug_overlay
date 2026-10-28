@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.74 RECORDER"
+	#define ADDON_VERSION "0.75 RECORDER"
 	#else
-	#define ADDON_VERSION "0.74"
+	#define ADDON_VERSION "0.75"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -1502,6 +1502,43 @@ namespace
 		return GetModuleHandleA(nullptr) == reinterpret_cast<HMODULE>(0x140000000ull) &&
 			memcmp(reinterpret_cast<const void*>(0x1403f4920ull), save_sig, 8) == 0 &&
 			memcmp(reinterpret_cast<const void*>(0x1402ed890ull), cbuf_sig, 8) == 0;
+	}
+
+	// looks for the save files in every folder the game could be using, and makes the folders if missing
+	void dev_probe(bool make_dirs)
+	{
+		char exe[MAX_PATH] = {0};
+		GetModuleFileNameA(nullptr, exe, MAX_PATH);
+		char* slash = strrchr(exe, '\\');
+		if (slash) { *slash = 0; }
+		char cwd[MAX_PATH] = {0};
+		GetCurrentDirectoryA(MAX_PATH, cwd);
+		log_line("devsave: exe folder %s, current folder %s", exe, cwd);
+		static const char* bases[] = {"%s\\save", "%s\\players2\\save", "%s\\s1x\\save", "%s\\main\\save"};
+		static const char* files[] = {"temp.svg", "autosave\\devsave.svg", "devsave.svg"};
+		for (const char* b : bases)
+		{
+			char dir[MAX_PATH];
+			snprintf(dir, sizeof(dir), b, exe);
+			if (make_dirs)
+			{
+				CreateDirectoryA(dir, nullptr);
+				char sub[MAX_PATH];
+				snprintf(sub, sizeof(sub), "%s\\autosave", dir);
+				CreateDirectoryA(sub, nullptr);
+			}
+			for (const char* f : files)
+			{
+				char path[MAX_PATH];
+				snprintf(path, sizeof(path), "%s\\%s", dir, f);
+				WIN32_FILE_ATTRIBUTE_DATA fa;
+				if (GetFileAttributesExA(path, GetFileExInfoStandard, &fa))
+				{
+					log_line("devsave: FOUND %s (%lu bytes)", path, static_cast<unsigned long>(fa.nFileSizeLow));
+				}
+			}
+		}
+		log_line("devsave: queue count %d, flag %d", *reinterpret_cast<volatile int*>(0x14ab9cf70ull), *reinterpret_cast<volatile unsigned char*>(0x14ab9cf74ull));
 	}
 
 	void dev_do_requests()
@@ -6735,17 +6772,25 @@ namespace
 			{
 				static bool n7_was = false, n9_was = false;
 				static LONG shown = 0;
+				static DWORD probe_at = 0;
 				const bool n7 = (GetAsyncKeyState(0x24) & 0x8000) != 0;
 				const bool n9 = (GetAsyncKeyState(0x23) & 0x8000) != 0;
 				if (n7 && !n7_was)
 				{
 					log_line("devsave: Home pressed");
+					dev_probe(true);
 					InterlockedExchange(&g_dev_save_req, 1);
+					probe_at = GetTickCount() + 2000;
 				}
 				if (n9 && !n9_was)
 				{
 					log_line("devsave: End pressed");
 					InterlockedExchange(&g_dev_load_req, 1);
+				}
+				if (probe_at != 0 && GetTickCount() > probe_at)
+				{
+					probe_at = 0;
+					dev_probe(false);
 				}
 				n7_was = n7;
 				n9_was = n9;
