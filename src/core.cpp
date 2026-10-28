@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.73 RECORDER"
+	#define ADDON_VERSION "0.74 RECORDER"
 	#else
-	#define ADDON_VERSION "0.73"
+	#define ADDON_VERSION "0.74"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -1489,8 +1489,65 @@ namespace
 		}
 	}
 
+	// ---- devsave: the game's own save / load, triggered by keys ------------------------------
+	// Home = save, End = load. The save runs on the game thread (inside hooked_notify).
+	volatile LONG g_dev_save_req = 0;
+	volatile LONG g_dev_load_req = 0;
+	volatile LONG g_dev_result = 0;   // 1 saved ok, -1 save refused, 2 load sent, -2 code check failed
+
+	bool dev_code_ok()
+	{
+		static const unsigned char save_sig[8] = {0x48, 0x83, 0xec, 0x48, 0x48, 0x8b, 0x05, 0x85};
+		static const unsigned char cbuf_sig[8] = {0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83};
+		return GetModuleHandleA(nullptr) == reinterpret_cast<HMODULE>(0x140000000ull) &&
+			memcmp(reinterpret_cast<const void*>(0x1403f4920ull), save_sig, 8) == 0 &&
+			memcmp(reinterpret_cast<const void*>(0x1402ed890ull), cbuf_sig, 8) == 0;
+	}
+
+	void dev_do_requests()
+	{
+		if (g_dev_save_req == 0 && g_dev_load_req == 0)
+		{
+			return;
+		}
+
+		const LONG save = InterlockedExchange(&g_dev_save_req, 0);
+		const LONG load = InterlockedExchange(&g_dev_load_req, 0);
+		__try
+		{
+			if (!dev_code_ok())
+			{
+				g_dev_result = -2;
+				return;
+			}
+
+			if (save)
+			{
+				typedef int (*save_fn)(const char*, const char*, const char*, int, int, bool);
+				char name[0x40];
+				memset(name, 0, sizeof(name));
+				strcpy(name, "autosave\\devsave");
+				const int rc = reinterpret_cast<save_fn>(0x1403f4920ull)(name, "", "$default", 2, 1, false);
+				g_dev_result = (rc == -1 || rc == -2) ? -1 : 1;
+				log_line("devsave: save returned %d", rc);
+			}
+			else if (load)
+			{
+				typedef void (*cbuf_fn)(int, const char*);
+				reinterpret_cast<cbuf_fn>(0x1402ed890ull)(0, "loadgame autosave\\devsave\n");
+				g_dev_result = 2;
+				log_line("devsave: load command sent");
+			}
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			g_dev_result = -3;
+		}
+	}
+
 	void hooked_notify(const unsigned int entity, const unsigned int string_id, const unsigned int count)
 	{
+		dev_do_requests();
 		__try
 		{
 			if (string_id != 0 && string_id < 0x100000)
@@ -6674,6 +6731,33 @@ namespace
 			}
 
 			insert_was_down = insert_down;
+
+			{
+				static bool n7_was = false, n9_was = false;
+				static LONG shown = 0;
+				const bool n7 = (GetAsyncKeyState(0x24) & 0x8000) != 0;
+				const bool n9 = (GetAsyncKeyState(0x23) & 0x8000) != 0;
+				if (n7 && !n7_was)
+				{
+					log_line("devsave: Home pressed");
+					InterlockedExchange(&g_dev_save_req, 1);
+				}
+				if (n9 && !n9_was)
+				{
+					log_line("devsave: End pressed");
+					InterlockedExchange(&g_dev_load_req, 1);
+				}
+				n7_was = n7;
+				n9_was = n9;
+				if (g_dev_result != 0)
+				{
+					const LONG r = InterlockedExchange(&g_dev_result, 0);
+					if (r == 1) { Beep(1200, 120); }
+					else if (r == 2) { Beep(900, 120); }
+					else { Beep(300, 400); log_line("devsave: failed, code %ld", r); }
+					(void)shown;
+				}
+			}
 
 			const bool f9_down = (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
 			const bool f9_pressed = f9_down && !f9_was_down;
