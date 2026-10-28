@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.70 RECORDER"
+	#define ADDON_VERSION "0.71 RECORDER"
 	#else
-	#define ADDON_VERSION "0.70"
+	#define ADDON_VERSION "0.71"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5745,6 +5745,8 @@ namespace
 
 	rec_slot g_rs[MAX_ENTITIES];
 	char g_rec_class_cache[65536];   // 0 unknown, 1 other, 2 actor, 3 vehicle
+	unsigned char g_hero_cache[65536];   // 0 unknown, 1 no, 2 hero (string ids are renumbered by a reload, so this is cleared then)
+	volatile int g_rec_gen = 0;
 	int g_rec_last_actors = -1, g_rec_last_vehicles = -1;
 	double g_rec_gone_burst_time = 0.0;
 
@@ -5932,6 +5934,15 @@ namespace
 
 	void rec_scan()
 	{
+		{
+			static int seen_gen = 0;
+			if (seen_gen != g_rec_gen)
+			{
+				seen_gen = g_rec_gen;
+				memset(g_rec_class_cache, 0, sizeof(g_rec_class_cache));
+				memset(g_hero_cache, 0, sizeof(g_hero_cache));
+			}
+		}
 		float origin[3] = {}, pitch = 0, yaw = 0;
 		const double scan_start = now_seconds();
 		const bool have_player = rec_player_state(origin, &pitch, &yaw);
@@ -5974,7 +5985,7 @@ namespace
 
 				// the squad (Will, Cormack, Jackson ...): where they are twice a second
 				{
-					static unsigned char hero_cache[65536];   // 0 unknown, 1 no, 2 hero
+					unsigned char* const hero_cache = g_hero_cache;
 					static double hero_time[MAX_ENTITIES];
 					unsigned int type_id = 0;
 					memcpy(&type_id, buffer + OFF_TYPE, 4);
@@ -6251,6 +6262,7 @@ namespace
 					g_prev_reset = true;
 					memset(g_rs, 0, sizeof(g_rs));
 					rec_line("RELOAD same mission again");
+					g_rec_gen = g_rec_gen + 1;
 					g_scan_go = true;
 				}
 				else
@@ -6292,6 +6304,7 @@ namespace
 						rec_line("RELOAD the game clock went back from %u to %u (checkpoint restart)", last_gt, g_rec_gt);
 						g_rs_silent = true;
 						g_prev_reset = true;
+						g_rec_gen = g_rec_gen + 1;
 					}
 
 					last_gt = g_rec_gt;

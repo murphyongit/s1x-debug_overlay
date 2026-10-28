@@ -83,3 +83,5 @@ v0.68 - Recorder: writes HERO lines (Will, Cormack and the other named squad mem
 v0.69 - Recorder: SWITCH ON / SWITCH OFF lines whenever a script turns a trigger on or off (moves it 10000 units), e.g. the bomb pickup, the finale prompt. Script messages with larger ids are now recorded too.
 
 v0.70 - Recorder: HERO lines also for squad members whose type name id is large (after a checkpoint restart they vanished from the log).
+
+v0.71 - Recorder: after a checkpoint restart the game renumbers its names, which made the squad (HERO) lines wrong; the name caches are now cleared on every restart.
