@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.69 RECORDER"
+	#define ADDON_VERSION "0.70 RECORDER"
 	#else
-	#define ADDON_VERSION "0.69"
+	#define ADDON_VERSION "0.70"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5978,6 +5978,21 @@ namespace
 					static double hero_time[MAX_ENTITIES];
 					unsigned int type_id = 0;
 					memcpy(&type_id, buffer + OFF_TYPE, 4);
+					if (type_id > 1 && type_id < 0x1000000)
+					{
+						if (type_id >= 0x10000)
+						{
+							char big[64] = {};
+							class_name(type_id, big, sizeof(big));
+							static double big_time[MAX_ENTITIES];
+							const double bnow = now_seconds();
+							if (strstr(big, "hero") && bnow - big_time[slot] >= 0.5)
+							{
+								big_time[slot] = bnow;
+								rec_line("HERO #%d %s at %.0f %.0f %.0f", slot, big, r.pos[0], r.pos[1], r.pos[2]);
+							}
+						}
+					}
 					if (type_id > 1 && type_id < 0x10000)
 					{
 						if (hero_cache[type_id] == 0)
