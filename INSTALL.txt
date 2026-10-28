@@ -79,3 +79,5 @@ v0.66 - Recorder: at the start of each file also looks for entities beyond slot 
 v0.67 - Found it: the game's entity list is longer than 2048 entries (the old tools only looked at the first 2048). Now reads up to 6144, so the hidden leave-area / mission-fail triggers and everything else past slot 2047 show up in the overlay and in the recorder. The recorder prints a line "ENTITY TABLE" with how many entries are really in use.
 
 v0.68 - Recorder: writes HERO lines (Will, Cormack and the other named squad members) with their position twice a second, so we can see where Will is when the finale prompt does not appear. The entity list is read up to 10240 slots (v0.67 hit its 6144 limit).
+
+v0.69 - Recorder: SWITCH ON / SWITCH OFF lines whenever a script turns a trigger on or off (moves it 10000 units), e.g. the bomb pickup, the finale prompt. Script messages with larger ids are now recorded too.

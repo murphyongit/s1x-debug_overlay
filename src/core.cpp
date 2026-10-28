@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.68 RECORDER"
+	#define ADDON_VERSION "0.69 RECORDER"
 	#else
-	#define ADDON_VERSION "0.68"
+	#define ADDON_VERSION "0.69"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -1493,7 +1493,7 @@ namespace
 	{
 		__try
 		{
-			if (string_id != 0 && string_id < 0x10000)
+			if (string_id != 0 && string_id < 0x100000)
 			{
 				record_event(entity, string_id);
 			}
@@ -5739,6 +5739,8 @@ namespace
 		unsigned int state;
 		double state_time;
 		float pos[3];
+		float tz;          // trigger height last seen (a script switching a trigger on/off moves it 10000 units)
+		bool tz_ok;
 	};
 
 	rec_slot g_rs[MAX_ENTITIES];
@@ -6049,6 +6051,26 @@ namespace
 
 				r.state = state;
 				r.name_id = name_id;
+
+				// a script switching a trigger on or off (the finale prompt, the bomb pickup, colour triggers ...)
+				if (class_id != 0)
+				{
+					float oz = 0.0f;
+					memcpy(&oz, buffer + OFF_ORIGIN + 8, 4);
+					if (r.tz_ok && std::fabs(oz - r.tz) > 3000.0f && !g_rs_silent)
+					{
+						char text[300];
+						rec_describe(slot, buffer, text, sizeof(text));
+						rec_line("SWITCH %s %s (height %.0f -> %.0f)", oz > r.tz ? "OFF" : "ON", text, r.tz, oz);
+					}
+
+					r.tz = oz;
+					r.tz_ok = true;
+				}
+				else
+				{
+					r.tz_ok = false;
+				}
 
 				if (class_id != 0 && have_player && kind != 7)
 				{
