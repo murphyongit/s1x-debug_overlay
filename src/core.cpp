@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.78 RECORDER"
+	#define ADDON_VERSION "0.79 RECORDER"
 	#else
-	#define ADDON_VERSION "0.78"
+	#define ADDON_VERSION "0.79"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -6319,6 +6319,53 @@ namespace
 							char tname[64] = {};
 							class_name(type_id, tname, sizeof(tname));
 							rec_line("HERO #%d %s at %.0f %.0f %.0f", slot, tname, r.pos[0], r.pos[1], r.pos[2]);
+						}
+					}
+				}
+
+				// v0.79: Cormack's raw entity bytes - log every changed 4-byte word, to catch what makes him start walking
+				{
+					static bool corm_slot[MAX_ENTITIES];
+					static unsigned char corm_prev[MAX_ENTITIES][0x2F8];
+					static bool corm_have[MAX_ENTITIES];
+					if (!corm_slot[slot])
+					{
+						unsigned int tid = 0;
+						memcpy(&tid, buffer + OFF_TYPE, 4);
+						if (tid > 1 && tid < 0x1000000)
+						{
+							char tn[64] = {};
+							class_name(tid, tn, sizeof(tn));
+							if (strstr(tn, "cormack") && strstr(tn, "hero"))
+							{
+								corm_slot[slot] = true;
+							}
+						}
+					}
+
+					if (corm_slot[slot])
+					{
+						unsigned char full[0x2F8];
+						if (read_fast(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, full, sizeof(full)))
+						{
+							if (corm_have[slot])
+							{
+								int logged = 0;
+								for (size_t off = 0; off + 4 <= sizeof(full) && logged < 24; off += 4)
+								{
+									if (off >= OFF_ORIGIN && off < OFF_ORIGIN + 12) continue;
+									if (memcmp(full + off, corm_prev[slot] + off, 4) != 0)
+									{
+										unsigned int a = 0, b = 0;
+										memcpy(&a, corm_prev[slot] + off, 4);
+										memcpy(&b, full + off, 4);
+										rec_line("CORM #%d +0x%zX %08X -> %08X", slot, off, a, b);
+										++logged;
+									}
+								}
+							}
+							memcpy(corm_prev[slot], full, sizeof(full));
+							corm_have[slot] = true;
 						}
 					}
 				}

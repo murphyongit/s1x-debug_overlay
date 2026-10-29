@@ -98,3 +98,5 @@ v0.76  position bookmark: Home = remember where you stand, End = go back there (
 v0.77  logs script-made notifies (flag_set etc.) as SNOTIFY lines in the run file.
 
 v0.78 - hook memory fix: reserves up to 64 spots (below and above the game) so the flag/event logging switches on every time.
+
+v0.79 - logs Cormack raw entity changes (CORM lines) to find what makes him start walking before the binocular scene ends.
