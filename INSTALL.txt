@@ -104,3 +104,5 @@ v0.79 - logs Cormack raw entity changes (CORM lines) to find what makes him star
 v0.80 - overlay draws the "no Will" box (trigger_convention_center_combat_06) as a thick flashing red/yellow box whenever you are within 5000 units, with a big warning on screen when you are inside or very close.
 
 v0.81 - on-screen roll check for the Seoul Will problem: after you pass the camp-combat trigger the overlay says CHECKING WILL ROLL, then within about 30 s either BAD ROLL - RESTART (camp scene started too early, Will will not come) or GOOD ROLL. Based on the logs: fast = fail, slow = works.
+
+v0.82 - the roll check now says RISKY ROLL (camp scene started early) instead of telling you to restart: one run with an early start still worked because the camp scene finished before Will was sent.

@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.81 RECORDER"
+	#define ADDON_VERSION "0.82 RECORDER"
 	#else
-	#define ADDON_VERSION "0.81"
+	#define ADDON_VERSION "0.82"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3416,7 +3416,7 @@ namespace
 				if (now - g_t_time < 400.0)
 				{
 					if (delta < 45.0)
-						draw_text(g_w * 0.5f - 24.0f * 3.0f * sc, g_h * 0.22f, "BAD ROLL - WILL WILL NOT COME - RESTART", sc, red);
+						draw_text(g_w * 0.5f - 20.0f * 3.0f * sc, g_h * 0.22f, "RISKY ROLL - CAMP SCENE EARLY", sc, red);
 					else
 						draw_text(g_w * 0.5f - 10.0f * 3.0f * sc, g_h * 0.22f, "GOOD ROLL - WILL OK", sc, grn);
 				}
