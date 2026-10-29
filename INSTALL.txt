@@ -102,3 +102,5 @@ v0.78 - hook memory fix: reserves up to 64 spots (below and above the game) so t
 v0.79 - logs Cormack raw entity changes (CORM lines) to find what makes him start walking before the binocular scene ends.
 
 v0.80 - overlay draws the "no Will" box (trigger_convention_center_combat_06) as a thick flashing red/yellow box whenever you are within 5000 units, with a big warning on screen when you are inside or very close.
+
+v0.81 - on-screen roll check for the Seoul Will problem: after you pass the camp-combat trigger the overlay says CHECKING WILL ROLL, then within about 30 s either BAD ROLL - RESTART (camp scene started too early, Will will not come) or GOOD ROLL. Based on the logs: fast = fail, slow = works.

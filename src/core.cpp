@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.80 RECORDER"
+	#define ADDON_VERSION "0.81 RECORDER"
 	#else
-	#define ADDON_VERSION "0.80"
+	#define ADDON_VERSION "0.81"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -560,6 +560,8 @@ namespace
 
 	vertex g_verts[MAX_VERTS];
 	int g_vert_count = 0;
+	volatile double g_v_time = 0.0;   // v0.81: when the player passed begin_fob_combat_vignette
+	volatile double g_t_time = 0.0;   // v0.81: when trigger_allies_to_fob fired after that
 	float g_w = 1920.0f;
 	float g_h = 1080.0f;
 
@@ -3399,6 +3401,32 @@ namespace
 			}
 		}
 
+		// v0.81: tells you early whether Will will come (fast "camp scene" start = bad roll, restart now)
+		if (g_v_time > 0.0)
+		{
+			const double now = now_seconds();
+			const double age = now - g_v_time;
+			const float sc = g_h >= 1200.0f ? 4.0f : 3.0f;
+			const float red[4] = {1.0f, 0.1f, 0.1f, 1.0f};
+			const float grn[4] = {0.2f, 1.0f, 0.2f, 1.0f};
+			const float gry[4] = {0.8f, 0.8f, 0.8f, 1.0f};
+			if (g_t_time > g_v_time)
+			{
+				const double delta = g_t_time - g_v_time;
+				if (now - g_t_time < 400.0)
+				{
+					if (delta < 45.0)
+						draw_text(g_w * 0.5f - 24.0f * 3.0f * sc, g_h * 0.22f, "BAD ROLL - WILL WILL NOT COME - RESTART", sc, red);
+					else
+						draw_text(g_w * 0.5f - 10.0f * 3.0f * sc, g_h * 0.22f, "GOOD ROLL - WILL OK", sc, grn);
+				}
+			}
+			else if (age < 120.0)
+			{
+				draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.22f, "CHECKING WILL ROLL...", sc, gry);
+			}
+		}
+
 		if (g_collision_on)
 		{
 			draw_collision_blocks({origin[0], origin[1], origin[2] + 30.0f - (eye_height == 0.0f ? EYE_HEIGHT : 0.0f)});
@@ -5824,6 +5852,11 @@ namespace
 
 	void rec_snotify(const char* name, const unsigned int owner)
 	{
+		if (g_v_time > 0.0 && g_t_time < g_v_time && strcmp(name, "trigger_allies_to_fob") == 0)
+		{
+			g_t_time = now_seconds();
+		}
+
 		if (g_rec)
 		{
 			rec_line("SNOTIFY %s ent=%u", name, owner);
@@ -6501,6 +6534,12 @@ namespace
 						char text[300];
 						rec_describe(slot, buffer, text, sizeof(text));
 						rec_line("%s %s", inside ? "ENTER" : "EXIT", text);
+						if (inside && strstr(text, "begin_fob_combat_vignette"))
+						{
+							g_v_time = now_seconds();
+							g_t_time = 0.0;
+						}
+
 						r.inside = inside;
 					}
 				}
