@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.75 RECORDER"
+	#define ADDON_VERSION "0.76 RECORDER"
 	#else
-	#define ADDON_VERSION "0.75"
+	#define ADDON_VERSION "0.76"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -1489,57 +1489,14 @@ namespace
 		}
 	}
 
-	// ---- devsave: the game's own save / load, triggered by keys ------------------------------
-	// Home = save, End = load. The save runs on the game thread (inside hooked_notify).
+	// ---- position bookmark: Home remembers where you stand, End puts you back there ----------
+	// The work happens on the game thread (inside hooked_notify) so the game is not touched while it updates.
 	volatile LONG g_dev_save_req = 0;
 	volatile LONG g_dev_load_req = 0;
-	volatile LONG g_dev_result = 0;   // 1 saved ok, -1 save refused, 2 load sent, -2 code check failed
-
-	bool dev_code_ok()
-	{
-		static const unsigned char save_sig[8] = {0x48, 0x83, 0xec, 0x48, 0x48, 0x8b, 0x05, 0x85};
-		static const unsigned char cbuf_sig[8] = {0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83};
-		return GetModuleHandleA(nullptr) == reinterpret_cast<HMODULE>(0x140000000ull) &&
-			memcmp(reinterpret_cast<const void*>(0x1403f4920ull), save_sig, 8) == 0 &&
-			memcmp(reinterpret_cast<const void*>(0x1402ed890ull), cbuf_sig, 8) == 0;
-	}
-
-	// looks for the save files in every folder the game could be using, and makes the folders if missing
-	void dev_probe(bool make_dirs)
-	{
-		char exe[MAX_PATH] = {0};
-		GetModuleFileNameA(nullptr, exe, MAX_PATH);
-		char* slash = strrchr(exe, '\\');
-		if (slash) { *slash = 0; }
-		char cwd[MAX_PATH] = {0};
-		GetCurrentDirectoryA(MAX_PATH, cwd);
-		log_line("devsave: exe folder %s, current folder %s", exe, cwd);
-		static const char* bases[] = {"%s\\save", "%s\\players2\\save", "%s\\s1x\\save", "%s\\main\\save"};
-		static const char* files[] = {"temp.svg", "autosave\\devsave.svg", "devsave.svg"};
-		for (const char* b : bases)
-		{
-			char dir[MAX_PATH];
-			snprintf(dir, sizeof(dir), b, exe);
-			if (make_dirs)
-			{
-				CreateDirectoryA(dir, nullptr);
-				char sub[MAX_PATH];
-				snprintf(sub, sizeof(sub), "%s\\autosave", dir);
-				CreateDirectoryA(sub, nullptr);
-			}
-			for (const char* f : files)
-			{
-				char path[MAX_PATH];
-				snprintf(path, sizeof(path), "%s\\%s", dir, f);
-				WIN32_FILE_ATTRIBUTE_DATA fa;
-				if (GetFileAttributesExA(path, GetFileExInfoStandard, &fa))
-				{
-					log_line("devsave: FOUND %s (%lu bytes)", path, static_cast<unsigned long>(fa.nFileSizeLow));
-				}
-			}
-		}
-		log_line("devsave: queue count %d, flag %d", *reinterpret_cast<volatile int*>(0x14ab9cf70ull), *reinterpret_cast<volatile unsigned char*>(0x14ab9cf74ull));
-	}
+	volatile LONG g_dev_result = 0;   // 1 remembered, 2 moved back, -1 could not read/write
+	float g_bm_pos[3] = {0, 0, 0};
+	float g_bm_ang[2] = {0, 0};
+	bool g_bm_ok = false;
 
 	void dev_do_requests()
 	{
@@ -1552,33 +1509,44 @@ namespace
 		const LONG load = InterlockedExchange(&g_dev_load_req, 0);
 		__try
 		{
-			if (!dev_code_ok())
+			unsigned long long client = 0;
+			if (!read_bytes(player_entity() + OFF_CLIENT, &client, sizeof(client)) || client < 0x140000000ull || client > 0x7FFFFFFE0000ull)
 			{
-				g_dev_result = -2;
+				g_dev_result = -1;
 				return;
 			}
 
+			float* org = reinterpret_cast<float*>(static_cast<uintptr_t>(client) + OFF_CAM_ORIGIN);
 			if (save)
 			{
-				typedef int (*save_fn)(const char*, const char*, const char*, int, int, bool);
-				char name[0x40];
-				memset(name, 0, sizeof(name));
-				strcpy(name, "autosave\\devsave");
-				const int rc = reinterpret_cast<save_fn>(0x1403f4920ull)(name, "", "$default", 2, 1, false);
-				g_dev_result = (rc == -1 || rc == -2) ? -1 : 1;
-				log_line("devsave: save returned %d", rc);
+				g_bm_pos[0] = org[0]; g_bm_pos[1] = org[1]; g_bm_pos[2] = org[2];
+				g_bm_ang[0] = *reinterpret_cast<float*>(static_cast<uintptr_t>(client) + OFF_CAM_PITCH);
+				g_bm_ang[1] = *reinterpret_cast<float*>(static_cast<uintptr_t>(client) + OFF_CAM_YAW);
+				g_bm_ok = true;
+				g_dev_result = 1;
+				log_line("bookmark: saved position %.1f %.1f %.1f (looking pitch %.1f yaw %.1f)", g_bm_pos[0], g_bm_pos[1], g_bm_pos[2], g_bm_ang[0], g_bm_ang[1]);
 			}
 			else if (load)
 			{
-				typedef void (*cbuf_fn)(int, const char*);
-				reinterpret_cast<cbuf_fn>(0x1402ed890ull)(0, "loadgame autosave\\devsave\n");
+				if (!g_bm_ok)
+				{
+					g_dev_result = -1;
+					return;
+				}
+
+				// the player's position lives in the client block; the entity keeps a copy that we move too
+				org[0] = g_bm_pos[0]; org[1] = g_bm_pos[1]; org[2] = g_bm_pos[2];
+				float* ent = reinterpret_cast<float*>(player_entity() + OFF_ORIGIN);
+				ent[0] = g_bm_pos[0]; ent[1] = g_bm_pos[1]; ent[2] = g_bm_pos[2];
+				float* vel = reinterpret_cast<float*>(static_cast<uintptr_t>(client) + OFF_CAM_ORIGIN + 12);
+				vel[0] = 0; vel[1] = 0; vel[2] = 0;   // stop all movement
 				g_dev_result = 2;
-				log_line("devsave: load command sent");
+				log_line("bookmark: moved back to %.1f %.1f %.1f", g_bm_pos[0], g_bm_pos[1], g_bm_pos[2]);
 			}
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
 		{
-			g_dev_result = -3;
+			g_dev_result = -1;
 		}
 	}
 
@@ -6772,25 +6740,17 @@ namespace
 			{
 				static bool n7_was = false, n9_was = false;
 				static LONG shown = 0;
-				static DWORD probe_at = 0;
 				const bool n7 = (GetAsyncKeyState(0x24) & 0x8000) != 0;
 				const bool n9 = (GetAsyncKeyState(0x23) & 0x8000) != 0;
 				if (n7 && !n7_was)
 				{
-					log_line("devsave: Home pressed");
-					dev_probe(true);
+					log_line("bookmark: Home pressed");
 					InterlockedExchange(&g_dev_save_req, 1);
-					probe_at = GetTickCount() + 2000;
 				}
 				if (n9 && !n9_was)
 				{
-					log_line("devsave: End pressed");
+					log_line("bookmark: End pressed");
 					InterlockedExchange(&g_dev_load_req, 1);
-				}
-				if (probe_at != 0 && GetTickCount() > probe_at)
-				{
-					probe_at = 0;
-					dev_probe(false);
 				}
 				n7_was = n7;
 				n9_was = n9;
@@ -6799,7 +6759,7 @@ namespace
 					const LONG r = InterlockedExchange(&g_dev_result, 0);
 					if (r == 1) { Beep(1200, 120); }
 					else if (r == 2) { Beep(900, 120); }
-					else { Beep(300, 400); log_line("devsave: failed, code %ld", r); }
+					else { Beep(300, 400); log_line("bookmark: failed (nothing remembered yet, or player not found)"); }
 					(void)shown;
 				}
 			}
