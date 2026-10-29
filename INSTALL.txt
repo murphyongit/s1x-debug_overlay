@@ -106,3 +106,5 @@ v0.80 - overlay draws the "no Will" box (trigger_convention_center_combat_06) as
 v0.81 - on-screen roll check for the Seoul Will problem: after you pass the camp-combat trigger the overlay says CHECKING WILL ROLL, then within about 30 s either BAD ROLL - RESTART (camp scene started too early, Will will not come) or GOOD ROLL. Based on the logs: fast = fail, slow = works.
 
 v0.82 - the roll check now says RISKY ROLL (camp scene started early) instead of telling you to restart: one run with an early start still worked because the camp scene finished before Will was sent.
+
+v0.83 - Seoul Will timer: from the moment Cormack lands the overlay counts down the time you have to enter the wait-spot box (player_leaving_map) - about 5 s. In time = the camp scene starts late and Will comes (6 of 6 logged cases bar one); too late = camp scene starts early (10 of 10 logged cases).

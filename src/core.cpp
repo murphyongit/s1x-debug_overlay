@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.82 RECORDER"
+	#define ADDON_VERSION "0.83 RECORDER"
 	#else
-	#define ADDON_VERSION "0.82"
+	#define ADDON_VERSION "0.83"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -561,6 +561,8 @@ namespace
 	vertex g_verts[MAX_VERTS];
 	int g_vert_count = 0;
 	volatile double g_v_time = 0.0;   // v0.81: when the player passed begin_fob_combat_vignette
+	volatile double g_l_time = 0.0;   // v0.83: when Cormack landed (i_have_landed) after that
+	volatile double g_in_time = 0.0;  // v0.83: when the player entered player_leaving_map after that
 	volatile double g_t_time = 0.0;   // v0.81: when trigger_allies_to_fob fired after that
 	float g_w = 1920.0f;
 	float g_h = 1080.0f;
@@ -3410,6 +3412,30 @@ namespace
 			const float red[4] = {1.0f, 0.1f, 0.1f, 1.0f};
 			const float grn[4] = {0.2f, 1.0f, 0.2f, 1.0f};
 			const float gry[4] = {0.8f, 0.8f, 0.8f, 1.0f};
+			if (g_l_time > g_v_time)
+			{
+				const double limit = 5.2;
+				char buf[64];
+				if (g_in_time > g_l_time)
+				{
+					const double used = g_in_time - g_l_time;
+					if (now - g_in_time < 40.0)
+					{
+						snprintf(buf, sizeof(buf), used <= limit ? "IN TIME  %.1f OF %.1f" : "TOO LATE  %.1f OF %.1f", used, limit);
+						draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.30f, buf, sc, used <= limit ? grn : red);
+					}
+				}
+				else
+				{
+					const double rem = g_l_time + limit - now;
+					if (rem > -1.0)
+					{
+						snprintf(buf, sizeof(buf), "WAIT SPOT BOX IN  %.1f", rem > 0.0 ? rem : 0.0);
+						draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.30f, buf, sc, rem > 2.0 ? grn : red);
+					}
+				}
+			}
+
 			if (g_t_time > g_v_time)
 			{
 				const double delta = g_t_time - g_v_time;
@@ -5852,6 +5878,12 @@ namespace
 
 	void rec_snotify(const char* name, const unsigned int owner)
 	{
+		if (g_v_time > 0.0 && g_l_time < g_v_time && strcmp(name, "i_have_landed") == 0)
+		{
+			const double dt = now_seconds() - g_v_time;
+			if (dt >= 10.0 && dt <= 30.0) g_l_time = now_seconds();
+		}
+
 		if (g_v_time > 0.0 && g_t_time < g_v_time && strcmp(name, "trigger_allies_to_fob") == 0)
 		{
 			g_t_time = now_seconds();
@@ -6538,6 +6570,13 @@ namespace
 						{
 							g_v_time = now_seconds();
 							g_t_time = 0.0;
+							g_l_time = 0.0;
+							g_in_time = 0.0;
+						}
+
+						if (inside && g_l_time > g_v_time && g_in_time < g_l_time && strstr(text, "player_leaving_map"))
+						{
+							g_in_time = now_seconds();
 						}
 
 						r.inside = inside;
