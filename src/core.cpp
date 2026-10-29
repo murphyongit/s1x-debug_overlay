@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.76 RECORDER"
+	#define ADDON_VERSION "0.77 RECORDER"
 	#else
-	#define ADDON_VERSION "0.76"
+	#define ADDON_VERSION "0.77"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -1061,6 +1061,7 @@ namespace
 	int g_events_logged = 0;
 	using notify_t = void (*)(unsigned int, unsigned int, unsigned int);
 	notify_t g_original_notify = nullptr;
+	thread_local bool g_in_code_notify = false;
 
 	// Messages that fire constantly for every character/vehicle and drown out everything else.
 	bool is_always_noise(const char* name)
@@ -1564,7 +1565,44 @@ namespace
 		{
 		}
 
+		g_in_code_notify = true;
 		g_original_notify(entity, string_id, count);
+		g_in_code_notify = false;
+	}
+
+	// Script-made notifies ("level notify" used by flag_set etc.) do not pass through the function above.
+	// They all end in the VM notify function, so we watch that one too and log the ones the first hook did not see.
+	void rec_snotify(const char* name, unsigned int owner);
+	typedef unsigned long long (*vm_notify_t)(unsigned int, unsigned int, void*);
+	vm_notify_t g_original_vm_notify = nullptr;
+	constexpr uintptr_t SP_VM_NOTIFY = 0x140320E50ull;
+
+	unsigned long long hooked_vm_notify(const unsigned int owner, const unsigned int string_id, void* top)
+	{
+		if (!g_in_code_notify && string_id != 0 && string_id < 0x100000)
+		{
+			__try
+			{
+				char name[44];
+				if (class_name(string_id, name, sizeof(name)))
+				{
+					static double last_time[1024];
+					unsigned int h = 5381;
+					for (const char* c = name; *c; ++c) h = h * 33 + static_cast<unsigned char>(*c);
+					const double now = now_seconds();
+					if (now - last_time[h & 1023] >= 0.25)
+					{
+						last_time[h & 1023] = now;
+						rec_snotify(name, owner);
+					}
+				}
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+			}
+		}
+
+		return g_original_vm_notify(owner, string_id, top);
 	}
 
 	// ---- learning which flag a flag-setting trigger sets ------------------------------------
@@ -5184,6 +5222,26 @@ namespace
 
 		g_notify_hooked = true;
 		log_line("hook: script events installed (attempt %d)", attempt);
+
+		if (!g_is_mp)
+		{
+			static const unsigned char vm_sig[1] = {0};
+			(void)vm_sig;
+			void* vm = reinterpret_cast<void*>(SP_VM_NOTIFY);
+			unsigned char vp[8];
+			if (read_bytes(SP_VM_NOTIFY, vp, sizeof(vp)))
+			{
+				MH_STATUS c2 = MH_CreateHook(vm, reinterpret_cast<LPVOID>(&hooked_vm_notify), reinterpret_cast<LPVOID*>(&g_original_vm_notify));
+				if (c2 == MH_OK && MH_EnableHook(vm) == MH_OK)
+				{
+					log_line("hook: script-made events (flags) installed");
+				}
+				else
+				{
+					log_line("hook: script-made events not installed (%s)", MH_StatusToString(c2));
+				}
+			}
+		}
 	}
 
 	bool is_campaign_exe()
@@ -5708,6 +5766,14 @@ namespace
 
 		last_time[h & 255] = now;
 		rec_line("EVENT %s ent=%u", name, entity);
+	}
+
+	void rec_snotify(const char* name, const unsigned int owner)
+	{
+		if (g_rec)
+		{
+			rec_line("SNOTIFY %s ent=%u", name, owner);
+		}
 	}
 
 	void rec_flush()

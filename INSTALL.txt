@@ -95,3 +95,4 @@ v0.74  DEVSAVE (experimental): Home = save a full game state, End = load it back
        a long low beep = failed (see the log for "devsave:" lines).
 v0.75  devsave diagnostics: after Home the log lists where the save file landed.
 v0.76  position bookmark: Home = remember where you stand, End = go back there (devsave removed).
+v0.77  logs script-made notifies (flag_set etc.) as SNOTIFY lines in the run file.
