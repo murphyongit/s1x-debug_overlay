@@ -108,3 +108,5 @@ v0.81 - on-screen roll check for the Seoul Will problem: after you pass the camp
 v0.82 - the roll check now says RISKY ROLL (camp scene started early) instead of telling you to restart: one run with an early start still worked because the camp scene finished before Will was sent.
 
 v0.83 - Seoul Will timer: from the moment Cormack lands the overlay counts down the time you have to enter the wait-spot box (player_leaving_map) - about 5 s. In time = the camp scene starts late and Will comes (6 of 6 logged cases bar one); too late = camp scene starts early (10 of 10 logged cases).
+
+v0.84 - the Will timer now ends at the turret area (trigger_cardoor_strafe) with 3.3 s after Cormack lands: logs show every run that reached it within 3.1 s was good, every run at 3.6 s or later was bad (except one).

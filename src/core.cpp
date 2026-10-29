@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.83 RECORDER"
+	#define ADDON_VERSION "0.84 RECORDER"
 	#else
-	#define ADDON_VERSION "0.83"
+	#define ADDON_VERSION "0.84"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3414,7 +3414,7 @@ namespace
 			const float gry[4] = {0.8f, 0.8f, 0.8f, 1.0f};
 			if (g_l_time > g_v_time)
 			{
-				const double limit = 5.2;
+				const double limit = 3.3;
 				char buf[64];
 				if (g_in_time > g_l_time)
 				{
@@ -3430,7 +3430,7 @@ namespace
 					const double rem = g_l_time + limit - now;
 					if (rem > -1.0)
 					{
-						snprintf(buf, sizeof(buf), "WAIT SPOT BOX IN  %.1f", rem > 0.0 ? rem : 0.0);
+						snprintf(buf, sizeof(buf), "TURRET AREA IN  %.1f", rem > 0.0 ? rem : 0.0);
 						draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.30f, buf, sc, rem > 2.0 ? grn : red);
 					}
 				}
@@ -6574,7 +6574,7 @@ namespace
 							g_in_time = 0.0;
 						}
 
-						if (inside && g_l_time > g_v_time && g_in_time < g_l_time && strstr(text, "player_leaving_map"))
+						if (inside && g_l_time > g_v_time && g_in_time < g_l_time && strstr(text, "trigger_cardoor_strafe"))
 						{
 							g_in_time = now_seconds();
 						}
