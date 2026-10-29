@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.79 RECORDER"
+	#define ADDON_VERSION "0.80 RECORDER"
 	#else
-	#define ADDON_VERSION "0.79"
+	#define ADDON_VERSION "0.80"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3353,6 +3353,50 @@ namespace
 		for (int i = count - 1; i >= 0; --i)
 		{
 			draw_box(hits[i]);
+		}
+
+		// v0.80: the "no Will" box (trigger_convention_center_combat_06, Seoul). Always drawn, very bright, thick.
+		{
+			const float m = 16.0f;   // player body radius, so the drawn edge is where touching really starts
+			const float x0 = 24187.0f - m, x1 = 25053.0f + m, y0 = 11449.0f - m, y1 = 11675.0f + m, z0 = 1511.0f, z1 = 2057.0f;
+			const float px = origin[0], py = origin[1], pz = origin[2];
+			const float dx = px < x0 ? x0 - px : (px > x1 ? px - x1 : 0.0f);
+			const float dy = py < y0 ? y0 - py : (py > y1 ? py - y1 : 0.0f);
+			const float hd = std::sqrt(dx * dx + dy * dy);
+			if (hd < 5000.0f && std::fabs(pz - 1784.0f) < 2500.0f)
+			{
+				const bool pulse = (static_cast<long long>(now_seconds() * 3.0) & 1) != 0;
+				const float red[4] = {1.0f, 0.05f, 0.05f, 1.0f};
+				const float yel[4] = {1.0f, 1.0f, 0.0f, 1.0f};
+				const float* col = pulse ? red : yel;
+				vec3 c[8];
+				for (int i = 0; i < 8; ++i)
+				{
+					c[i].x = (i & 1) ? x1 : x0;
+					c[i].y = (i & 2) ? y1 : y0;
+					c[i].z = (i & 4) ? z1 : z0;
+				}
+				g_line_override = 9.0f;
+				for (int i = 0; i < 8; ++i)
+					for (int bit = 1; bit <= 4; bit <<= 1)
+						if ((i & bit) == 0) edge(c[i], c[i | bit], col);
+				// X across floor and ceiling, and posts along the two long sides
+				edge(c[0], c[3], col); edge(c[1], c[2], col);
+				edge(c[4], c[7], col); edge(c[5], c[6], col);
+				for (int k = 1; k < 8; ++k)
+				{
+					const float x = x0 + (x1 - x0) * static_cast<float>(k) / 8.0f;
+					edge({x, y0, z0}, {x, y0, z1}, col);
+					edge({x, y1, z0}, {x, y1, z1}, col);
+				}
+				g_line_override = 0.0f;
+				const bool inside = dx == 0.0f && dy == 0.0f && pz > z0 - 70.0f && pz < z1;
+				const float sc = g_h >= 1200.0f ? 6.0f : 4.0f;
+				if (inside)
+					draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.12f, "NO WILL BOX - BACK OUT", sc, red);
+				else if (hd < 250.0f && pz > z0 - 70.0f && pz < z1)
+					draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.12f, "CLOSE TO WILL BOX", sc, yel);
+			}
 		}
 
 		if (g_collision_on)

@@ -100,3 +100,5 @@ v0.77  logs script-made notifies (flag_set etc.) as SNOTIFY lines in the run fil
 v0.78 - hook memory fix: reserves up to 64 spots (below and above the game) so the flag/event logging switches on every time.
 
 v0.79 - logs Cormack raw entity changes (CORM lines) to find what makes him start walking before the binocular scene ends.
+
+v0.80 - overlay draws the "no Will" box (trigger_convention_center_combat_06) as a thick flashing red/yellow box whenever you are within 5000 units, with a big warning on screen when you are inside or very close.
