@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.77 RECORDER"
+	#define ADDON_VERSION "0.78 RECORDER"
 	#else
-	#define ADDON_VERSION "0.77"
+	#define ADDON_VERSION "0.78"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5166,12 +5166,22 @@ namespace
 	// Tries to hook the script "notify" function. Can be called again and again until it works.
 	// MinHook needs a free spot within 1 GB of the function it patches. Once the game is running those
 	// spots can all be taken, so we reserve a few early and give them back right before hooking.
-	void* g_reserved[8];
+	void* g_reserved[64];
 	int g_reserved_count = 0;
 
 	void reserve_hook_memory()
 	{
-		for (uintptr_t address = 0x13F000000ull; address > 0x110000000ull && g_reserved_count < 8; address -= 0x400000ull)
+		// below the game program, then above it, so MinHook always has somewhere to put its code
+		for (uintptr_t address = 0x13F000000ull; address > 0x110000000ull && g_reserved_count < 32; address -= 0x400000ull)
+		{
+			void* block = VirtualAlloc(reinterpret_cast<void*>(address), 0x10000, MEM_RESERVE, PAGE_NOACCESS);
+			if (block)
+			{
+				g_reserved[g_reserved_count++] = block;
+			}
+		}
+
+		for (uintptr_t address = 0x14C000000ull; address < 0x170000000ull && g_reserved_count < 64; address += 0x400000ull)
 		{
 			void* block = VirtualAlloc(reinterpret_cast<void*>(address), 0x10000, MEM_RESERVE, PAGE_NOACCESS);
 			if (block)
