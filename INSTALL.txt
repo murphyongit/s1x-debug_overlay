@@ -112,3 +112,5 @@ v0.83 - Seoul Will timer: from the moment Cormack lands the overlay counts down 
 v0.84 - the Will timer now ends at the turret area (trigger_cardoor_strafe) with 3.3 s after Cormack lands: logs show every run that reached it within 3.1 s was good, every run at 3.6 s or later was bad (except one).
 
 v0.85 - fixed: after a checkpoint restart the game forgets the trigger flag names, so the Will timer missed the start and showed a false GOOD ROLL. It now recognises the triggers by their position. The timer is back to ending at the wait-spot box (5.2 s after Cormack lands); the turret line was wrong once.
+
+v0.86: shows "WILL HEAD START x S (NEED 3+)" after Will is sent (gap between Will starting and the camp meetup dialogue). Logs WILLGAP lines. Play whole runs through the finale and send logs.

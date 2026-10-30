@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.85 RECORDER"
+	#define ADDON_VERSION "0.86 RECORDER"
 	#else
-	#define ADDON_VERSION "0.85"
+	#define ADDON_VERSION "0.86"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -563,6 +563,8 @@ namespace
 	volatile double g_v_time = 0.0;   // v0.81: when the player passed begin_fob_combat_vignette
 	volatile double g_l_time = 0.0;   // v0.83: when Cormack landed (i_have_landed) after that
 	volatile double g_in_time = 0.0;  // v0.83: when the player entered player_leaving_map after that
+	volatile double g_s_time = 0.0;   // v0.86: canal_strategy_scene_complete (Will is sent to the platform)
+	volatile double g_f2_time = 0.0;  // v0.86: dialogue_start_fob_meetup (camp scene part 2)
 	volatile double g_t_time = 0.0;   // v0.81: when trigger_allies_to_fob fired after that
 	float g_w = 1920.0f;
 	float g_h = 1080.0f;
@@ -3436,6 +3438,22 @@ namespace
 				}
 			}
 
+			if (g_s_time > g_v_time && now - g_s_time < 90.0)
+			{
+				char gb[96];
+				if (g_f2_time > g_v_time)
+				{
+					const double gap = g_f2_time - g_s_time;
+					snprintf(gb, sizeof(gb), "WILL HEAD START %.1f S  (NEED 3+)", gap);
+					draw_text(g_w * 0.5f - 18.0f * 3.0f * sc, g_h * 0.38f, gb, sc, gap >= 3.0 ? grn : red);
+				}
+				else
+				{
+					snprintf(gb, sizeof(gb), "WILL SENT %.1f S AGO - CAMP DIALOGUE NOT YET", now - g_s_time);
+					draw_text(g_w * 0.5f - 22.0f * 3.0f * sc, g_h * 0.38f, gb, sc, grn);
+				}
+			}
+
 			if (g_t_time > g_v_time)
 			{
 				const double delta = g_t_time - g_v_time;
@@ -5889,6 +5907,17 @@ namespace
 			g_t_time = now_seconds();
 		}
 
+		if (g_v_time > 0.0 && strcmp(name, "canal_strategy_scene_complete") == 0)
+		{
+			g_s_time = now_seconds();
+			if (g_rec) rec_line("WILLGAP S (Will sent) at %.2f  F2=%.2f", g_s_time, g_f2_time);
+		}
+		if (g_v_time > 0.0 && strcmp(name, "dialogue_start_fob_meetup") == 0)
+		{
+			g_f2_time = now_seconds();
+			if (g_rec) rec_line("WILLGAP F2 (camp dialogue) at %.2f  S=%.2f  gap F2-S=%.2f", g_f2_time, g_s_time, g_f2_time - g_s_time);
+		}
+
 		if (g_rec)
 		{
 			rec_line("SNOTIFY %s ent=%u", name, owner);
@@ -6571,7 +6600,7 @@ namespace
 							g_v_time = now_seconds();
 							g_t_time = 0.0;
 							g_l_time = 0.0;
-							g_in_time = 0.0;
+							g_in_time = 0.0; g_s_time = 0.0; g_f2_time = 0.0;
 						}
 
 						if (inside && g_l_time > g_v_time && g_in_time < g_l_time && (strstr(text, "player_leaving_map") || strstr(text, "at 27731 7141 2006")))
