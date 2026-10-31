@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.86 RECORDER"
+	#define ADDON_VERSION "0.87 RECORDER"
 	#else
-	#define ADDON_VERSION "0.86"
+	#define ADDON_VERSION "0.87"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -564,7 +564,9 @@ namespace
 	volatile double g_l_time = 0.0;   // v0.83: when Cormack landed (i_have_landed) after that
 	volatile double g_in_time = 0.0;  // v0.83: when the player entered player_leaving_map after that
 	volatile double g_s_time = 0.0;   // v0.86: canal_strategy_scene_complete (Will is sent to the platform)
-	volatile double g_f2_time = 0.0;  // v0.86: dialogue_start_fob_meetup (camp scene part 2)
+	volatile double g_f2_time = 0.0;
+	volatile double g_f1_time = 0.0;  // v0.87: fob_talk_scene_start (camp scene started)
+	volatile double g_fe_time = 0.0;  // v0.87: fob_talk_scene_end (camp scene finished)  // v0.86: dialogue_start_fob_meetup (camp scene part 2)
 	volatile double g_t_time = 0.0;   // v0.81: when trigger_allies_to_fob fired after that
 	float g_w = 1920.0f;
 	float g_h = 1080.0f;
@@ -3438,6 +3440,17 @@ namespace
 				}
 			}
 
+			if (g_v_time > 0.0 && g_s_time < g_v_time && now - g_v_time < 900.0)
+			{
+				// v0.87: camp scene stage before the binoculars. Started-but-not-finished = Will gets grabbed.
+				if (g_fe_time > g_v_time)
+					draw_text(g_w * 0.5f - 22.0f * 3.0f * sc, g_h * 0.38f, "CAMP SCENE DONE - BINOCULARS OK", sc, grn);
+				else if (g_f1_time > g_v_time)
+					draw_text(g_w * 0.5f - 28.0f * 3.0f * sc, g_h * 0.38f, "CAMP SCENE MID-WAY - BINOCULARS NOW = NO WILL", sc, red);
+				else
+					draw_text(g_w * 0.5f - 24.0f * 3.0f * sc, g_h * 0.38f, "CAMP SCENE NOT STARTED - BINOCULARS OK", sc, grn);
+			}
+
 			if (g_s_time > g_v_time && now - g_s_time < 90.0)
 			{
 				char gb[96];
@@ -5912,6 +5925,8 @@ namespace
 			g_s_time = now_seconds();
 			if (g_rec) rec_line("WILLGAP S (Will sent) at %.2f  F2=%.2f", g_s_time, g_f2_time);
 		}
+		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_start") == 0) g_f1_time = now_seconds();
+		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_end") == 0) g_fe_time = now_seconds();
 		if (g_v_time > 0.0 && strcmp(name, "dialogue_start_fob_meetup") == 0)
 		{
 			g_f2_time = now_seconds();
@@ -6600,7 +6615,7 @@ namespace
 							g_v_time = now_seconds();
 							g_t_time = 0.0;
 							g_l_time = 0.0;
-							g_in_time = 0.0; g_s_time = 0.0; g_f2_time = 0.0;
+							g_in_time = 0.0; g_s_time = 0.0; g_f2_time = 0.0; g_f1_time = 0.0; g_fe_time = 0.0;
 						}
 
 						if (inside && g_l_time > g_v_time && g_in_time < g_l_time && (strstr(text, "player_leaving_map") || strstr(text, "at 27731 7141 2006")))

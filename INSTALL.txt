@@ -114,3 +114,5 @@ v0.84 - the Will timer now ends at the turret area (trigger_cardoor_strafe) with
 v0.85 - fixed: after a checkpoint restart the game forgets the trigger flag names, so the Will timer missed the start and showed a false GOOD ROLL. It now recognises the triggers by their position. The timer is back to ending at the wait-spot box (5.2 s after Cormack lands); the turret line was wrong once.
 
 v0.86: shows "WILL HEAD START x S (NEED 3+)" after Will is sent (gap between Will starting and the camp meetup dialogue). Logs WILLGAP lines. Play whole runs through the finale and send logs.
+
+v0.87: before the binoculars, shows the camp scene stage: NOT STARTED (good), MID-WAY (binoculars now = no Will), DONE (good).
