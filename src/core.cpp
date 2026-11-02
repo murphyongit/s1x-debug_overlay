@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.87 RECORDER"
+	#define ADDON_VERSION "0.88 RECORDER"
 	#else
-	#define ADDON_VERSION "0.87"
+	#define ADDON_VERSION "0.88"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -565,6 +565,10 @@ namespace
 	volatile double g_in_time = 0.0;  // v0.83: when the player entered player_leaving_map after that
 	volatile double g_s_time = 0.0;   // v0.86: canal_strategy_scene_complete (Will is sent to the platform)
 	volatile double g_f2_time = 0.0;
+	volatile double g_box_time = 0.0; // v0.88: first entry into player_leaving_map after V
+	volatile double g_corm_dist = -1.0; // v0.88: live Cormack distance to his door spot (struct_building_exit_cormack_wait)
+	volatile double g_corm_speed = 0.0; // v0.88: his speed (units/s, smoothed)
+	volatile double g_corm_seen = 0.0;  // v0.88: when that was last updated
 	volatile double g_f1_time = 0.0;  // v0.87: fob_talk_scene_start (camp scene started)
 	volatile double g_fe_time = 0.0;  // v0.87: fob_talk_scene_end (camp scene finished)  // v0.86: dialogue_start_fob_meetup (camp scene part 2)
 	volatile double g_t_time = 0.0;   // v0.81: when trigger_allies_to_fob fired after that
@@ -3416,26 +3420,42 @@ namespace
 			const float red[4] = {1.0f, 0.1f, 0.1f, 1.0f};
 			const float grn[4] = {0.2f, 1.0f, 0.2f, 1.0f};
 			const float gry[4] = {0.8f, 0.8f, 0.8f, 1.0f};
-			if (g_l_time > g_v_time)
+			// v0.88: race between you entering the leaving-map box and Cormack reaching his door spot.
+			// The game warps him away ~3.2-4.0 s after you enter the box. If he reaches the door first,
+			// the camp scene starts early and Will gets grabbed later. So: enter the box before (his ETA - 4 s).
 			{
-				const double limit = 5.2;
-				char buf[64];
-				if (g_in_time > g_l_time)
+				char buf[96];
+				const bool t_seen = g_t_time > g_v_time;
+				if (g_box_time > g_v_time)
 				{
-					const double used = g_in_time - g_l_time;
-					if (now - g_in_time < 40.0)
+					const double since = now - g_box_time;
+					if (since < 60.0)
 					{
-						snprintf(buf, sizeof(buf), used <= limit ? "IN TIME  %.1f OF %.1f" : "TOO LATE  %.1f OF %.1f", used, limit);
-						draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.30f, buf, sc, used <= limit ? grn : red);
+						if (t_seen && g_t_time - g_box_time < 5.0)
+							draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.30f, "CORMACK BEAT THE WARP - NO WILL", sc, red);
+						else if (since > 5.5 || (t_seen && g_t_time - g_box_time >= 5.0))
+							draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.30f, "WARP BEAT CORMACK - WILL OK", sc, grn);
+						else
+							draw_text(g_w * 0.5f - 14.0f * 3.0f * sc, g_h * 0.30f, "IN BOX - WAITING...", sc, gry);
 					}
 				}
-				else
+				else if (t_seen)
 				{
-					const double rem = g_l_time + limit - now;
-					if (rem > -1.0)
+					if (now - g_t_time < 60.0)
+						draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.30f, "CORMACK BEAT THE WARP - NO WILL", sc, red);
+				}
+				else if (age < 90.0 && g_corm_dist >= 0.0 && now - g_corm_seen < 2.0)
+				{
+					if (g_corm_speed > 30.0)
 					{
-						snprintf(buf, sizeof(buf), "WAIT SPOT BOX IN  %.1f", rem > 0.0 ? rem : 0.0);
-						draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.30f, buf, sc, rem > 2.0 ? grn : red);
+						const double rem = (g_corm_dist - 30.0) / g_corm_speed - 4.0;
+						snprintf(buf, sizeof(buf), "ENTER BOX IN %.1f S", rem > 0.0 ? rem : 0.0);
+						draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.30f, buf, sc, rem > 1.0 ? grn : red);
+					}
+					else
+					{
+						snprintf(buf, sizeof(buf), "CORMACK %.0f FROM DOOR", g_corm_dist);
+						draw_text(g_w * 0.5f - 13.0f * 3.0f * sc, g_h * 0.30f, buf, sc, gry);
 					}
 				}
 			}
@@ -3472,8 +3492,9 @@ namespace
 				const double delta = g_t_time - g_v_time;
 				if (now - g_t_time < 400.0)
 				{
-					if (delta < 45.0)
-						draw_text(g_w * 0.5f - 20.0f * 3.0f * sc, g_h * 0.22f, "RISKY ROLL - CAMP SCENE EARLY", sc, red);
+					(void)delta;
+					if (!(g_box_time > g_v_time) || g_t_time - g_box_time < 5.0)
+						draw_text(g_w * 0.5f - 20.0f * 3.0f * sc, g_h * 0.22f, "BAD ROLL - CAMP SCENE EARLY", sc, red);
 					else
 						draw_text(g_w * 0.5f - 10.0f * 3.0f * sc, g_h * 0.22f, "GOOD ROLL - WILL OK", sc, grn);
 				}
@@ -5907,6 +5928,35 @@ namespace
 		rec_line("EVENT %s ent=%u", name, entity);
 	}
 
+	// v0.88: track the real (moving) Cormack and how far he is from his door spot
+	void corm_track(const int slot, const char* name, const float* pos)
+	{
+		if (!strstr(name, "cormack_marine") || strstr(name, "damaged") || strstr(name, "seointro") || strstr(name, "outro")) return;
+		if (slot < 0 || slot >= MAX_ENTITIES) return;
+		static float last_x[MAX_ENTITIES], last_y[MAX_ENTITIES];
+		static double last_t[MAX_ENTITIES], moved_t[MAX_ENTITIES];
+		static int best = -1;
+		const double now = now_seconds();
+		const float dx = pos[0] - last_x[slot], dy = pos[1] - last_y[slot];
+		const double dt = now - last_t[slot];
+		if (dt < 0.2 && last_t[slot] > 0.0) return;
+		const double moved = sqrt(dx * dx + dy * dy);
+		if (last_t[slot] > 0.0 && moved > 2.0) moved_t[slot] = now;
+		if (best < 0 || best >= MAX_ENTITIES || now - moved_t[best] > 3.0 || moved_t[slot] >= moved_t[best]) best = slot;
+		if (best == slot)
+		{
+			const double ddx = pos[0] - 34529.1, ddy = pos[1] - 8378.7;
+			g_corm_dist = sqrt(ddx * ddx + ddy * ddy);
+			if (last_t[slot] > 0.0 && dt < 2.0 && moved < 1000.0)
+			{
+				const double v = moved / dt;
+				g_corm_speed = g_corm_speed * 0.6 + v * 0.4;
+			}
+			g_corm_seen = now;
+		}
+		last_x[slot] = pos[0]; last_y[slot] = pos[1]; last_t[slot] = now;
+	}
+
 	void rec_snotify(const char* name, const unsigned int owner)
 	{
 		if (g_v_time > 0.0 && g_l_time < g_v_time && strcmp(name, "i_have_landed") == 0)
@@ -6447,6 +6497,7 @@ namespace
 						{
 							char big[64] = {};
 							class_name(type_id, big, sizeof(big));
+							corm_track(slot, big, r.pos);
 							static double big_time[MAX_ENTITIES];
 							const double bnow = now_seconds();
 							if (strstr(big, "hero") && bnow - big_time[slot] >= 0.5)
@@ -6466,6 +6517,12 @@ namespace
 						}
 
 						const double hnow = now_seconds();
+						if (hero_cache[type_id] == 2)
+						{
+							char cname[64] = {};
+							class_name(type_id, cname, sizeof(cname));
+							corm_track(slot, cname, r.pos);
+						}
 						if (hero_cache[type_id] == 2 && hnow - hero_time[slot] >= 0.5)
 						{
 							hero_time[slot] = hnow;
@@ -6615,7 +6672,13 @@ namespace
 							g_v_time = now_seconds();
 							g_t_time = 0.0;
 							g_l_time = 0.0;
-							g_in_time = 0.0; g_s_time = 0.0; g_f2_time = 0.0; g_f1_time = 0.0; g_fe_time = 0.0;
+							g_in_time = 0.0; g_s_time = 0.0; g_f2_time = 0.0; g_f1_time = 0.0; g_fe_time = 0.0; g_box_time = 0.0;
+						}
+
+						if (inside && g_v_time > 0.0 && g_box_time < g_v_time && (strstr(text, "player_leaving_map") || strstr(text, "at 27731 7141 2006")))
+						{
+							g_box_time = now_seconds();
+							rec_line("BOXRACE box entered, Cormack %.0f from door, speed %.0f, T so far %.2f", g_corm_dist, g_corm_speed, g_t_time);
 						}
 
 						if (inside && g_l_time > g_v_time && g_in_time < g_l_time && (strstr(text, "player_leaving_map") || strstr(text, "at 27731 7141 2006")))

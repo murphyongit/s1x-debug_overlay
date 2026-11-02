@@ -116,3 +116,5 @@ v0.85 - fixed: after a checkpoint restart the game forgets the trigger flag name
 v0.86: shows "WILL HEAD START x S (NEED 3+)" after Will is sent (gap between Will starting and the camp meetup dialogue). Logs WILLGAP lines. Play whole runs through the finale and send logs.
 
 v0.87: before the binoculars, shows the camp scene stage: NOT STARTED (good), MID-WAY (binoculars now = no Will), DONE (good).
+
+v0.88: new countdown "ENTER BOX IN x S" after the tent combat starts. It is how long you have left to touch the leaving-map box before Cormack reaches his door spot. Afterwards it says WARP BEAT CORMACK - WILL OK, or CORMACK BEAT THE WARP - NO WILL.
