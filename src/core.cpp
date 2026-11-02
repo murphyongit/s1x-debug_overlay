@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.88 RECORDER"
+	#define ADDON_VERSION "0.89 RECORDER"
 	#else
-	#define ADDON_VERSION "0.88"
+	#define ADDON_VERSION "0.89"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3380,7 +3380,12 @@ namespace
 				const bool pulse = (static_cast<long long>(now_seconds() * 3.0) & 1) != 0;
 				const float red[4] = {1.0f, 0.05f, 0.05f, 1.0f};
 				const float yel[4] = {1.0f, 1.0f, 0.0f, 1.0f};
-				const float* col = pulse ? red : yel;
+				const float gr2[4] = {0.1f, 1.0f, 0.1f, 1.0f};
+				const float wht[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+				// v0.89: if the camp scene already started (bad roll), touching this box makes Cormack walk to it,
+				// which lets the camp scene finish early (run 173300) - so then it is a GOOD box.
+				const bool rescue = g_v_time > 0.0 && g_f1_time > g_v_time && !(g_fe_time > g_v_time) && !(g_s_time > g_v_time);
+				const float* col = rescue ? (pulse ? gr2 : wht) : (pulse ? red : yel);
 				vec3 c[8];
 				for (int i = 0; i < 8; ++i)
 				{
@@ -3404,7 +3409,14 @@ namespace
 				g_line_override = 0.0f;
 				const bool inside = dx == 0.0f && dy == 0.0f && pz > z0 - 70.0f && pz < z1;
 				const float sc = g_h >= 1200.0f ? 6.0f : 4.0f;
-				if (inside)
+				if (rescue)
+				{
+					if (inside)
+						draw_text(g_w * 0.5f - 13.0f * 3.0f * sc, g_h * 0.12f, "TOUCHED - GOOD", sc, gr2);
+					else if (hd < 1500.0f)
+						draw_text(g_w * 0.5f - 18.0f * 3.0f * sc, g_h * 0.12f, "TOUCH THIS BOX - SAVES WILL", sc, gr2);
+				}
+				else if (inside)
 					draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.12f, "NO WILL BOX - BACK OUT", sc, red);
 				else if (hd < 250.0f && pz > z0 - 70.0f && pz < z1)
 					draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.12f, "CLOSE TO WILL BOX", sc, yel);
