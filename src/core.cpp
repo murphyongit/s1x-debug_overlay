@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.89 RECORDER"
+	#define ADDON_VERSION "0.90 RECORDER"
 	#else
-	#define ADDON_VERSION "0.89"
+	#define ADDON_VERSION "0.90"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -1978,6 +1978,8 @@ namespace
 	// ---- level collision blocks (Delete key) ------------------------------------------------
 	// The level's collision data is stored as a tree of boxes. We keep the smallest boxes (the "leaves")
 	// and draw the ones near the player.
+	extern char g_rec_map[64];   // v0.90: defined with the recorder further down
+
 	struct block
 	{
 		float mid[3];
@@ -5119,6 +5121,26 @@ namespace
 		g_blocks = out;          // the previous array is intentionally not freed (the picture thread may still be reading it)
 		g_block_count = static_cast<int>(written);
 		log_line("collision: %lld blocks ready", written);
+
+		// v0.90: also save the blocks so a top-down route map can be drawn outside the game
+		{
+			char name[128];
+			snprintf(name, sizeof(name), "collision_%s.txt", g_rec_map[0] ? g_rec_map : "map");
+			const char* old_sub = g_subdir;
+			g_subdir = "speedrun_data\\";
+			char path[MAX_PATH];
+			make_path(path, name);
+			g_subdir = old_sub;
+			FILE* f = nullptr;
+			if (fopen_s(&f, path, "w") == 0 && f)
+			{
+				fprintf(f, "# collision leaf boxes: mid x y z  half x y z  (tool version %s)\n", ADDON_VERSION);
+				for (long long i = 0; i < written; ++i)
+					fprintf(f, "%.1f %.1f %.1f %.1f %.1f %.1f\n", out[i].mid[0], out[i].mid[1], out[i].mid[2], out[i].half[0], out[i].half[1], out[i].half[2]);
+				fclose(f);
+				log_line("collision: saved %lld blocks to %s", written, path);
+			}
+		}
 	}
 
 	// Console command: overlay_help
