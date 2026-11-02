@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.93 RECORDER"
+	#define ADDON_VERSION "0.94 RECORDER"
 	#else
-	#define ADDON_VERSION "0.93"
+	#define ADDON_VERSION "0.94"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -544,6 +544,7 @@ namespace
 	};
 
 	volatile bool g_route_on = true;      // v0.92: \ key toggles the Seoul route guide lines
+	volatile int g_speedo_mode = 2;       // v0.94: ; key cycles speedometer + strafe helper (2) / speed only (1) / off (0)
 	volatile bool g_overlay_on = false;   // starts OFF; press F8 in a mission to turn it on
 	volatile int g_dist_level = 1;
 	volatile int g_fov_style = 0;   // 0 was confirmed to line up correctly
@@ -892,6 +893,9 @@ namespace
 	volatile bool g_brushes_on = false;   // Home
 #ifndef VK_OEM_4
 #define VK_OEM_4 0xDB
+#endif
+#ifndef VK_OEM_1
+#define VK_OEM_1 0xBA
 #endif
 #ifndef VK_OEM_6
 #define VK_OEM_6 0xDD
@@ -3058,6 +3062,12 @@ namespace
 			g_route_on = !g_route_on;
 			log_line("\\ key: route guide lines %s", g_route_on ? "ON" : "OFF");
 		}
+		static bool was_semicolon;
+		if (key_pressed(VK_OEM_1, &was_semicolon))
+		{
+			g_speedo_mode = (g_speedo_mode + 2) % 3;
+			log_line("; key: speedometer mode %d (2 = speed + strafe helper, 1 = speed only, 0 = off)", static_cast<int>(g_speedo_mode));
+		}
 		ghost_keys();
 		static bool was_n1, was_n2, was_n3, was_n4;
 		if (key_pressed(VK_NUMPAD1, &was_n1)) { g_pitch_sign = -g_pitch_sign; log_line("numpad 1: pitch sign now %d", static_cast<int>(g_pitch_sign)); }
@@ -3479,6 +3489,175 @@ namespace
 			}
 		}
 
+		// v0.94: speedometer + strafe helper. Reads your own speed (playerState velocity, checked against
+		// how fast your position actually changes) and learns, from your own jumps, which angle between
+		// your movement keys and your direction of travel gains speed in the air at each speed.
+		if (g_speedo_mode > 0)
+		{
+			static unsigned int s_gt = 0;
+			static float s_pos[3] = {};
+			static float s_hs = 0.0f, s_disp = 0.0f, s_trend = 0.0f;
+			static int s_good = 0, s_bad = 0;
+			static bool s_air = false;
+			static float s_take[6] = {};
+			static int s_ntake = 0;
+			static float s_take_speed = 0.0f, s_last_gain = 0.0f;
+			static double s_land_time = 0.0;
+			static float s_sum[16][46] = {}, s_w[16][46] = {};
+			static float s_angle = -1.0f;
+			float p[3] = {}, v[3] = {}, ryaw = 0.0f;
+			unsigned int gt = 0;
+			const uintptr_t cl = static_cast<uintptr_t>(pointer);
+			const bool ok = read_bytes(cl + OFF_CAM_ORIGIN, p, sizeof(p)) && read_bytes(cl + OFF_CAM_ORIGIN + 12, v, sizeof(v)) &&
+				read_bytes(cl + OFF_CAM_YAW, &ryaw, sizeof(ryaw)) && read_bytes(cl + 0x4C, &gt, sizeof(gt));
+			if (ok && gt != s_gt)
+			{
+				const float dt = static_cast<float>(static_cast<int>(gt - s_gt)) / 1000.0f;
+				const float dx = p[0] - s_pos[0], dy = p[1] - s_pos[1], dz = p[2] - s_pos[2];
+				const bool cont = s_gt != 0 && dt > 0.0f && dt < 0.3f && dx * dx + dy * dy < 400.0f * 400.0f;
+				const float pos_speed = cont ? std::sqrt(dx * dx + dy * dy) / dt : 0.0f;
+				const bool vel_sane = std::fabs(v[0]) < 20000.0f && std::fabs(v[1]) < 20000.0f && std::fabs(v[2]) < 20000.0f;
+				const float vel_speed = vel_sane ? std::sqrt(v[0] * v[0] + v[1] * v[1]) : 0.0f;
+				if (cont && pos_speed > 80.0f && s_good + s_bad < 400)
+				{
+					if (std::fabs(vel_speed - pos_speed) < 0.3f * pos_speed) ++s_good; else ++s_bad;
+				}
+				const bool use_vel = vel_sane && s_good >= s_bad;
+				const float hs = use_vel ? vel_speed : pos_speed;
+				const bool ground = use_vel ? (v[2] == 0.0f) : (cont && std::fabs(dz) < 0.01f);
+				float vyaw = use_vel ? std::atan2(v[1], v[0]) : std::atan2(dy, dx);
+				vyaw *= 57.29578f;
+				if (cont)
+				{
+					// take-off / landing
+					if (!ground && !s_air)
+					{
+						s_air = true;
+						s_take_speed = s_hs;
+						for (int i = 5; i > 0; --i) s_take[i] = s_take[i - 1];
+						s_take[0] = s_hs;
+						if (s_ntake < 6) ++s_ntake;
+					}
+					else if (ground && s_air)
+					{
+						s_air = false;
+						s_last_gain = s_hs - s_take_speed;
+						s_land_time = now_seconds();
+					}
+					// which way do the movement keys push?
+					const int fwd = ((GetAsyncKeyState('W') & 0x8000) ? 1 : 0) - ((GetAsyncKeyState('S') & 0x8000) ? 1 : 0);
+					const int side = ((GetAsyncKeyState('D') & 0x8000) ? 1 : 0) - ((GetAsyncKeyState('A') & 0x8000) ? 1 : 0);
+					s_angle = -1.0f;
+					if ((fwd != 0 || side != 0) && hs > 100.0f)
+					{
+						const float wish = ryaw + std::atan2(static_cast<float>(-side), static_cast<float>(fwd)) * 57.29578f;
+						float a = std::fmod(wish - vyaw + 540.0f, 360.0f) - 180.0f;
+						a = std::fabs(a);
+						s_angle = a;
+						const float gain = (hs - s_hs) / dt;
+						if (s_air && !ground && a <= 90.0f && std::fabs(gain) < 2500.0f)
+						{
+							const int band = hs >= 1500.0f ? 15 : static_cast<int>(hs / 100.0f);
+							const int b = static_cast<int>(a / 2.0f);
+							s_sum[band][b] = s_sum[band][b] * 0.97f + gain;
+							s_w[band][b] = s_w[band][b] * 0.97f + 1.0f;
+						}
+					}
+				}
+				s_hs = hs;
+				s_gt = gt;
+				s_pos[0] = p[0]; s_pos[1] = p[1]; s_pos[2] = p[2];
+			}
+			// display
+			const float prev = s_disp;
+			s_disp += (s_hs - s_disp) * 0.25f;
+			s_trend = s_trend * 0.9f + (s_disp - prev) * 0.1f;
+			const float s1 = g_h >= 1200.0f ? 1.5f : 1.0f;
+			const float big = 4.0f * s1;
+			const float cx = g_w * 0.5f, top = g_h * 0.62f;
+			const float wht[4] = {1.0f, 1.0f, 1.0f, 0.9f};
+			const float grn[4] = {0.3f, 1.0f, 0.3f, 0.95f};
+			const float red[4] = {1.0f, 0.3f, 0.25f, 0.95f};
+			const float dim[4] = {0.8f, 0.8f, 0.8f, 0.75f};
+			char buf[96];
+			snprintf(buf, sizeof(buf), "%d", static_cast<int>(s_disp + 0.5f));
+			const float* sc = s_trend > 0.15f ? grn : (s_trend < -0.15f ? red : wht);
+			draw_text(cx - static_cast<float>(strlen(buf)) * 3.0f * big, top, buf, big, sc);
+			draw_text(cx - 9.0f * s1 * 1.0f, top + 8.0f * big, "UPS", s1, dim);
+			if (s_good + s_bad >= 20 && s_bad > s_good)
+				draw_text(cx + static_cast<float>(strlen(buf)) * 3.0f * big + 6.0f, top, "(POS)", s1, dim);
+			if (g_speedo_mode == 2)
+			{
+				float y = top + 8.0f * big + 14.0f * s1;
+				// last jump result (shown for 2.5 s after landing)
+				if (now_seconds() - s_land_time < 2.5)
+				{
+					snprintf(buf, sizeof(buf), "LAST JUMP %+d", static_cast<int>(s_last_gain));
+					draw_text(cx - static_cast<float>(strlen(buf)) * 3.0f * s1 * 1.5f, y, buf, s1 * 1.5f, s_last_gain >= 0.0f ? grn : red);
+				}
+				y += 14.0f * s1;
+				// take-off speeds of the last hops, oldest first
+				if (s_ntake > 1)
+				{
+					float x = cx - 3.0f * 5.0f * 6.0f * s1;
+					draw_text(x, y, "HOPS", s1, dim);
+					x += 30.0f * s1;
+					for (int i = s_ntake - 1; i >= 0; --i)
+					{
+						snprintf(buf, sizeof(buf), "%d", static_cast<int>(s_take[i]));
+						const bool up = i < s_ntake - 1 && s_take[i] >= s_take[i + 1];
+						draw_text(x, y, buf, s1, i == s_ntake - 1 ? dim : (up ? grn : red));
+						x += static_cast<float>(strlen(buf) + 1) * 6.0f * s1;
+					}
+				}
+				y += 14.0f * s1;
+				// learned angle bar: 0 to 90 degrees between where your keys push and where you are going
+				const int band = s_hs >= 1500.0f ? 15 : static_cast<int>(s_hs / 100.0f);
+				float best_avg = 0.0f;
+				int best = -1;
+				for (int b = 0; b < 46; ++b)
+				{
+					if (s_w[band][b] >= 3.0f)
+					{
+						const float avg = s_sum[band][b] / s_w[band][b];
+						if (best < 0 || avg > best_avg) { best_avg = avg; best = b; }
+					}
+				}
+				const float bw = 4.0f * s1, bh = 10.0f * s1, bx = cx - 23.0f * bw;
+				const float back[4] = {0.0f, 0.0f, 0.0f, 0.35f};
+				add_rect(bx - 2.0f, y - 2.0f, 46.0f * bw + 4.0f, bh + 4.0f, back);
+				for (int b = 0; b < 46; ++b)
+				{
+					float c[4] = {0.5f, 0.5f, 0.5f, 0.25f};
+					if (s_w[band][b] >= 3.0f)
+					{
+						const float avg = s_sum[band][b] / s_w[band][b];
+						const float k = best_avg > 0.0f ? std::fmin(1.0f, std::fmax(0.0f, avg / best_avg)) : 0.0f;
+						if (avg > 0.0f) { c[0] = 0.15f; c[1] = 0.4f + 0.6f * k; c[2] = 0.15f; c[3] = 0.35f + 0.55f * k; }
+						else { c[0] = 0.8f; c[1] = 0.15f; c[2] = 0.15f; c[3] = 0.5f; }
+					}
+					add_rect(bx + static_cast<float>(b) * bw, y, bw - 1.0f, bh, c);
+				}
+				if (best >= 0 && best_avg > 0.0f)
+				{
+					const float gold[4] = {1.0f, 0.85f, 0.2f, 1.0f};
+					add_rect(bx + static_cast<float>(best) * bw, y - 3.0f * s1, bw - 1.0f, bh + 6.0f * s1, gold);
+				}
+				if (s_angle >= 0.0f && s_angle <= 92.0f)
+				{
+					add_rect(bx + std::fmin(s_angle, 91.0f) / 2.0f * bw - 1.0f, y - 5.0f * s1, 3.0f, bh + 10.0f * s1, wht);
+				}
+				draw_text(bx - 4.0f * 6.0f * s1, y + 2.0f * s1, "0", s1, dim);
+				draw_text(bx + 46.0f * bw + 6.0f, y + 2.0f * s1, "90", s1, dim);
+				y += bh + 8.0f * s1;
+				if (s_angle >= 0.0f)
+					snprintf(buf, sizeof(buf), best >= 0 && best_avg > 0.0f ? "ANGLE %d   BEST %d AT THIS SPEED" : "ANGLE %d   LEARNING...", static_cast<int>(s_angle), best * 2 + 1);
+				else
+					snprintf(buf, sizeof(buf), best >= 0 && best_avg > 0.0f ? "NO KEYS   BEST %d AT THIS SPEED" : "HOLD W + A OR D IN THE AIR", best * 2 + 1);
+				draw_text(cx - static_cast<float>(strlen(buf)) * 3.0f * s1, y, buf, s1, dim);
+			}
+		}
+
 		// v0.81: tells you early whether Will will come (fast "camp scene" start = bad roll, restart now)
 		if (g_v_time > 0.0)
 		{
@@ -3609,7 +3788,7 @@ namespace
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
 				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "[ show all/green/pink/magenta/leave-area", "] leave-area boxes on/off", "F9 save data files",
-				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "\\ route guide lines (Seoul)", "End this help (or console: overlay_help)"};
+				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "\\ route guide lines (Seoul)", "; speedometer / strafe helper", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
 			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));
