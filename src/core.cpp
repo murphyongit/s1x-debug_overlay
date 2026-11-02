@@ -3444,7 +3444,6 @@ namespace
 				if (g_enter_count == 1 && g_enter1_time > 0.0 && tnow - g_enter1_time > 8.0 && g_will_msg == 0)
 				{
 					g_will_msg = 2; g_will_msg_time = g_enter1_time + 8.0;
-					if (g_rec) rec_line("WILLJUMP Will did not reach the ledge within 8 s of Cormack (missed jump)");
 				}
 				const double shown = tnow - g_will_msg_time;
 				const float yel[4] = {1.0f, 0.8f, 0.2f, 1.0f};
