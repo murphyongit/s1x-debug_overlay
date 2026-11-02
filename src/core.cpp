@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.90 RECORDER"
+	#define ADDON_VERSION "0.91 RECORDER"
 	#else
-	#define ADDON_VERSION "0.90"
+	#define ADDON_VERSION "0.91"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -565,6 +565,10 @@ namespace
 	volatile double g_in_time = 0.0;  // v0.83: when the player entered player_leaving_map after that
 	volatile double g_s_time = 0.0;   // v0.86: canal_strategy_scene_complete (Will is sent to the platform)
 	volatile double g_f2_time = 0.0;
+	volatile double g_bbt_time = 0.0;   // v0.91: begin_building_traversal (start of the level, also after a restart)
+	volatile double g_enter1_time = 0.0; // v0.91: first first_landassist_enter (Cormack at the ledge)
+	volatile int g_enter_count = 0;      // v0.91: how many ledge "enter" animations finished
+	volatile double g_will_msg_time = 0.0; volatile int g_will_msg = 0; // 1 jumped, 2 missed, 3 snapped mid-level, 4 snapped at ending
 	volatile double g_box_time = 0.0; // v0.88: first entry into player_leaving_map after V
 	volatile double g_corm_dist = -1.0; // v0.88: live Cormack distance to his door spot (struct_building_exit_cormack_wait)
 	volatile double g_corm_speed = 0.0; // v0.88: his speed (units/s, smoothed)
@@ -3434,6 +3438,26 @@ namespace
 			const float red[4] = {1.0f, 0.1f, 0.1f, 1.0f};
 			const float grn[4] = {0.2f, 1.0f, 0.2f, 1.0f};
 			const float gry[4] = {0.8f, 0.8f, 0.8f, 1.0f};
+			// v0.91: Will's opening jump status (short-lived messages)
+			{
+				const double tnow = now_seconds();
+				if (g_enter_count == 1 && g_enter1_time > 0.0 && tnow - g_enter1_time > 8.0 && g_will_msg == 0)
+				{
+					g_will_msg = 2; g_will_msg_time = g_enter1_time + 8.0;
+					if (g_rec) rec_line("WILLJUMP Will did not reach the ledge within 8 s of Cormack (missed jump)");
+				}
+				const double shown = tnow - g_will_msg_time;
+				const float yel[4] = {1.0f, 0.8f, 0.2f, 1.0f};
+				if (g_will_msg == 1 && shown < 3.0)
+					draw_text(g_w * 0.5f - 9.0f * 3.0f * sc, g_h * 0.16f, "WILL JUMPED NORMALLY", sc, gry);
+				else if (g_will_msg == 2 && shown < 5.0)
+					draw_text(g_w * 0.5f - 18.0f * 3.0f * sc, g_h * 0.16f, "WILL MISSED HIS JUMP - KEEP THIS RUN", sc, yel);
+				else if (g_will_msg == 3 && shown < 5.0)
+					draw_text(g_w * 0.5f - 19.0f * 3.0f * sc, g_h * 0.16f, "WILL SNAPPED BACK TO BALCONY - SKIP LOST", sc, red);
+				else if (g_will_msg == 4 && shown < 6.0)
+					draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.16f, "WILL ON BALCONY - PLANT AS SOON AS PROMPT SHOWS", sc, grn);
+			}
+
 			// v0.88: race between you entering the leaving-map box and Cormack reaching his door spot.
 			// The game warps him away ~3.2-4.0 s after you enter the box. If he reaches the door first,
 			// the camp scene starts early and Will gets grabbed later. So: enter the box before (his ETA - 4 s).
@@ -6008,6 +6032,23 @@ namespace
 		{
 			g_s_time = now_seconds();
 			if (g_rec) rec_line("WILLGAP S (Will sent) at %.2f  F2=%.2f", g_s_time, g_f2_time);
+		}
+		if (strcmp(name, "begin_building_traversal") == 0)
+		{
+			g_bbt_time = now_seconds(); g_enter1_time = 0.0; g_enter_count = 0; g_will_msg = 0; g_will_msg_time = 0.0;
+		}
+		if (strcmp(name, "first_landassist_enter") == 0 && g_bbt_time > 0.0)
+		{
+			const double t = now_seconds();
+			++g_enter_count;
+			if (g_enter_count == 1) g_enter1_time = t;
+			else if (g_enter_count == 2)
+			{
+				if (t - g_enter1_time < 8.0) { g_will_msg = 1; g_will_msg_time = t; }
+				else if (g_s_time > g_v_time && t - g_s_time < 25.0) { g_will_msg = 4; g_will_msg_time = t; }
+				else { g_will_msg = 3; g_will_msg_time = t; }
+				if (g_rec) rec_line("WILLJUMP second ledge enter %.2f s after the first (msg %d)", t - g_enter1_time, g_will_msg);
+			}
 		}
 		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_start") == 0) g_f1_time = now_seconds();
 		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_end") == 0) g_fe_time = now_seconds();
