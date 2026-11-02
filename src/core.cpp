@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.91 RECORDER"
+	#define ADDON_VERSION "0.92 RECORDER"
 	#else
-	#define ADDON_VERSION "0.91"
+	#define ADDON_VERSION "0.92"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -543,6 +543,7 @@ namespace
 		float r, g, b, a;
 	};
 
+	volatile bool g_route_on = true;      // v0.92: \ key toggles the Seoul route guide lines
 	volatile bool g_overlay_on = false;   // starts OFF; press F8 in a mission to turn it on
 	volatile int g_dist_level = 1;
 	volatile int g_fov_style = 0;   // 0 was confirmed to line up correctly
@@ -3051,6 +3052,12 @@ namespace
 		const bool f6 = key_pressed(VK_F6, &was_f6);
 		const bool f7 = key_pressed(VK_F7, &was_f7);
 		const bool f8 = key_pressed(VK_F8, &was_f8);
+		static bool was_backslash;
+		if (key_pressed(VK_OEM_5, &was_backslash))
+		{
+			g_route_on = !g_route_on;
+			log_line("\\ key: route guide lines %s", g_route_on ? "ON" : "OFF");
+		}
 		ghost_keys();
 		static bool was_n1, was_n2, was_n3, was_n4;
 		if (key_pressed(VK_NUMPAD1, &was_n1)) { g_pitch_sign = -g_pitch_sign; log_line("numpad 1: pitch sign now %d", static_cast<int>(g_pitch_sign)); }
@@ -3373,6 +3380,49 @@ namespace
 			draw_box(hits[i]);
 		}
 
+		// v0.92: route guide - thin white straight lines between the key points of the Seoul route (\\ key toggles)
+		if (g_route_on && strcmp(g_rec_map, "seoul") == 0)
+		{
+			struct wp { float x, y, z; const char* name; };
+			static const wp route[] = {
+				{35946.0f, 10431.0f, 4328.0f, "START"},
+				{34869.0f, 8683.0f, 1336.0f, "DROP LANDING"},
+				{32813.0f, 6098.0f, 1359.0f, "TENT SKIP"},
+				{28188.0f, 7466.0f, 1316.0f, "TURRET AREA (VAN WARP)"},
+				{28107.0f, 7452.0f, 1329.0f, "TURRET"},
+				{23934.0f, 12530.0f, 2212.0f, "CONVENTION CENTRE EXIT"},
+				{21322.0f, 13698.0f, 2957.0f, "HIGH HOVER"},
+				{17003.0f, 19857.0f, 1335.0f, "BACK IN MAP"},
+				{15852.0f, 20461.0f, 1792.0f, "BINOC TRIGGER 1 (UPSTAIRS)"},
+				{15368.0f, 20700.0f, 1792.0f, "BINOC TRIGGER 2 (WINDOW APPROACH)"},
+				{15188.0f, 20202.0f, 1770.0f, "BINOC TRIGGER 3 (WINDOW)"},
+				{12940.0f, 19564.0f, 1316.0f, "CHARGES"},
+				{13960.0f, 17022.0f, 1377.0f, "PLATFORM (PLANT)"},
+			};
+			const float wht[4] = {1.0f, 1.0f, 1.0f, 0.85f};
+			const float lab[4] = {1.0f, 1.0f, 1.0f, 0.95f};
+			const int n = static_cast<int>(sizeof(route) / sizeof(route[0]));
+			g_thin_lines = true;
+			for (int i = 0; i + 1 < n; ++i)
+				edge({route[i].x, route[i].y, route[i].z}, {route[i + 1].x, route[i + 1].y, route[i + 1].z}, wht);
+			for (int i = 0; i < n; ++i)
+			{
+				const vec3 p = {route[i].x, route[i].y, route[i].z};
+				edge({p.x - 40.0f, p.y, p.z}, {p.x + 40.0f, p.y, p.z}, wht);
+				edge({p.x, p.y - 40.0f, p.z}, {p.x, p.y + 40.0f, p.z}, wht);
+				edge({p.x, p.y, p.z - 40.0f}, {p.x, p.y, p.z + 40.0f}, wht);
+				const vec3 c = to_camera(p);
+				const float dx = p.x - origin[0], dy = p.y - origin[1], dz = p.z - origin[2];
+				if (c.z > 50.0f && dx * dx + dy * dy + dz * dz < 9000.0f * 9000.0f)
+				{
+					float sx, sy;
+					to_screen(c, &sx, &sy);
+					draw_text(sx + 6.0f, sy - 6.0f, route[i].name, 1.0f, lab);
+				}
+			}
+			g_thin_lines = false;
+		}
+
 		// v0.80: the "no Will" box (trigger_convention_center_combat_06, Seoul). Always drawn, very bright, thick.
 		{
 			const float m = 16.0f;   // player body radius, so the drawn edge is where touching really starts
@@ -3559,7 +3609,7 @@ namespace
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
 				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "[ show all/green/pink/magenta/leave-area", "] leave-area boxes on/off", "F9 save data files",
-				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "End this help (or console: overlay_help)"};
+				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "\\ route guide lines (Seoul)", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
 			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));
