@@ -1,0 +1,1100 @@
+0.00 COLUMNS  P x y z pitch yaw | ENTER/EXIT #slot class/type name flags | SPAWN/REMOVED/STATE | EVENT name | ACTOR+/ACTOR- #slot type name at x y z | ACTORS n | TRIG (all triggers at start)
+0.04 TRIG #205 trigger_multiple/trigger_multiple name=trigger_opening_view_off_01 at 29008 7304 1880 size 162 2130 1234
+0.04 TRIG #206 info_volume/info_volume name=vol_ally_battle_volume_01 at 33204 4908 1324 size 330 386 410
+0.04 TRIG #210 script_brushmodel/script_brushmodel name=subway_ceiling_intact at 20081 15768 1042 size 168 168 40
+0.04 TRIG #211 script_brushmodel/script_brushmodel name=subway_ceiling_intact at 20028 15714 1042 size 365 365 40
+0.04 TRIG #212 script_brushmodel/script_brushmodel name=subway_ceiling_intact at 19931 15649 1042 size 305 367 40
+0.04 TRIG #213 script_brushmodel/script_brushmodel name=subway_ceiling_intact at 19994 15681 1202 size 425 425 40
+0.04 TRIG #214 script_brushmodel/script_brushmodel name=subway_ceiling_intact at 20062 15746 1186 size 250 250 8
+0.04 TRIG #218 script_brushmodel/script_brushmodel name=subway_ceiling_stage1 at 20081 15768 1042 size 168 168 40
+0.04 TRIG #219 script_brushmodel/script_brushmodel name=subway_ceiling_stage1 at 19996 15804 1186 size 117 100 8
+0.04 TRIG #220 script_brushmodel/script_brushmodel name=subway_ceiling_stage1 at 19915 15681 1202 size 267 425 40
+0.04 TRIG #221 script_brushmodel/script_brushmodel name=subway_ceiling_stage1 at 19975 15669 1202 size 352 369 40
+0.04 TRIG #222 script_brushmodel/script_brushmodel name=subway_ceiling_stage1 at 20074 15667 1186 size 267 181 8
+0.04 TRIG #223 script_brushmodel/script_brushmodel name=subway_ceiling_stage1 at 20136 15667 1202 size 109 131 40
+0.04 TRIG #224 script_brushmodel/script_brushmodel name=subway_ceiling_stage1 at 19994 15681 1042 size 431 431 40
+0.04 TRIG #225 script_brushmodel/script_brushmodel name=subway_ceiling_stage1 at 19883 15713 1056 size 38 27 12
+0.04 TRIG #227 script_brushmodel/script_brushmodel name=subway_ceiling_destroyed at 20007 15662 1205 size 360 304 8
+0.04 TRIG #228 script_brushmodel/script_brushmodel name=subway_ceiling_destroyed at 19994 15681 1042 size 431 431 40
+0.04 TRIG #229 script_brushmodel/script_brushmodel name=subway_ceiling_destroyed at 19864 15520 1124 size 1257 1257 204
+0.04 TRIG #230 script_brushmodel/script_brushmodel name=subway_ceiling_destroyed at 20071 15740 1186 size 199 227 8
+0.04 TRIG #232 script_brushmodel/script_brushmodel name=subway_ceiling_destroyed at 20092 15778 1198 size 242 242 24
+0.04 TRIG #242 script_brushmodel/script_brushmodel name=subway_ceiling_destroyed at 19956 15428 1198 size 1039 1039 24
+0.04 TRIG #248 trigger_multiple/trigger_multiple name=seoul_subway_interior at 19499 16130 1124 size 330 130 146
+0.04 TRIG #249 trigger_multiple/trigger_multiple name=seoul_shopping at 19543 16490 1340 size 242 146 290
+0.04 TRIG #251 script_brushmodel/script_brushmodel name=gate02_clip at 21509 16691 1084 size 5 26 31
+0.04 TRIG #254 info_volume/info_volume name=rotating_auto_doors at 21486 16675 1118 size 293 60 118
+0.04 TRIG #255 script_brushmodel/script_brushmodel name=gate01_clip at 21509 16659 1084 size 5 26 31
+0.04 TRIG #261 trigger_multiple/trigger_multiple_flag_set name=- flags=vo_civ_convo1 at 21336 16797 1126 size 25 360 135
+0.04 TRIG #262 trigger_multiple/trigger_multiple_flag_set name=- flags=vo_civ_convo2 at 20751 16924 1126 size 480 487 135
+0.04 TRIG #263 trigger_multiple/trigger_multiple_flag_set name=- flags=vo_civ_convo3 at 20498 16536 1126 size 480 487 135
+0.04 TRIG #264 script_brushmodel/script_brushmodel name=gate02_clip at 21509 16923 1084 size 5 26 31
+0.04 TRIG #267 info_volume/info_volume name=rotating_auto_doors at 21486 16907 1118 size 293 60 118
+0.04 TRIG #268 script_brushmodel/script_brushmodel name=gate01_clip at 21509 16891 1084 size 5 26 31
+0.04 TRIG #271 trigger_multiple/trigger_multiple name=trigger_enter_subway_station_03 at 19533 16368 1227 size 240 72 250
+0.04 TRIG #272 trigger_multiple/trigger_multiple name=trigger_enter_subway_station_01 at 22582 16338 942 size 63 1442 181
+0.04 TRIG #273 trigger_multiple/trigger_multiple name=trigger_enter_subway_station_02 at 22373 15816 924 size 68 402 226
+0.04 TRIG #274 trigger_multiple/trigger_multiple_flag_set name=- flags=vo_civ_convo4 at 20399 16296 1126 size 480 347 135
+0.04 TRIG #275 trigger_multiple/trigger_multiple name=trigger_enter_subway_station_04 at 19544 16530 1365 size 352 87 250
+0.04 TRIG #276 trigger_multiple/trigger_multiple name=trig_subway_round_corner at 22176 16720 1136 size 578 578 226
+0.04 TRIG #284 script_brushmodel/script_brushmodel name=subway_gate_atlas_meetup_clip at 20089 15783 1130 size 180 180 144
+0.04 TRIG #286 trigger_multiple/trigger_multiple name=trig_subway_get_allies_to_execution_scene at 22548 16338 932 size 82 1444 226
+0.04 TRIG #287 script_brushmodel/script_brushmodel name=gate02_clip at 21509 16749 1084 size 5 26 31
+0.04 TRIG #290 info_volume/info_volume name=rotating_auto_doors at 21486 16733 1118 size 293 60 118
+0.04 TRIG #291 script_brushmodel/script_brushmodel name=gate01_clip at 21509 16717 1084 size 5 26 31
+0.04 TRIG #294 script_brushmodel/script_brushmodel name=gate02_clip at 21509 16807 1084 size 5 26 31
+0.04 TRIG #297 info_volume/info_volume name=rotating_auto_doors at 21486 16791 1118 size 293 60 118
+0.04 TRIG #298 script_brushmodel/script_brushmodel name=gate01_clip at 21509 16775 1084 size 5 26 31
+0.04 TRIG #301 script_brushmodel/script_brushmodel name=gate02_clip at 21509 16865 1084 size 5 26 31
+0.04 TRIG #304 info_volume/info_volume name=rotating_auto_doors at 21486 16849 1118 size 293 60 118
+0.04 TRIG #305 script_brushmodel/script_brushmodel name=gate01_clip at 21509 16833 1084 size 5 26 31
+0.04 TRIG #320 trigger_multiple/trigger_multiple name=trig_start_subway_section at 22664 15418 932 size 403 68 226
+0.04 TRIG #325 script_brushmodel/script_brushmodel name=subway_gate_atlas_entrance at 20503 15616 1312 size 262 8 263
+0.04 TRIG #328 trigger_multiple/trigger_multiple name=trig_subway_gate_arrival at 20400 16085 1164 size 270 272 217
+0.04 TRIG #329 trigger_use/trigger_use name=subway_open_gate at 20103 15783 1118 size 93 93 68
+0.04 TRIG #331 trigger_multiple/trigger_multiple name=- at 20067 15763 1164 size 381 385 217
+0.04 TRIG #332 trigger_multiple/trigger_multiple name=- at 21158 16873 1134 size 285 898 189
+0.04 TRIG #333 trigger_multiple/trigger_multiple name=trigger_sinkhole_enemy_setup at 23288 14026 1011 size 1455 1899 604
+0.04 TRIG #334 trigger_multiple/trigger_multiple_flag_set name=- flags=sinkhole_jet_flyby at 22663 13863 941 size 416 32 254
+0.04 TRIG #343 trigger_multiple/trigger_multiple name=trigger_sinkhole_drones_01 at 23972 14025 1088 size 479 928 482
+0.04 TRIG #345 trigger_multiple/trigger_multiple name=trig_train_force_shadows_on at 22249 15990 946 size 274 98 194
+0.04 TRIG #359 trigger_multiple/trigger_multiple name=trigger_subway_cars_drop at 24465 16078 955 size 166 170 184
+0.04 TRIG #360 trigger_multiple/trigger_multiple name=seoul_subway_interior at 22249 16198 1002 size 274 98 210
+0.04 TRIG #367 trigger_multiple/trigger_multiple name=seoul_sinkhole at 22561 15822 946 size 194 242 194
+0.04 TRIG #368 trigger_multiple/trigger_multiple name=trig_sh_kill_s_flicker at 23049 13926 922 size 1282 754 210
+0.04 TRIG #369 trigger_multiple/trigger_multiple name=trig_train_force_shadows_on at 22609 15206 922 size 402 50 306
+0.04 TRIG #370 trigger_multiple/trigger_multiple name=trig_train_force_shadows_off at 22609 15110 922 size 402 50 306
+0.04 TRIG #371 trigger_multiple/trigger_multiple name=trig_train_force_shadows_off at 22241 16134 1050 size 402 50 562
+0.04 TRIG #372 trigger_multiple/trigger_multiple name=- at 22241 16038 922 size 402 50 306
+0.04 TRIG #375 trigger_multiple/trigger_multiple name=trig_lensflare_subway_int_on at 22609 15430 922 size 402 50 306
+0.04 TRIG #376 trigger_multiple/trigger_multiple name=trig_lensflare_subway_int_off at 22609 15334 922 size 402 50 306
+0.04 TRIG #382 trigger_multiple/trigger_multiple name=seoul_sinkhole at 25459 15079 1691 size 66 424 176
+0.04 TRIG #383 trigger_multiple/trigger_multiple name=seoul_building_jump at 25556 15079 1689 size 66 424 170
+0.04 TRIG #400 trigger_multiple/trigger_multiple name=seoul_weapons_platform_trigger at 25620 15079 1689 size 66 424 170
+0.04 TRIG #423 trigger_multiple/trigger_multiple name=seoul_building_jump at 25276 14287 1689 size 146 120 170
+0.04 TRIG #430 trigger_multiple/trigger_multiple name=trig_s_flicker_fluo_jump2_shadow_on at 25790 14816 1689 size 279 66 170
+0.04 TRIG #431 trigger_multiple/trigger_multiple name=trig_sh_s_flicker at 25379 15079 1691 size 66 424 176
+0.04 TRIG #432 trigger_multiple/trigger_multiple name=trig_jb_kill_s_flicker at 24803 15087 1539 size 290 440 96
+0.04 TRIG #437 info_volume/info_volume name=pf1155_auto1406 at 23736 14123 1240 size 407 333 182
+0.04 TRIG #439 info_volume/info_volume name=vol_land_assist_reminder at 25030 15096 1668 size 328 450 130
+0.04 TRIG #441 info_volume/info_volume name=- at 22782 14755 960 size 182 552 178
+0.04 TRIG #443 info_volume/info_volume name=- at 23406 13855 1169 size 195 222 140
+0.04 TRIG #444 info_volume/info_volume name=pf1155_auto1416 at 24134 14300 1243 size 479 358 176
+0.04 TRIG #449 trigger_multiple/trigger_multiple name=trig_sinkhole_1st_drop at 24777 15098 1545 size 496 642 38
+0.04 TRIG #453 trigger_multiple/trigger_multiple name=trig_sinkhole_launcher_vo at 25587 15078 1672 size 98 434 146
+0.04 TRIG #454 trigger_multiple/trigger_multiple_flag_set name=- flags=wakeup_ambush at 22602 15848 895 size 42 509 228
+0.04 TRIG #456 trigger_multiple/trigger_multiple name=trig_sinkhole_ai_warp_jump2 at 23091 13742 888 size 34 738 146
+0.04 TRIG #458 info_volume/info_volume name=- at 24426 14720 1248 size 227 453 165
+0.04 TRIG #459 trigger_hurt/trigger_hurt name=- at 23567 15040 389 size 2618 2985 208
+0.04 TRIG #467 trigger_multiple/trigger_multiple name=trig_sinkhole_drone_intro at 24384 14359 1240 size 492 699 355
+0.04 TRIG #468 trigger_multiple/trigger_multiple name=trig_start_sinkhole_section at 25291 14280 1693 size 496 81 182
+0.04 TRIG #469 info_volume/info_volume name=- at 24464 15176 1248 size 163 400 165
+0.04 TRIG #476 info_volume/info_volume name=- at 22566 14032 952 size 119 237 71
+0.04 TRIG #477 trigger_multiple/trigger_multiple name=trigger_sinkhole_drones_attack_civs at 23802 14023 1102 size 43 738 498
+0.04 TRIG #478 info_volume/info_volume name=- at 24795 14558 1016 size 946 226 82
+0.04 TRIG #479 trigger_multiple/trigger_multiple name=trig_sinkhole_ai_move_to_jump1 at 25552 14452 1668 size 26 584 147
+0.04 TRIG #480 trigger_multiple/trigger_multiple name=trig_move_allies_up_sinkhole_01 at 22817 14435 1092 size 59 2135 638
+0.04 TRIG #481 trigger_multiple/trigger_multiple name=trigger_sinkhole_enemy_defend at 24308 14217 1236 size 426 873 362
+0.04 TRIG #482 info_volume/info_volume name=vol_land_assist_reminder at 25150 13898 1810 size 293 194 168
+0.04 TRIG #486 trigger_multiple/trigger_multiple name=- at 25026 13585 1812 size 1187 808 194
+0.04 TRIG #493 trigger_multiple/trigger_multiple name=trig_sinkhole_drones_group4 at 22945 14179 1060 size 59 55 94
+0.04 TRIG #494 info_volume/info_volume name=- at 22718 15312 964 size 133 549 137
+0.04 TRIG #495 trigger_multiple/trigger_multiple name=trig_videolog_over_sinkhole at 23701 14109 1106 size 459 843 415
+0.04 TRIG #496 trigger_multiple/trigger_multiple name=vol_tester_skipping_guys_sinkhole at 22688 14558 956 size 948 46 322
+0.04 TRIG #497 trigger_multiple/trigger_multiple_flag_set name=- flags=first_building_jump_complete at 24968 13158 1812 size 1100 56 194
+0.04 TRIG #498 info_volume/info_volume name=- at 22854 13740 962 size 77 132 59
+0.04 TRIG #499 info_volume/info_volume name=- at 22740 13798 920 size 205 121 71
+0.04 TRIG #507 trigger_multiple/trigger_multiple name=trig_sinkhole_1st_drop_land at 24777 15082 1121 size 496 642 38
+0.04 TRIG #509 trigger_multiple/trigger_multiple_flag_set name=- flags=start_truck_fall at 23493 14189 1102 size 314 232 322
+0.04 TRIG #512 trigger_use/trigger_use name=sinkhole_use_zipline at 23698 13910 1156 size 74 74 38
+0.04 TRIG #513 trigger_multiple/trigger_multiple_flag_set name=- flags=start_truck_fall at 22628 14261 960 size 330 68 322
+0.04 TRIG #525 trigger_multiple/trigger_multiple name=trig_sinkhole_spawn_smoke_grenades at 22689 15338 867 size 162 76 172
+0.04 TRIG #526 info_volume/info_volume name=sinkhole_goal_smoke_ambush at 22250 15845 936 size 395 444 257
+0.04 TRIG #531 info_volume/info_volume name=volume_sinkhole_enemy_defend at 22658 13980 876 size 409 803 153
+0.04 TRIG #537 trigger_multiple/trigger_multiple name=sinkhole_trig_allies_jump1 at 24782 15158 1544 size 538 690 66
+0.04 TRIG #538 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 23775 15918 1140 size 1882 66 906
+0.04 TRIG #545 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 23743 15678 1132 size 1930 162 922
+0.04 TRIG #546 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 23469 14678 1629 size 2278 2546 76
+0.04 TRIG #548 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 23687 15486 1140 size 1882 66 906
+0.04 TRIG #549 trigger_hurt/trigger_hurt name=- at 23686 15040 -299 size 2856 2985 208
+0.04 TRIG #550 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 23548 14678 656 size 2436 2546 130
+0.04 TRIG #551 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 22579 14698 1416 size 66 1882 354
+0.04 TRIG #552 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 22911 13974 1416 size 954 754 354
+0.04 TRIG #553 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 22912 15587 1416 size 756 756 354
+0.04 TRIG #554 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 22579 14698 1416 size 66 1882 354
+0.04 TRIG #555 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 23631 13694 1416 size 682 242 354
+0.04 TRIG #556 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 24302 13979 1416 size 746 432 354
+0.04 TRIG #568 trigger_multiple/trigger_multiple name=trig_sinkhole_subway_car_vo at 22705 15130 891 size 482 140 220
+0.04 TRIG #573 script_brushmodel/script_brushmodel name=pf2018_auto3 at 14552 19884 1347 size 33 37 34
+0.04 TRIG #574 trigger_use/trigger_use name=trig_door_shield at 14561 19889 -8654 size 13 18 14
+0.04 TRIG #575 script_brushmodel/script_brushmodel name=car_door_vehicle_clip at 14566 19919 1348 size 103 132 52
+0.04 TRIG #577 trigger_multiple/trigger_multiple name=trig_sd_reached_bombsquad at 12840 19731 1380 size 539 516 145
+0.04 TRIG #579 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 13968 21192 1784 size 2250 990 1266
+0.04 TRIG #582 trigger_multiple/trigger_multiple_flag_set name=- flags=canal_reached_walls at 14048 18704 1560 size 770 226 946
+0.04 TRIG #588 info_volume/info_volume name=sd_goal_weapon_guard1 at 14029 17436 1359 size 486 461 176
+0.04 TRIG #598 script_brushmodel/script_brushmodel name=security_door_left at 15301 25384 1374 size 102 5 115
+0.04 TRIG #603 script_brushmodel/script_brushmodel name=bridge_support at 14004 19280 1535 size 760 330 474
+0.04 TRIG #604 script_brushmodel/script_brushmodel name=bridge_support at 14004 20109 1535 size 760 330 474
+0.04 TRIG #606 trigger_multiple/trigger_multiple name=lighting_canal_volume at 14040 17988 1504 size 2386 34 802
+0.04 TRIG #607 trigger_multiple/trigger_multiple name=lighting_weapons_platform_area_volume at 14040 17956 1504 size 2386 34 802
+0.04 TRIG #608 script_brushmodel/script_brushmodel name=pf2528_auto4 at 12741 19981 1382 size 4 26 4
+0.04 TRIG #609 script_brushmodel/script_brushmodel name=pf2528_auto3 at 12741 20002 1382 size 4 24 4
+0.04 TRIG #610 script_brushmodel/script_brushmodel name=pf2528_auto2 at 12741 20023 1382 size 4 26 4
+0.04 TRIG #611 script_brushmodel/script_brushmodel name=pf2528_auto1 at 12729 20034 1382 size 26 4 4
+0.04 TRIG #612 script_brushmodel/script_brushmodel name=glass at 12741 19981 1382 size 4 26 4
+0.04 TRIG #613 script_brushmodel/script_brushmodel name=glass at 12741 20002 1382 size 4 24 4
+0.04 TRIG #614 script_brushmodel/script_brushmodel name=glass at 12741 20023 1382 size 4 26 4
+0.04 TRIG #615 script_brushmodel/script_brushmodel name=glass at 12729 20034 1382 size 26 4 4
+0.04 TRIG #617 trigger_multiple/trigger_multiple_slide name=- at 14493 17071 1590 size 19 11 14
+0.04 TRIG #620 trigger_multiple/trigger_multiple name=trigger_mwp_lightgrid_tweak_01 at 14000 17724 1520 size 2338 91 802
+0.04 TRIG #621 trigger_multiple/trigger_multiple name=trigger_mwp_lightgrid_tweak_01 at 14208 17269 1520 size 248 216 802
+0.04 TRIG #623 trigger_multiple/trigger_multiple_slide name=- at 13385 17263 1602 size 18 20 14
+0.04 TRIG #628 trigger_multiple/trigger_multiple name=seoul_canal_entrance at 15008 20048 1492 size 514 546 378
+0.04 TRIG #632 trigger_multiple/trigger_multiple_slide name=- at 13582 20450 1466 size 11 18 14
+0.04 TRIG #633 trigger_multiple/trigger_multiple_slide name=- at 14458 17518 1569 size 20 17 14
+0.04 TRIG #634 trigger_multiple/trigger_multiple_slide name=- at 13072 19523 1466 size 20 16 14
+0.04 TRIG #645 info_volume/info_volume name=sd_goal_canal2 at 14026 18622 1264 size 796 458 241
+0.04 TRIG #646 info_volume/info_volume name=- at 13708 19720 1388 size 554 818 154
+0.04 TRIG #647 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 15528 19894 1922 size 226 382 614
+0.04 TRIG #651 trigger_multiple/trigger_multiple_flag_set name=sd_canal_window_jump_down_land flags=canal_jump_complete at 14050 19904 1408 size 2463 2169 462
+0.04 TRIG #652 trigger_multiple/trigger_multiple_flag_set name=- flags=canal_send_will_to_platform at 13952 17286 1396 size 897 731 485
+0.04 TRIG #667 info_volume/info_volume name=vol_canal_kamikaze_player_check at 13964 17564 1528 size 2202 2283 710
+0.04 TRIG #668 info_volume/info_volume name=- at 13982 19692 1388 size 510 530 154
+0.04 TRIG #669 info_volume/info_volume name=sd_goal_canal1 at 14026 19144 1213 size 796 583 140
+0.04 TRIG #674 trigger_multiple/trigger_multiple name=- at 14254 18702 1280 size 246 1446 330
+0.04 TRIG #675 trigger_multiple/trigger_multiple name=- at 14254 20626 1280 size 246 1310 330
+0.04 TRIG #676 info_volume/info_volume name=canal_goal_balcony at 12954 19816 1694 size 264 737 191
+0.04 TRIG #686 trigger_multiple/trigger_multiple name=trig_pick_up_charges at 13992 18184 1578 size 2002 1010 871
+0.04 TRIG #687 trigger_multiple/trigger_multiple_flag_set name=- flags=bombs_reached at 12930 19644 1620 size 587 685 658
+0.04 TRIG #688 trigger_multiple/trigger_multiple_flag_set name=- flags=weapon_platform_reached at 13976 17080 1452 size 234 167 282
+0.04 TRIG #696 trigger_use/trigger_use_flag_set name=trig_interact_with_will_finale flags=canal_bomb_plant_trigger_on + interacted_with_will_finale at 13960 17022 -8623 size 123 65 100
+0.04 TRIG #707 trigger_multiple/trigger_multiple name=- at 13860 18702 1280 size 418 1446 330
+0.04 TRIG #711 trigger_multiple/trigger_multiple name=- at 13846 20626 1280 size 438 1310 330
+0.04 TRIG #732 info_volume/info_volume name=sd_goal_wallR at 13357 18338 1512 size 544 676 192
+0.04 TRIG #733 info_volume/info_volume name=sd_goal_wallL at 14704 18159 1512 size 664 672 192
+0.04 TRIG #735 trigger_multiple/trigger_multiple name=- at 14251 19704 1647 size 240 522 656
+0.04 TRIG #747 info_volume/info_volume name=- at 13308 19730 1390 size 653 844 215
+0.04 TRIG #752 trigger_use/trigger_use name=trig_sd_pickup_bombs at 12930 19559 1333 size 82 66 34
+0.04 TRIG #754 trigger_multiple/trigger_multiple name=trig_canal_tunnel at 14326 17890 1206 size 123 109 126
+0.04 TRIG #756 trigger_use/trigger_use name=intelligence_item at 14018 17545 1207 size 40 40 32
+0.04 TRIG #757 trigger_multiple/trigger_multiple name=- at 12862 19660 1370 size 461 481 455
+0.04 TRIG #758 trigger_multiple/trigger_multiple name=- at 13920 19704 1584 size 298 522 530
+0.04 TRIG #771 trigger_multiple/trigger_multiple name=trig_canal_bridge_reinforcements1 at 14243 19187 1491 size 40 4232 804
+0.04 TRIG #773 info_volume/info_volume name=- at 13032 19598 1402 size 651 670 238
+0.04 TRIG #774 trigger_multiple/trigger_multiple name=- at 14735 19854 1512 size 960 1469 481
+0.04 TRIG #786 trigger_multiple/trigger_multiple name=trig_canal_bridge_reinforcements2 at 13934 19189 1490 size 40 4236 804
+0.04 TRIG #787 trigger_multiple/trigger_multiple name=- at 13888 19998 1370 size 2550 151 455
+0.04 TRIG #788 trigger_multiple/trigger_multiple name=trig_will_to_canals_pos1 at 14236 19314 1370 size 1853 481 455
+0.04 TRIG #797 trigger_multiple/trigger_multiple name=- at 13686 19526 1774 size 118 3206 1014
+0.04 TRIG #798 trigger_multiple/trigger_multiple name=- at 12875 19623 -8612 size 170 214 194
+0.04 TRIG #799 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 15228 17915 1922 size 241 500 616
+0.04 TRIG #800 trigger_multiple/trigger_multiple name=trig_will_move_security_drones at 13914 18912 1578 size 2550 151 871
+0.04 TRIG #803 trigger_multiple/trigger_multiple name=trig_move_to_final_color at 13940 17820 1372 size 2074 1354 458
+0.04 TRIG #805 trigger_multiple/trigger_multiple_bcs_seo_cafe name=- at 12810 20068 1414 size 385 578 217
+0.04 TRIG #806 trigger_multiple/trigger_multiple_bcs_seo_balcony name=- at 12994 19770 1714 size 183 669 191
+0.04 TRIG #807 trigger_multiple/trigger_multiple_flag_set name=- flags=begin_fight_to_weapon_platform at 13026 20482 1384 size 30 126 162
+0.04 TRIG #808 trigger_multiple/trigger_multiple name=trig_canal_dead_demo_team1 at 15864 20606 1874 size 50 1022 358
+0.04 TRIG #826 info_volume/info_volume name=sd_goal_canal3 at 14026 18300 1264 size 796 507 241
+0.04 TRIG #827 info_volume/info_volume name=sd_goal_waterfall_top at 14076 17848 1371 size 553 266 200
+0.04 TRIG #828 info_volume/info_volume name=sd_goal_canal4 at 14050 17404 1388 size 953 535 259
+0.04 TRIG #842 script_brushmodel/script_brushmodel name=pf3085_auto1 at 14497 20005 1346 size 16 40 40
+0.04 TRIG #843 trigger_use/trigger_use name=trig_door_shield at 14505 20012 -8649 size 9 19 14
+0.04 TRIG #844 script_brushmodel/script_brushmodel name=car_door_vehicle_clip at 14539 19998 1348 size 132 117 52
+0.04 TRIG #854 trigger_multiple/trigger_multiple name=trig_canal_near_platform at 13938 17335 1396 size 2332 192 485
+0.04 TRIG #859 trigger_multiple/trigger_multiple name=trig_canal_dead_demo_team2 at 15756 20606 1874 size 50 1022 358
+0.04 TRIG #860 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 13968 20673 1784 size 2250 876 1266
+0.04 TRIG #861 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 13990 16470 1676 size 2369 275 770
+0.04 TRIG #862 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 13958 20837 1776 size 2230 1004 1282
+0.04 TRIG #863 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 13997 16732 1668 size 2364 413 786
+0.04 TRIG #864 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 12628 18720 1780 size 82 6122 490
+0.04 TRIG #865 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 13986 17623 2282 size 3070 3536 182
+0.04 TRIG #866 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 13990 16946 1676 size 2369 275 770
+0.04 TRIG #867 script_brushmodel/script_brushmodel name=canal_razorback_clip at 12308 21080 2066 size 812 564 320
+0.04 TRIG #888 trigger_multiple/trigger_multiple_flag_set name=- flags=canal_reached_walls at 13972 18560 1560 size 2588 447 948
+0.04 TRIG #891 trigger_multiple/trigger_multiple_flag_set name=trig_canal_reach_waterfall flags=canal_reached_waterfall at 13894 17868 1396 size 2244 192 485
+0.04 TRIG #892 trigger_multiple/trigger_multiple name=trig_canal_dead_demo_team4 at 14008 17924 1586 size 2226 50 934
+0.04 TRIG #893 trigger_multiple/trigger_multiple name=trig_canal_dead_demo_team3 at 14008 18032 1586 size 2226 50 934
+0.04 TRIG #898 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 13391 21160 2282 size 1880 3542 182
+0.04 TRIG #899 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 14899 22109 2298 size 1140 3542 150
+0.04 TRIG #900 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 14904 19864 2472 size 1138 946 210
+0.04 TRIG #901 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 15645 19864 2298 size 356 951 150
+0.04 TRIG #904 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 15550 19530 1922 size 182 350 614
+0.04 TRIG #909 info_volume/info_volume name=vol_dropped_gun_check_volume at 12930 19566 1321 size 86 94 20
+0.04 TRIG #912 info_volume/info_volume name=vol_canal_enemy_ai_check_01 at 13980 18880 1224 size 790 959 162
+0.04 TRIG #916 trigger_multiple/trigger_multiple name=trig_move_will_to_canal_pos2 at 14090 18994 2306 size 167 189 187
+0.04 TRIG #917 trigger_multiple/trigger_multiple name=trig_move_will_to_canal_pos3 at 14358 18994 2308 size 167 189 187
+0.04 TRIG #931 info_volume/info_volume name=vol_canals_security_drone_fight_pos2 at 13802 19200 1213 size 332 471 140
+0.04 TRIG #932 info_volume/info_volume name=vol_canals_security_drone_fight_pos1 at 14226 19192 1213 size 332 471 140
+0.04 TRIG #933 info_volume/info_volume name=vol_canals_security_drone_fight_pos3 at 14006 19908 1213 size 772 943 140
+0.04 TRIG #934 info_volume/info_volume name=vol_canals_security_drone_fight_posf1 at 14030 18760 1213 size 772 439 140
+0.04 TRIG #935 info_volume/info_volume name=vol_canals_security_drone_fight_posf2 at 13994 18312 1269 size 2156 439 252
+0.04 TRIG #936 trigger_multiple/trigger_multiple_slide name=- at 28606 9196 1836 size 22 34 30
+0.04 TRIG #940 trigger_multiple/trigger_multiple_slide name=- at 28610 9230 1550 size 134 94 106
+0.04 TRIG #947 trigger_multiple/trigger_multiple_slide name=- at 27486 11080 1490 size 6 6 282
+0.04 TRIG #949 trigger_multiple/trigger_multiple_flag_set name=- flags=dof_fob at 28043 8082 1424 size 683 30 290
+0.04 TRIG #951 trigger_multiple/trigger_multiple_flag_clear name=- flags=dof_fob at 28049 8221 1424 size 616 30 354
+0.04 TRIG #952 trigger_multiple/trigger_multiple name=seoul_building_jump at 24924 12258 2076 size 1346 114 682
+0.04 TRIG #953 trigger_multiple/trigger_multiple name=seoul_art_center_atrium at 24756 12034 1888 size 1010 114 306
+0.04 TRIG #954 script_brushmodel/script_brushmodel name=pf3738_auto4 at 25145 12036 1928 size 4 26 4
+0.04 TRIG #955 script_brushmodel/script_brushmodel name=pf3738_auto3 at 25145 12015 1928 size 4 24 4
+0.04 TRIG #956 script_brushmodel/script_brushmodel name=pf3738_auto2 at 25145 11994 1928 size 4 26 4
+0.04 TRIG #957 script_brushmodel/script_brushmodel name=pf3738_auto1 at 25156 11983 1928 size 26 4 4
+0.04 TRIG #958 script_brushmodel/script_brushmodel name=glass at 25145 12036 1928 size 4 26 4
+0.04 TRIG #959 script_brushmodel/script_brushmodel name=glass at 25145 12015 1928 size 4 24 4
+0.04 TRIG #960 script_brushmodel/script_brushmodel name=glass at 25145 11994 1928 size 4 26 4
+0.04 TRIG #961 script_brushmodel/script_brushmodel name=glass at 25156 11983 1928 size 26 4 4
+0.04 TRIG #985 trigger_multiple/trigger_multiple name=trig_jb2_s_flicker at 24952 13966 1754 size 1043 955 324
+0.04 TRIG #995 script_brushmodel/script_brushmodel name=- at 25043 11772 1736 size 41 43 36
+0.04 TRIG #996 script_brushmodel/script_brushmodel name=- at 25043 11693 1736 size 41 43 36
+0.04 TRIG #997 script_brushmodel/script_brushmodel name=- at 25043 11612 1736 size 41 43 36
+0.04 TRIG #998 script_brushmodel/script_brushmodel name=table_brown_fancy_long_01 at 25172 11698 1736 size 40 62 36
+0.04 TRIG #999 script_brushmodel/script_brushmodel name=table_brown_fancy_long_01 at 25172 11786 1736 size 40 62 36
+0.04 TRIG #1000 script_brushmodel/script_brushmodel name=table_brown_fancy_long_01 at 25172 11610 1736 size 40 62 36
+0.04 TRIG #1001 script_brushmodel/script_brushmodel name=- at 25038 11962 1736 size 41 43 36
+0.04 TRIG #1002 trigger_multiple/trigger_multiple name=trig_jb1_s_flicker at 24924 12122 1888 size 1346 98 306
+0.04 TRIG #1003 script_brushmodel/script_brushmodel name=big_screen_video_03 at 24239 10583 2260 size 219 322 130
+0.04 TRIG #1004 script_brushmodel/script_brushmodel name=big_screen_video_04 at 24239 10583 2132 size 219 322 130
+0.04 TRIG #1005 script_brushmodel/script_brushmodel name=big_screen_static_03 at 24241 10584 2260 size 210 309 130
+0.04 TRIG #1006 script_brushmodel/script_brushmodel name=big_screen_static_03 at 24339 10438 2235 size 13 17 20
+0.04 TRIG #1007 script_brushmodel/script_brushmodel name=big_screen_static_04 at 24241 10584 2132 size 210 309 130
+0.04 TRIG #1008 script_brushmodel/script_brushmodel name=big_screen_static_03 at 24334 10447 2212 size 24 34 36
+0.04 TRIG #1009 script_brushmodel/script_brushmodel name=big_screen_static_03 at 24318 10470 2302 size 21 28 47
+0.04 TRIG #1010 script_brushmodel/script_brushmodel name=big_screen_static_03 at 24330 10453 2285 size 33 46 80
+0.04 TRIG #1011 script_brushmodel/script_brushmodel name=big_screen_static_03 at 24318 10470 2302 size 21 28 47
+0.04 TRIG #1012 script_brushmodel/script_brushmodel name=big_screen_static_03 at 24327 10456 2174 size 15 21 30
+0.04 TRIG #1013 script_brushmodel/script_brushmodel name=big_screen_static_03 at 24327 10456 2174 size 15 21 30
+0.04 TRIG #1014 script_brushmodel/script_brushmodel name=big_screen_static_03 at 24162 10700 2274 size 53 77 101
+0.04 TRIG #1015 script_brushmodel/script_brushmodel name=big_screen_static_04 at 24151 10717 2175 size 31 43 44
+0.04 TRIG #1016 script_brushmodel/script_brushmodel name=big_screen_video_01 at 24062 11069 1876 size 69 382 130
+0.04 TRIG #1017 script_brushmodel/script_brushmodel name=big_screen_video_02 at 24062 11069 2004 size 69 382 130
+0.04 TRIG #1018 script_brushmodel/script_brushmodel name=big_screen_static_01 at 24064 11069 1876 size 67 367 130
+0.04 TRIG #1019 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24090 10921 2037 size 10 37 34
+0.04 TRIG #1020 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24064 11069 2004 size 67 367 130
+0.04 TRIG #1021 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24091 10913 2015 size 7 20 26
+0.04 TRIG #1022 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24091 10914 2004 size 13 57 130
+0.04 TRIG #1023 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24090 10918 1857 size 9 33 44
+0.04 TRIG #1024 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24091 10912 1890 size 7 24 28
+0.04 TRIG #1025 script_brushmodel/script_brushmodel name=big_screen_static_01 at 24064 11069 1876 size 67 367 130
+0.04 TRIG #1026 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24045 11181 2051 size 11 46 36
+0.04 TRIG #1027 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24090 10918 1857 size 9 33 44
+0.04 TRIG #1028 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24091 10912 1890 size 7 24 28
+0.04 TRIG #1029 script_brushmodel/script_brushmodel name=big_screen_static_02 at 24037 11228 1968 size 7 23 42
+0.04 TRIG #1054 trigger_multiple/trigger_multiple name=end_warbird_spotlight at 24604 11754 1544 size 642 226 130
+0.04 TRIG #1056 info_volume/info_volume name=vol_hotel_zipline_defend at 25324 10508 1576 size 354 506 194
+0.04 TRIG #1064 trigger_multiple/trigger_multiple name=trig_convention_center_setup at 26852 10530 1408 size 370 370 146
+0.04 TRIG #1066 trigger_multiple/trigger_multiple name=trig_pickup_crush_anim_01 at 24423 10365 1383 size 189 182 68
+0.04 TRIG #1067 trigger_multiple/trigger_multiple name=trig_sedan_crush_anim_01 at 24541 10336 1376 size 97 106 54
+0.04 TRIG #1068 trigger_multiple/trigger_multiple name=trig_npc_crushcar_jump at 24444 10678 1688 size 130 194 98
+0.04 TRIG #1071 info_volume/info_volume name=vol_pac_laser_on_vol at 25500 10514 1576 size 98 50 98
+0.04 TRIG #1072 info_volume/info_volume name=vol_pac_laser_on_vol at 25708 10522 1520 size 66 674 178
+0.04 TRIG #1078 info_volume/info_volume name=vol_hotel_zipline_defend at 24866 10732 1566 size 885 926 190
+0.04 TRIG #1079 info_volume/info_volume name=vol_hotel_waterfall_defend at 24835 11288 1568 size 475 509 178
+0.04 TRIG #1080 trigger_multiple/trigger_multiple name=trig_convention_center_combat_01 at 25884 10506 1776 size 66 642 882
+0.04 TRIG #1081 trigger_multiple/trigger_multiple name=trigger_enemy_waterfall at 25214 10334 1784 size 478 1082 546
+0.04 TRIG #1082 trigger_multiple/trigger_multiple name=trig_convention_center_combat_04 at 24734 10750 1800 size 1138 1005 602
+0.04 TRIG #1090 trigger_multiple/trigger_multiple name=trig_player_in_air_building_jump at 24892 12890 1746 size 1450 114 862
+0.04 TRIG #1092 trigger_multiple/trigger_multiple name=trigger_allies_enter_hotel at 26616 10546 1380 size 74 498 202
+0.04 TRIG #1093 trigger_multiple/trigger_multiple name=- at 26832 10546 1380 size 346 498 202
+0.04 TRIG #1095 trigger_multiple/trigger_multiple name=trigger_hotel_zipline_gag at 25988 10498 1688 size 146 754 802
+0.04 TRIG #1096 info_volume/info_volume name=vol_hotel_waterfall_defend at 24434 11153 1568 size 562 625 178
+0.04 TRIG #1097 info_volume/info_volume name=vol_hotel_waterfall_defend at 24479 11738 1592 size 568 442 130
+0.04 TRIG #1099 info_volume/info_volume name=vol_hotel_waterfall_defend_2 at 24635 11795 1752 size 776 782 130
+0.04 TRIG #1100 info_volume/info_volume name=vol_hotel_waterfall_defend_3 at 24764 12202 1912 size 610 418 130
+0.04 TRIG #1101 trigger_multiple/trigger_multiple name=- at 26298 10516 1748 size 342 718 938
+0.04 TRIG #1102 trigger_multiple/trigger_multiple name=trigger_building_jump1 at 24812 12290 1922 size 170 610 510
+0.04 TRIG #1103 trigger_multiple/trigger_multiple name=trig_convention_center_combat_01 at 25788 10506 1688 size 66 642 546
+0.04 TRIG #1104 trigger_multiple/trigger_multiple name=trig_convention_center_combat_03 at 25135 10351 1848 size 476 1112 738
+0.04 TRIG #1108 trigger_multiple/trigger_multiple name=trig_convention_center_combat_02 at 25500 10522 1784 size 66 642 738
+0.04 TRIG #1109 trigger_multiple/trigger_multiple name=trig_convention_center_combat_05 at 24516 11138 1816 size 1330 498 610
+0.04 TRIG #1110 trigger_multiple/trigger_multiple name=trig_convention_center_combat_06 at 24620 11562 1784 size 866 226 546
+0.04 TRIG #1111 script_brushmodel/script_brushmodel name=clip_pac_entrance_01 at 26657 10278 1400 size 18 188 164
+0.04 TRIG #1145 info_volume/info_volume name=- at 24748 11994 1768 size 482 322 130
+0.04 TRIG #1147 trigger_use/trigger_use name=intelligence_item at 25175 11627 1762 size 40 40 32
+0.04 TRIG #1161 info_volume/info_volume name=vol_pac_entrance_fallback at 25612 10538 1561 size 290 742 224
+0.04 TRIG #1162 info_volume/info_volume name=vol_pac_laser_on_vol at 24424 11572 1752 size 358 402 130
+0.04 TRIG #1177 trigger_multiple/trigger_multiple name=seoul_streets_02_xx at 26696 10510 1400 size 26 346 210
+0.04 TRIG #1178 trigger_multiple/trigger_multiple name=seoul_hotel_interior_lrg at 26600 10510 1400 size 26 346 210
+0.04 TRIG #1179 info_volume/info_volume name=vol_test_for_will_and_cormack at 24800 12098 1828 size 298 514 346
+0.04 TRIG #1180 info_volume/info_volume name=vol_land_assist_reminder_full at 24844 12602 1896 size 322 546 258
+0.04 TRIG #1181 info_volume/info_volume name=vol_fucker_volume_in_pac at 24828 12482 1912 size 322 210 130
+0.04 TRIG #1182 info_volume/info_volume name=pf3482_auto298 at 24772 11322 1584 size 402 354 210
+0.04 TRIG #1183 trigger_multiple/trigger_multiple name=trig_convention_center_combat_04_c at 24734 10750 2152 size 1138 1005 26
+0.04 TRIG #1184 info_volume/info_volume name=vol_tester_skipping_guys_pac at 24788 10394 1494 size 2242 1602 334
+0.04 TRIG #1194 trigger_multiple/trigger_multiple name=trig_convention_center_combat_05_c at 24516 11138 2176 size 1330 498 50
+0.04 TRIG #1195 info_volume/info_volume name=pf3482_auto299 at 24895 11778 1672 size 412 530 386
+0.04 TRIG #1196 trigger_multiple/trigger_multiple_bcs_seo_balcony name=- at 24430 11540 1752 size 200 274 97
+0.04 TRIG #1197 trigger_multiple/trigger_multiple_bcs_seo_3rdbalcony name=- at 24580 12122 1872 size 338 354 82
+0.04 TRIG #1198 trigger_multiple/trigger_multiple_bcs_seo_sculpture name=- at 24749 10875 1616 size 206 227 274
+0.04 TRIG #1199 trigger_multiple/trigger_multiple_bcs_seo_sculpture name=- at 25221 10562 1616 size 244 203 274
+0.04 TRIG #1200 trigger_multiple/trigger_multiple_bcs_seo_sculpture name=- at 24999 10690 1616 size 186 220 274
+0.04 TRIG #1201 trigger_multiple/trigger_multiple_bcs_seo_stairs name=- at 24818 11918 1700 size 174 814 446
+0.04 TRIG #1206 script_brushmodel/script_brushmodel name=- at 19109 18612 1558 size 96 4 100
+0.04 TRIG #1208 script_brushmodel/script_brushmodel name=sd_glass_sign1_1 at 19122 18344 1384 size 6 141 117
+0.04 TRIG #1209 script_brushmodel/script_brushmodel name=- at 18840 18312 1558 size 96 4 100
+0.04 TRIG #1210 script_brushmodel/script_brushmodel name=- at 19108 18312 1558 size 96 4 100
+0.04 TRIG #1212 trigger_damage/trigger_damage name=- at 18841 18614 1576 size 98 6 71
+0.04 TRIG #1213 script_brushmodel/script_brushmodel name=- at 19328 18625 1521 size 43 41 36
+0.04 TRIG #1215 script_brushmodel/script_brushmodel name=- at 19360 18353 1567 size 4 81 75
+0.04 TRIG #1218 script_brushmodel/script_brushmodel name=- at 18732 18174 1521 size 41 43 36
+0.04 TRIG #1219 script_brushmodel/script_brushmodel name=- at 18614 18417 1570 size 5 60 116
+0.04 TRIG #1221 script_brushmodel/script_brushmodel name=- at 19070 18180 1338 size 41 43 36
+0.04 TRIG #1222 script_brushmodel/script_brushmodel name=- at 18857 18181 1339 size 52 52 46
+0.04 TRIG #1223 script_brushmodel/script_brushmodel name=- at 18788 18180 1338 size 41 43 36
+0.04 TRIG #1224 script_brushmodel/script_brushmodel name=- at 18862 18176 1521 size 50 51 36
+0.04 TRIG #1225 script_brushmodel/script_brushmodel name=- at 18616 18285 1570 size 5 62 117
+0.04 TRIG #1228 script_brushmodel/script_brushmodel name=- at 19106 18182 1521 size 47 49 36
+0.04 TRIG #1237 script_brushmodel/script_brushmodel name=- at 19030 18186 1523 size 54 53 46
+0.04 TRIG #1238 script_brushmodel/script_brushmodel name=- at 19327 18474 1521 size 43 41 36
+0.04 TRIG #1240 script_brushmodel/script_brushmodel name=- at 18646 18438 1523 size 53 54 48
+0.04 TRIG #1241 script_brushmodel/script_brushmodel name=- at 19360 18478 1567 size 4 83 75
+0.04 TRIG #1242 script_brushmodel/script_brushmodel name=- at 19360 18562 1567 size 4 83 75
+0.04 TRIG #1243 script_brushmodel/script_brushmodel name=- at 19360 18646 1567 size 4 83 75
+0.04 TRIG #1244 script_brushmodel/script_brushmodel name=- at 19333 18284 1567 size 51 51 75
+0.04 TRIG #1245 script_brushmodel/script_brushmodel name=- at 19278 18228 1567 size 58 58 75
+0.04 TRIG #1246 script_brushmodel/script_brushmodel name=- at 19222 18172 1567 size 52 52 75
+0.04 TRIG #1247 script_brushmodel/script_brushmodel name=- at 19152 18146 1567 size 83 4 75
+0.04 TRIG #1248 script_brushmodel/script_brushmodel name=- at 19028 18146 1567 size 83 4 75
+0.04 TRIG #1249 script_brushmodel/script_brushmodel name=- at 18944 18146 1567 size 83 4 75
+0.04 TRIG #1250 script_brushmodel/script_brushmodel name=- at 18859 18146 1567 size 83 4 75
+0.04 TRIG #1251 script_brushmodel/script_brushmodel name=- at 18734 18146 1567 size 83 4 75
+0.04 TRIG #1252 script_brushmodel/script_brushmodel name=- at 18649 18146 1567 size 83 4 75
+0.04 TRIG #1253 script_brushmodel/script_brushmodel name=- at 18565 18146 1567 size 83 4 75
+0.04 TRIG #1254 script_brushmodel/script_brushmodel name=- at 18731 18381 1386 size 4 60 116
+0.04 TRIG #1255 script_brushmodel/script_brushmodel name=- at 18731 18302 1386 size 4 61 117
+0.04 TRIG #1256 script_brushmodel/script_brushmodel name=- at 18776 18530 1386 size 61 4 117
+0.04 TRIG #1257 script_brushmodel/script_brushmodel name=- at 18894 18530 1386 size 61 4 117
+0.04 TRIG #1258 script_brushmodel/script_brushmodel name=- at 19010 18530 1386 size 61 4 117
+0.04 TRIG #1259 script_brushmodel/script_brushmodel name=- at 19130 18530 1386 size 61 4 117
+0.04 TRIG #1260 script_brushmodel/script_brushmodel name=- at 19300 18530 1386 size 61 4 117
+0.04 TRIG #1262 script_brushmodel/script_brushmodel name=hide_screens at 17070 19968 1771 size 10 68 260
+0.04 TRIG #1264 script_brushmodel/script_brushmodel name=hide_screens at 18934 18453 1699 size 237 117 84
+0.04 TRIG #1265 script_brushmodel/script_brushmodel name=hide_screens at 19551 17913 1860 size 130 128 33
+0.04 TRIG #1270 script_brushmodel/script_brushmodel name=pf5145_auto1 at 16413 20090 1582 size 30 9 107
+0.04 TRIG #1271 script_brushmodel/script_brushmodel name=brush_panel at 16413 20090 1582 size 36 12 113
+0.04 TRIG #1272 trigger_multiple/trigger_multiple name=seoul_control_room at 15157 20165 1768 size 242 226 124
+0.04 TRIG #1285 script_brushmodel/script_brushmodel name=pf5168_auto1 at 16125 20090 1582 size 30 6 107
+0.04 TRIG #1286 script_brushmodel/script_brushmodel name=brush_panel at 16125 20090 1582 size 36 8 113
+0.04 TRIG #1287 script_brushmodel/script_brushmodel name=pf5169_auto1 at 16157 20090 1582 size 30 6 107
+0.04 TRIG #1288 script_brushmodel/script_brushmodel name=brush_panel at 16157 20090 1582 size 36 8 113
+0.04 TRIG #1289 script_brushmodel/script_brushmodel name=pf5170_auto1 at 16189 20090 1582 size 30 6 107
+0.04 TRIG #1290 script_brushmodel/script_brushmodel name=brush_panel at 16189 20090 1582 size 36 8 113
+0.04 TRIG #1291 script_brushmodel/script_brushmodel name=pf5171_auto1 at 16221 20090 1582 size 30 6 107
+0.04 TRIG #1292 script_brushmodel/script_brushmodel name=brush_panel at 16221 20090 1582 size 36 8 113
+0.04 TRIG #1293 script_brushmodel/script_brushmodel name=pf5172_auto1 at 16253 20090 1582 size 30 6 107
+0.04 TRIG #1294 script_brushmodel/script_brushmodel name=brush_panel at 16253 20090 1582 size 36 8 113
+0.04 TRIG #1295 script_brushmodel/script_brushmodel name=pf5173_auto1 at 16285 20090 1582 size 30 6 107
+0.04 TRIG #1296 script_brushmodel/script_brushmodel name=brush_panel at 16285 20090 1582 size 36 8 113
+0.04 TRIG #1298 script_brushmodel/script_brushmodel name=pf5208_auto1 at 16317 20090 1582 size 30 6 107
+0.04 TRIG #1299 script_brushmodel/script_brushmodel name=brush_panel at 16317 20090 1582 size 36 8 113
+0.04 TRIG #1303 script_brushmodel/script_brushmodel name=pf5235_auto1 at 16445 20086 1582 size 30 9 107
+0.04 TRIG #1304 script_brushmodel/script_brushmodel name=brush_panel at 16445 20086 1582 size 36 11 113
+0.04 TRIG #1305 script_brushmodel/script_brushmodel name=pf5237_auto1 at 16476 20089 1582 size 30 9 107
+0.04 TRIG #1306 script_brushmodel/script_brushmodel name=brush_panel at 16476 20089 1582 size 36 12 113
+0.04 TRIG #1307 script_brushmodel/script_brushmodel name=pf5238_auto1 at 16509 20087 1582 size 30 9 107
+0.04 TRIG #1308 script_brushmodel/script_brushmodel name=brush_panel at 16509 20087 1582 size 36 12 113
+0.04 TRIG #1309 script_brushmodel/script_brushmodel name=pf5239_auto1 at 16541 20090 1582 size 30 6 107
+0.04 TRIG #1310 script_brushmodel/script_brushmodel name=brush_panel at 16541 20090 1582 size 36 8 113
+0.04 TRIG #1311 script_brushmodel/script_brushmodel name=pf5249_auto1 at 16573 20090 1582 size 30 6 107
+0.04 TRIG #1312 script_brushmodel/script_brushmodel name=brush_panel at 16573 20090 1582 size 36 8 113
+0.04 TRIG #1314 script_brushmodel/script_brushmodel name=pf5250_auto1 at 16605 20090 1582 size 30 6 107
+0.04 TRIG #1315 script_brushmodel/script_brushmodel name=brush_panel at 16605 20090 1582 size 36 8 113
+0.04 TRIG #1321 trigger_multiple/trigger_multiple name=trigger_bar2_enter at 15936 20707 1792 size 98 130 198
+0.04 TRIG #1329 trigger_multiple/trigger_multiple name=trigger_bar2_exit at 15362 20708 1771 size 66 126 124
+0.04 TRIG #1330 trigger_multiple/trigger_multiple name=trigger_shopping_walkway_exit at 15936 20334 1728 size 98 508 422
+0.04 TRIG #1335 trigger_multiple/trigger_multiple name=trigger_bar2_enter at 15442 20708 1771 size 66 126 124
+0.04 TRIG #1336 trigger_multiple/trigger_multiple name=trigger_shopping_walkway_enter at 16839 20190 1517 size 66 189 318
+0.04 TRIG #1337 trigger_multiple/trigger_multiple name=trigger_shopping_walkway_pre_enter at 16919 20190 1517 size 66 189 318
+0.04 TRIG #1338 trigger_multiple/trigger_multiple name=trigger_shopping_walkway_enter at 16021 20184 1605 size 66 178 174
+0.04 TRIG #1339 trigger_multiple/trigger_multiple_slide name=- at 15071 20247 1722 size 17 45 14
+0.04 TRIG #1340 script_brushmodel/script_brushmodel name=- at 16707 20098 1587 size 106 5 119
+0.04 TRIG #1341 script_brushmodel/script_brushmodel name=- at 16811 20098 1587 size 106 5 119
+0.04 TRIG #1342 script_brushmodel/script_brushmodel name=- at 16915 20098 1587 size 106 5 119
+0.04 TRIG #1343 script_brushmodel/script_brushmodel name=- at 17019 20098 1587 size 106 5 119
+0.04 TRIG #1344 script_brushmodel/script_brushmodel name=brush_glass_smash_drone at 16707 20098 1587 size 106 5 119
+0.04 TRIG #1345 script_brushmodel/script_brushmodel name=brush_glass_smash_drone at 16811 20098 1587 size 106 5 119
+0.04 TRIG #1346 script_brushmodel/script_brushmodel name=brush_glass_smash_drone at 16915 20098 1587 size 106 5 119
+0.04 TRIG #1347 script_brushmodel/script_brushmodel name=brush_glass_smash_drone at 17020 20098 1587 size 106 5 119
+0.04 TRIG #1348 trigger_multiple/trigger_multiple name=- at 16930 20194 1493 size 66 158 252
+0.04 TRIG #1350 script_brushmodel/script_brushmodel name=- at 19588 18061 1379 size 129 85 126
+0.04 TRIG #1351 trigger_multiple/trigger_multiple_visionset name=- at 19554 16823 1370 size 410 115 100
+0.04 TRIG #1352 trigger_multiple/trigger_multiple name=seoul at 17030 20141 1493 size 82 52 252
+0.04 TRIG #1353 trigger_multiple/trigger_multiple_slide name=- at 16632 18492 1720 size 142 34 138
+0.04 TRIG #1359 script_brushmodel/script_brushmodel name=- at 19319 16953 1526 size 41 43 36
+0.04 TRIG #1360 script_brushmodel/script_brushmodel name=- at 19319 17034 1526 size 41 43 36
+0.04 TRIG #1362 trigger_multiple/trigger_multiple name=seoul_shopping_district at 19551 16860 1474 size 418 119 316
+0.04 TRIG #1365 script_brushmodel/script_brushmodel name=- at 17925 17554 1704 size 43 41 36
+0.04 TRIG #1371 script_brushmodel/script_brushmodel name=- at 17771 17554 1704 size 43 41 36
+0.04 TRIG #1380 script_brushmodel/script_brushmodel name=- at 18590 20156 1524 size 43 41 36
+0.04 TRIG #1381 script_brushmodel/script_brushmodel name=- at 18454 20156 1524 size 43 41 36
+0.04 TRIG #1382 script_brushmodel/script_brushmodel name=- at 18409 20445 1524 size 43 41 36
+0.04 TRIG #1383 script_brushmodel/script_brushmodel name=- at 18560 20445 1524 size 43 41 36
+0.04 TRIG #1384 script_brushmodel/script_brushmodel name=- at 18447 20119 1704 size 43 41 36
+0.04 TRIG #1385 script_brushmodel/script_brushmodel name=- at 18454 20266 1524 size 43 41 36
+0.04 TRIG #1386 script_brushmodel/script_brushmodel name=- at 18756 20156 1524 size 43 41 36
+0.04 TRIG #1387 script_brushmodel/script_brushmodel name=- at 18762 20057 1340 size 43 41 36
+0.04 TRIG #1388 script_brushmodel/script_brushmodel name=- at 18671 20057 1340 size 43 41 36
+0.04 TRIG #1389 script_brushmodel/script_brushmodel name=- at 18762 20164 1340 size 43 41 36
+0.04 TRIG #1390 script_brushmodel/script_brushmodel name=- at 18671 20164 1340 size 43 41 36
+0.04 TRIG #1391 script_brushmodel/script_brushmodel name=- at 18260 20120 1524 size 43 41 36
+0.04 TRIG #1392 script_brushmodel/script_brushmodel name=- at 18756 20252 1524 size 43 41 36
+0.04 TRIG #1393 script_brushmodel/script_brushmodel name=- at 18601 20119 1704 size 43 41 36
+0.04 TRIG #1394 script_brushmodel/script_brushmodel name=hide_screens at 19686 17320 1860 size 16 445 33
+0.04 TRIG #1395 script_brushmodel/script_brushmodel name=hide_screens at 20096 17723 1860 size 445 62 33
+0.04 TRIG #1396 script_brushmodel/script_brushmodel name=hide_screens at 19434 17124 1712 size 17 14 219
+0.04 TRIG #1397 script_brushmodel/script_brushmodel name=hide_screens at 19698 16975 1604 size 12 81 35
+0.04 TRIG #1398 script_brushmodel/script_brushmodel name=hide_screens at 19700 18351 1768 size 49 28 200
+0.04 TRIG #1399 script_brushmodel/script_brushmodel name=hide_screens at 18706 18088 1891 size 244 17 62
+0.04 TRIG #1400 script_brushmodel/script_brushmodel name=hide_screens at 19026 18088 1892 size 244 17 63
+0.04 TRIG #1401 script_brushmodel/script_brushmodel name=hide_screens at 17994 18090 1803 size 643 17 62
+0.04 TRIG #1402 script_brushmodel/script_brushmodel name=hide_screens at 17994 18090 2120 size 643 16 62
+0.04 TRIG #1403 script_brushmodel/script_brushmodel name=hide_screens at 18304 17731 1707 size 198 17 166
+0.04 TRIG #1404 script_brushmodel/script_brushmodel name=hide_screens at 18458 17841 1610 size 14 60 65
+0.04 TRIG #1405 script_brushmodel/script_brushmodel name=hide_screens at 18545 17709 1606 size 164 14 120
+0.04 TRIG #1406 script_brushmodel/script_brushmodel name=hide_screens at 17232 17686 1593 size 298 24 194
+0.04 TRIG #1407 script_brushmodel/script_brushmodel name=hide_screens at 16756 17692 1647 size 294 13 66
+0.04 TRIG #1408 script_brushmodel/script_brushmodel name=hide_screens at 16698 18742 1788 size 101 20 260
+0.04 TRIG #1409 script_brushmodel/script_brushmodel name=hide_screens at 16945 19184 1745 size 76 20 268
+0.04 TRIG #1410 script_brushmodel/script_brushmodel name=hide_screens at 18143 18128 1446 size 344 30 27
+0.04 TRIG #1411 script_brushmodel/script_brushmodel name=hide_screens at 17728 18078 1437 size 253 60 12
+0.04 TRIG #1412 script_brushmodel/script_brushmodel name=hide_screens at 16883 19181 1857 size 50 16 397
+0.04 TRIG #1413 script_brushmodel/script_brushmodel name=hide_screens at 17500 18101 1428 size 191 52 12
+0.04 TRIG #1414 script_brushmodel/script_brushmodel name=hide_screens at 16597 18973 1864 size 17 440 60
+0.04 TRIG #1415 script_brushmodel/script_brushmodel name=hide_screens at 16942 18975 1664 size 11 328 73
+0.04 TRIG #1416 script_brushmodel/script_brushmodel name=hide_screens at 17611 18007 1904 size 16 50 397
+0.04 TRIG #1417 script_brushmodel/script_brushmodel name=- at 15589 19335 1531 size 43 41 36
+0.04 TRIG #1418 script_brushmodel/script_brushmodel name=- at 15850 19335 1531 size 43 41 36
+0.04 TRIG #1419 script_brushmodel/script_brushmodel name=- at 15719 19335 1531 size 43 41 36
+0.04 TRIG #1421 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_exit at 18888 18104 1376 size 1074 66 130
+0.04 TRIG #1422 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_exit at 19392 18376 1376 size 66 482 130
+0.04 TRIG #1423 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_exit at 18968 18104 1568 size 914 66 98
+0.04 TRIG #1424 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_exit at 19392 18416 1568 size 66 562 98
+0.04 TRIG #1425 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_exit at 18088 18072 1560 size 562 66 146
+0.04 TRIG #1426 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_exit at 19328 18168 1464 size 66 66 306
+0.04 TRIG #1427 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_enter at 18088 18152 1560 size 562 66 146
+0.04 TRIG #1428 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_enter at 18900 18176 1568 size 778 66 162
+0.04 TRIG #1429 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_enter at 19288 18452 1568 size 130 490 162
+0.04 TRIG #1430 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_enter at 18820 18176 1376 size 938 66 130
+0.04 TRIG #1431 trigger_multiple/trigger_multiple name=trigger_shopping_restaraunt_bar_enter at 19288 18452 1376 size 130 490 130
+0.04 TRIG #1440 script_brushmodel/script_brushmodel name=hide_screens at 19715 16968 1488 size 6 210 33
+0.04 TRIG #1442 script_brushmodel/script_brushmodel name=hide_screens at 16860 20058 1582 size 416 8 121
+0.04 TRIG #1443 script_brushmodel/script_brushmodel name=hide_screens at 17406 19694 1401 size 164 10 52
+0.04 TRIG #1444 script_brushmodel/script_brushmodel name=hide_screens at 17405 19666 1401 size 164 10 52
+0.04 TRIG #1445 script_brushmodel/script_brushmodel name=hide_screens at 17868 19694 1401 size 164 10 52
+0.04 TRIG #1446 script_brushmodel/script_brushmodel name=hide_screens at 17866 19666 1401 size 164 10 52
+0.04 TRIG #1447 script_brushmodel/script_brushmodel name=hide_screens at 18313 19694 1401 size 164 10 52
+0.04 TRIG #1448 script_brushmodel/script_brushmodel name=hide_screens at 18311 19666 1401 size 164 10 52
+0.04 TRIG #1450 script_brushmodel/script_brushmodel name=hide_screens at 18937 18107 1475 size 222 19 40
+0.04 TRIG #1451 script_brushmodel/script_brushmodel name=hide_screens at 15972 19400 1690 size 11 62 256
+0.04 TRIG #1452 script_brushmodel/script_brushmodel name=hide_screens at 15936 19400 1690 size 11 62 256
+0.04 TRIG #1453 script_brushmodel/script_brushmodel name=hide_screens at 16626 17739 1778 size 11 62 256
+0.04 TRIG #1454 script_brushmodel/script_brushmodel name=hide_screens at 16590 17739 1778 size 11 62 256
+0.04 TRIG #1455 script_brushmodel/script_brushmodel name=hide_screens at 17241 18080 1792 size 37 48 256
+0.04 TRIG #1456 script_brushmodel/script_brushmodel name=hide_screens at 17156 18080 1792 size 37 48 256
+0.04 TRIG #1457 script_brushmodel/script_brushmodel name=hide_screens at 18377 18091 1874 size 11 62 256
+0.04 TRIG #1458 script_brushmodel/script_brushmodel name=hide_screens at 18204 17721 1738 size 11 62 256
+0.04 TRIG #1459 script_brushmodel/script_brushmodel name=hide_screens at 18168 17721 1778 size 11 62 256
+0.04 TRIG #1463 script_brushmodel/script_brushmodel name=hide_screens at 16640 19968 1997 size 10 68 486
+0.04 TRIG #1464 script_brushmodel/script_brushmodel name=hide_screens at 16596 19968 1997 size 10 68 486
+0.04 TRIG #1465 script_brushmodel/script_brushmodel name=hide_screens at 15518 19968 1997 size 10 68 486
+0.04 TRIG #1466 script_brushmodel/script_brushmodel name=hide_screens at 17201 18076 1652 size 85 56 40
+0.04 TRIG #1470 trigger_multiple/trigger_multiple name=trig_sd_reinforce1 at 19007 18210 1502 size 26 1134 370
+0.04 TRIG #1472 info_volume/info_volume name=sd_goal_upstairs1 at 18719 18355 1564 size 1292 452 154
+0.04 TRIG #1473 info_volume/info_volume name=sd_goal_street1 at 19513 17967 1382 size 888 636 150
+0.04 TRIG #1476 trigger_multiple/trigger_multiple name=trig_sd_turret_vehicle_spawn at 19454 18057 1502 size 601 1007 370
+0.04 TRIG #1477 trigger_multiple/trigger_multiple name=- at 19532 16600 1446 size 378 86 306
+0.04 TRIG #1480 trigger_multiple/trigger_multiple name=- at 19532 16428 1310 size 378 86 306
+0.04 TRIG #1488 trigger_multiple/trigger_multiple_autosave name=- at 18484 18390 1618 size 218 493 227
+0.04 TRIG #1496 trigger_multiple/trigger_multiple name=- at 16835 17977 1457 size 648 860 288
+0.04 TRIG #1505 trigger_multiple/trigger_multiple_bcs_seo_window name=- at 17873 17452 1600 size 642 499 191
+0.04 TRIG #1507 trigger_multiple/trigger_multiple_flag_set name=- flags=sd_street_combat_complete at 17034 20029 1452 size 218 118 282
+0.04 TRIG #1510 trigger_multiple/trigger_multiple name=sd_trig_engage_patrol at 19520 17394 1460 size 407 46 314
+0.04 TRIG #1512 trigger_multiple/trigger_multiple name=- at 19820 15892 1172 size 602 602 314
+0.04 TRIG #1513 trigger_multiple/trigger_multiple_flag_set name=- flags=sd_escaped_swarm at 16063 20176 1626 size 72 218 262
+0.04 TRIG #1519 info_volume/info_volume name=sd_goal_intersection2 at 16641 18051 1400 size 628 776 186
+0.04 TRIG #1521 trigger_multiple/trigger_multiple_flag_set name=- flags=sd_start_shopping_district at 19804 15860 1172 size 458 458 314
+0.04 TRIG #1523 trigger_multiple/trigger_multiple name=trig_sd_upstairs1_zipreinforce at 18544 18504 1504 size 322 690 386
+0.04 TRIG #1524 trigger_multiple/trigger_multiple name=- at 19044 18218 2116 size 677 196 141
+0.04 TRIG #1527 trigger_multiple/trigger_multiple name=pf4737_auto7429 at 19508 18103 1472 size 692 1050 322
+0.04 TRIG #1530 info_volume/info_volume name=sd_goal_reinforce1 at 17856 17900 1400 size 690 506 186
+0.04 TRIG #1531 trigger_multiple/trigger_multiple name=- at 18781 18452 1564 size 44 690 139
+0.04 TRIG #1535 info_volume/info_volume name=sd_goal_reinforce_fallback1 at 16770 18041 1400 size 758 764 186
+0.04 TRIG #1536 info_volume/info_volume name=vol_sd_1st_int_windows at 19260 18254 1568 size 290 246 162
+0.04 TRIG #1545 trigger_multiple/trigger_multiple name=trig_upstairs2_spawn at 18352 18168 1496 size 322 946 402
+0.04 TRIG #1547 trigger_multiple/trigger_multiple name=trig_updstairs_window_approach at 15368 20700 1792 size 70 162 242
+0.04 TRIG #1548 info_volume/info_volume name=sd_goal_upstairs2 at 17845 17430 1576 size 642 515 259
+0.04 TRIG #1549 trigger_multiple/trigger_multiple_flag_set name=trig_sd_cleanup_upstairs2 flags=sd_cleanup_upstairs at 17682 17897 1504 size 70 532 370
+0.04 TRIG #1552 info_volume/info_volume name=sd_goal_intersection2_fallback at 16768 18769 1464 size 466 956 314
+0.04 TRIG #1553 trigger_multiple/trigger_multiple name=trig_sd_upstairs1_reinforce at 19144 18738 1491 size 220 84 130
+0.04 TRIG #1554 trigger_multiple/trigger_multiple name=pf4737_auto2250 at 19760 17888 1472 size 1121 559 322
+0.04 TRIG #1555 trigger_multiple/trigger_multiple name=sd_trig_move_inside_restaurant at 18580 18480 1508 size 1546 670 394
+0.04 TRIG #1556 trigger_multiple/trigger_multiple name=- at 18178 18168 1466 size 62 1227 315
+0.04 TRIG #1557 trigger_multiple/trigger_multiple name=pf4737_auto7425 at 18726 18214 1504 size 64 1166 370
+0.05 TRIG #1558 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 16250 18958 2067 size 646 429 316
+0.05 TRIG #1559 trigger_multiple/trigger_multiple name=- at 17822 17895 1387 size 611 440 220
+0.05 TRIG #1560 trigger_multiple/trigger_multiple name=- at 17659 17913 1742 size 334 502 929
+0.05 TRIG #1561 trigger_multiple/trigger_multiple name=- at 16797 18283 1473 size 1006 310 320
+0.05 TRIG #1562 trigger_multiple/trigger_multiple name=trig_drone_evade at 16755 19356 1400 size 992 68 186
+0.05 TRIG #1563 trigger_multiple/trigger_multiple name=- at 16925 20192 1514 size 100 168 154
+0.05 TRIG #1564 info_volume/info_volume name=vol_kamikaze_drone_evade at 16088 20280 1624 size 1810 434 498
+0.05 TRIG #1565 trigger_multiple/trigger_multiple_flag_set name=- flags=sd_spawn_drone_swarm_for_evade at 17112 17944 1516 size 274 722 410
+0.05 TRIG #1566 trigger_multiple/trigger_multiple_flag_set name=- flags=sd_trigger_drone_evade at 16792 18594 1488 size 466 333 354
+0.05 TRIG #1567 info_volume/info_volume name=sd_goal_upstairs3 at 17960 18376 1564 size 754 530 154
+0.05 TRIG #1570 trigger_multiple/trigger_multiple_flag_set name=- flags=sd_player_reached_swarm_cover at 17022 20121 1452 size 109 46 154
+0.05 TRIG #1575 trigger_multiple/trigger_multiple_slide name=- at 18346 18051 1700 size 38 151 72
+0.05 TRIG #1580 trigger_multiple/trigger_multiple_bcs_seo_window name=- at 19258 18244 1602 size 238 226 190
+0.05 TRIG #1581 trigger_multiple/trigger_multiple_bcs_seo_window name=- at 16366 18392 1602 size 406 418 190
+0.05 TRIG #1585 trigger_multiple/trigger_multiple name=pf4737_auto2249 at 19548 17177 1460 size 407 46 314
+0.05 TRIG #1591 trigger_multiple/trigger_multiple name=pf4737_auto7425 at 19102 18466 1393 size 572 699 164
+0.05 TRIG #1592 trigger_multiple/trigger_multiple name=- at 16264 20180 1602 size 98 186 198
+0.05 TRIG #1594 trigger_use/trigger_use name=trig_sd_use_drone_control at 15233 20415 -8227 size 46 51 36
+0.05 TRIG #1596 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 19524 19136 1696 size 570 66 770
+0.05 TRIG #1597 trigger_multiple/trigger_multiple_flag_set name=- flags=canal_window_check_on + canal_reached_window at 15188 20202 -8230 size 234 237 142
+0.05 TRIG #1598 script_brushmodel/script_brushmodel name=canal_window_blocker at 15150 20168 1776 size 179 162 293
+0.05 TRIG #1602 info_volume/info_volume name=vol_land_assist_reminder at 15188 20218 1775 size 272 275 130
+0.05 TRIG #1605 trigger_multiple/trigger_multiple name=trig_canal_reach_upstairs at 15852 20461 1792 size 79 746 242
+0.05 TRIG #1606 trigger_multiple/trigger_multiple name=canal_trig_allies_cover1 at 16168 20180 1580 size 98 186 154
+0.05 TRIG #1610 trigger_multiple/trigger_multiple_flag_set name=- flags=trig_player_up_first_stairs at 19104 18740 1512 size 74 82 170
+0.05 TRIG #1611 trigger_multiple/trigger_multiple name=trig_sd_will_command_restaraunt1 at 19217 18612 1392 size 248 331 147
+0.05 TRIG #1612 trigger_multiple/trigger_multiple name=trig_disable_restaraunt_events at 18524 18406 1399 size 284 529 180
+0.05 TRIG #1615 info_volume/info_volume name=sd_goal_restaraunt at 18914 18448 1382 size 863 609 154
+0.05 TRIG #1616 trigger_multiple/trigger_multiple_flag_set name=- flags=objective_sd_mid at 19562 17554 1445 size 699 53 338
+0.05 TRIG #1617 trigger_multiple/trigger_multiple_flag_set name=- flags=objective_sd_stairs at 17182 17905 1488 size 53 628 338
+0.05 TRIG #1626 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 19580 18858 1688 size 458 238 786
+0.05 TRIG #1627 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 20446 17932 1688 size 118 826 770
+0.05 TRIG #1628 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 20240 17912 1680 size 146 546 786
+0.05 TRIG #1629 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 17636 19708 1672 size 170 1034 770
+0.05 TRIG #1630 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 17356 19708 1664 size 346 1034 786
+0.05 TRIG #1631 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 15952 19678 1688 size 66 838 770
+0.05 TRIG #1632 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 16238 19648 1680 size 254 882 786
+0.05 TRIG #1633 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 15468 17874 1688 size 107 838 770
+0.05 TRIG #1634 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 15751 17874 1680 size 290 838 786
+0.05 TRIG #1635 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 17970 18332 2171 size 5198 3529 108
+0.05 TRIG #1636 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 20056 17932 1688 size 66 826 770
+0.05 TRIG #1637 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 19582 18632 1696 size 454 66 770
+0.05 TRIG #1638 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 17038 19720 1672 size 94 1034 770
+0.05 TRIG #1639 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 16502 19648 1672 size 94 890 770
+0.05 TRIG #1640 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 16041 17884 1672 size 94 890 770
+0.05 TRIG #1641 trigger_multiple/trigger_multiple_flag_set name=- flags=sd_trigger_final_combat at 16748 18298 1568 size 784 300 515
+0.05 TRIG #1644 trigger_multiple/trigger_multiple_slide name=- at 18100 17676 1630 size 147 67 53
+0.05 TRIG #1645 trigger_multiple/trigger_multiple_slide name=- at 17943 17704 1630 size 160 67 53
+0.05 TRIG #1646 trigger_multiple/trigger_multiple_slide name=- at 17768 17704 1630 size 162 67 53
+0.05 TRIG #1647 trigger_multiple/trigger_multiple_slide name=- at 17610 17676 1630 size 147 67 53
+0.05 TRIG #1648 trigger_multiple/trigger_multiple_slide name=- at 17722 18062 1452 size 242 59 53
+0.05 TRIG #1649 trigger_multiple/trigger_multiple_slide name=- at 17500 18096 1452 size 190 72 53
+0.05 TRIG #1650 trigger_multiple/trigger_multiple_slide name=- at 16592 18538 1462 size 57 393 53
+0.05 TRIG #1651 trigger_multiple/trigger_multiple_slide name=- at 16518 18233 1485 size 268 267 98
+0.05 TRIG #1652 trigger_multiple/trigger_multiple_slide name=- at 16259 18152 1462 size 307 57 53
+0.05 TRIG #1653 trigger_multiple/trigger_multiple_bcs_seo_window name=- at 16424 18296 1568 size 306 306 130
+0.05 TRIG #1656 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 16250 19262 2067 size 645 181 316
+0.05 TRIG #1657 trigger_multiple/trigger_multiple_bcs_seo_counter name=- at 17872 18424 1528 size 130 434 82
+0.05 TRIG #1659 trigger_use/trigger_use name=intelligence_item at 18152 18206 1641 size 40 40 32
+0.05 TRIG #1661 trigger_multiple/trigger_multiple_flag_set name=- flags=objective_sd_intersection2 at 17792 17905 1512 size 53 628 445
+0.05 TRIG #1662 trigger_multiple/trigger_multiple name=pf4737_auto7419 at 19548 17386 1460 size 407 46 314
+0.05 TRIG #1667 info_volume/info_volume name=sd_goal_intersection2_upstairs at 16344 18360 1584 size 466 402 162
+0.05 TRIG #1673 info_volume/info_volume name=- at 18938 18266 1553 size 850 273 160
+0.05 TRIG #1674 info_volume/info_volume name=- at 18927 18580 1553 size 850 273 160
+0.05 TRIG #1675 trigger_multiple/trigger_multiple name=pf4737_auto7425 at 19104 18253 1545 size 574 298 144
+0.05 TRIG #1676 trigger_multiple/trigger_multiple name=- at 19104 18640 1545 size 575 289 144
+0.05 TRIG #1677 trigger_multiple/trigger_multiple_slide name=- at 18210 17754 1524 size 31 190 53
+0.05 TRIG #1678 trigger_multiple/trigger_multiple_slide name=- at 17602 18026 1651 size 31 187 128
+0.05 TRIG #1682 trigger_multiple/trigger_multiple_slide name=- at 18364 18018 1606 size 26 150 110
+0.05 TRIG #1683 trigger_multiple/trigger_multiple_slide name=- at 18422 17726 1720 size 42 190 110
+0.05 TRIG #1684 trigger_multiple/trigger_multiple_slide name=- at 17820 18082 1630 size 18 102 62
+0.05 TRIG #1685 trigger_multiple/trigger_multiple_slide name=- at 17413 17748 1697 size 38 148 62
+0.05 TRIG #1686 trigger_multiple/trigger_multiple_slide name=- at 17179 18056 1695 size 38 148 62
+0.05 TRIG #1687 trigger_multiple/trigger_multiple_slide name=- at 16370 18124 1714 size 31 114 128
+0.05 TRIG #1688 trigger_multiple/trigger_multiple_slide name=- at 16293 18058 1691 size 36 143 82
+0.05 TRIG #1689 trigger_multiple/trigger_multiple_slide name=- at 16397 17768 1691 size 36 146 82
+0.05 TRIG #1690 trigger_multiple/trigger_multiple_slide name=- at 15716 17766 1691 size 39 150 82
+0.05 TRIG #1691 trigger_multiple/trigger_multiple_slide name=- at 19208 17788 1691 size 39 144 82
+0.05 TRIG #1692 trigger_multiple/trigger_multiple_slide name=- at 19982 18048 1691 size 41 147 82
+0.05 TRIG #1693 trigger_multiple/trigger_multiple_slide name=- at 19464 18426 1691 size 147 41 82
+0.05 TRIG #1694 trigger_multiple/trigger_multiple_slide name=- at 19670 19178 1691 size 147 41 82
+0.05 TRIG #1695 trigger_multiple/trigger_multiple_slide name=- at 19470 18826 1691 size 147 41 82
+0.05 TRIG #1696 trigger_multiple/trigger_multiple_slide name=- at 20036 18120 1665 size 102 43 82
+0.05 TRIG #1697 trigger_multiple/trigger_multiple_slide name=- at 20036 18120 1482 size 102 43 82
+0.05 TRIG #1698 trigger_multiple/trigger_multiple_slide name=- at 20036 18120 1842 size 102 43 82
+0.05 TRIG #1699 trigger_multiple/trigger_multiple_slide name=- at 19724 18432 1665 size 43 102 82
+0.05 TRIG #1700 trigger_multiple/trigger_multiple_slide name=- at 19724 18432 1482 size 43 102 82
+0.05 TRIG #1701 trigger_multiple/trigger_multiple_slide name=- at 19724 18432 1842 size 43 102 82
+0.05 TRIG #1702 trigger_multiple/trigger_multiple_slide name=- at 19724 18571 1665 size 43 102 82
+0.05 TRIG #1703 trigger_multiple/trigger_multiple_slide name=- at 19724 18571 1482 size 43 102 82
+0.05 TRIG #1704 trigger_multiple/trigger_multiple_slide name=- at 19724 18571 1842 size 43 102 82
+0.05 TRIG #1705 trigger_multiple/trigger_multiple_slide name=- at 19831 18226 1665 size 174 174 82
+0.05 TRIG #1706 trigger_multiple/trigger_multiple_slide name=- at 19831 18226 1482 size 174 174 82
+0.05 TRIG #1707 trigger_multiple/trigger_multiple_slide name=- at 19831 18226 1842 size 174 174 82
+0.05 TRIG #1708 info_volume/info_volume name=- at 18932 18466 1560 size 373 151 114
+0.05 TRIG #1713 trigger_multiple/trigger_multiple name=trigger_allies_to_swarm_evade_stairs at 16813 19151 1473 size 1006 310 320
+0.05 TRIG #1714 trigger_multiple/trigger_multiple_flag_set_touching name=shopping_district_retreat_left_map flags=player_leaving_map at 19600 16216 11240 size 1356 147 786
+0.05 TRIG #1715 trigger_multiple/trigger_multiple_flag_set_touching name=shopping_district_retreat_left_map flags=player_leaving_map at 19650 16514 11232 size 1258 94 770
+0.05 TRIG #1716 trigger_multiple/trigger_multiple_flag_set_touching name=shopping_district_retreat_left_map flags=player_leaving_map at 19722 15893 11248 size 1569 124 770
+0.05 TRIG #1717 trigger_multiple/trigger_multiple_flag_set_touching name=canal_intro_retreat_left_map flags=player_leaving_map at 16752 18744 11240 size 1356 147 786
+0.05 TRIG #1718 trigger_multiple/trigger_multiple_flag_set_touching name=canal_intro_retreat_left_map flags=player_leaving_map at 16802 19042 11232 size 1258 94 770
+0.05 TRIG #1719 trigger_multiple/trigger_multiple_flag_set_touching name=canal_intro_retreat_left_map flags=player_leaving_map at 16874 18421 11248 size 1569 124 770
+0.05 TRIG #1720 trigger_multiple/trigger_multiple name=trig_updstairs_window_retreat at 15470 20742 1792 size 30 1326 242
+0.05 TRIG #1721 trigger_multiple/trigger_multiple name=trig_sd_upstairs1_zipreinforce_02 at 18544 17920 1504 size 322 482 386
+0.05 TRIG #1735 trigger_multiple/trigger_multiple name=trig_sd_intersection2_reinforce at 17778 17897 1504 size 42 532 370
+0.05 TRIG #1736 trigger_multiple/trigger_multiple name=trig_restaurant_spawn at 19582 17873 1512 size 1028 879 402
+0.05 TRIG #1742 script_brushmodel/script_brushmodel name=seo_advertisement_01 at 34569 6126 1986 size 502 502 496
+0.05 TRIG #1743 script_brushmodel/script_brushmodel name=hide_screens at 34567 6128 1986 size 503 503 497
+0.05 TRIG #1745 trigger_multiple/trigger_multiple name=trigger_start_script_color at 35876 10712 4368 size 18 26 50
+0.05 TRIG #1746 trigger_multiple/trigger_multiple name=trig_guys_move_up_after_first_fight at 35522 10168 4368 size 445 122 50
+0.05 TRIG #1747 trigger_multiple/trigger_multiple name=- at 35472 10164 4368 size 234 146 50
+0.05 TRIG #1748 trigger_multiple/trigger_multiple name=trig_cormack_trigger_will_first_landassist at 35456 9764 4368 size 106 50 82
+0.05 TRIG #1749 trigger_multiple/trigger_multiple name=trig_guys_to_first_land_assist at 35500 9976 4344 size 274 346 98
+0.05 TRIG #1750 trigger_multiple/trigger_multiple name=trigger_start_vista_vehicle_flyby at 36102 10408 4504 size 110 130 114
+0.05 TRIG #1751 trigger_multiple/trigger_multiple name=trigger_land_assist_jump_01 at 35028 9452 4304 size 610 546 306
+0.05 TRIG #1753 trigger_multiple/trigger_multiple name=trigger_building_traverse_crush_gag at 35292 8564 3664 size 754 530 178
+0.05 TRIG #1754 trigger_multiple/trigger_multiple name=trigger_building_traverse_crush_gag_setup at 34948 8498 3856 size 482 398 178
+0.05 TRIG #1755 trigger_multiple/trigger_multiple name=trigger_building_traverse_missile_explosion_gag at 36524 8772 3056 size 386 178 178
+0.05 TRIG #1756 trigger_multiple/trigger_multiple name=trigger_building_traverse_missile_explosion_fx_trig at 35628 8844 3032 size 242 482 226
+0.05 TRIG #1757 info_volume/info_volume name=vol_land_assist_reminder at 35092 9612 4384 size 418 258 114
+0.05 TRIG #1758 info_volume/info_volume name=vol_land_assist_reminder at 35228 8462 3800 size 274 326 130
+0.05 TRIG #1759 info_volume/info_volume name=vol_land_assist_reminder at 35060 8468 2248 size 322 338 130
+0.05 TRIG #1760 trigger_multiple/trigger_multiple name=trig_look_down_trigger at 35328 9126 4366 size 794 774 398
+0.05 TRIG #1761 info_volume/info_volume name=vol_npc_kill_volume_startbuilding at 35332 8978 3668 size 1546 1502 42
+0.05 TRIG #1763 trigger_multiple/trigger_multiple name=trigger_building_traverse_enemy_setup_01 at 34566 8684 3856 size 374 178 178
+0.05 TRIG #1764 trigger_multiple/trigger_multiple name=trigger_building_traverse_missile_teaser at 34434 9188 3856 size 62 210 178
+0.05 TRIG #1765 info_volume/info_volume name=vol_second_land_assist_fight_space_allies at 34910 8550 3800 size 406 518 130
+0.05 TRIG #1766 trigger_multiple/trigger_multiple name=- at 35372 8524 3528 size 610 514 114
+0.05 TRIG #1767 trigger_multiple/trigger_multiple name=trigger_missile_dodge_entrance at 35812 8524 3048 size 290 418 226
+0.05 TRIG #1768 trigger_multiple/trigger_multiple name=trigger_missile_dodge_entrance_b at 36348 8484 3048 size 114 306 226
+0.05 TRIG #1769 info_volume/info_volume name=vol_monitor_player_allies_second_jump at 35176 8514 3800 size 490 462 130
+0.05 TRIG #1770 info_volume/info_volume name=vol_enemy_boost_choose_volume at 35792 8709 4032 size 557 472 210
+0.05 TRIG #1771 info_volume/info_volume name=vol_enemy_change_floors_1 at 35648 8461 3784 size 301 360 162
+0.05 TRIG #1775 trigger_multiple/trigger_multiple name=- at 35092 9346 4128 size 946 846 90
+0.05 TRIG #1776 trigger_multiple/trigger_multiple name=trigger_lesser_allies_encounter_01a at 34420 9500 3696 size 98 130 82
+0.05 TRIG #1777 info_volume/info_volume name=vol_exo_punch_breach at 34586 9219 3812 size 126 96 138
+0.05 TRIG #1778 trigger_multiple/trigger_multiple_flag_set name=- flags=player_entered_glass_room at 34482 9188 3857 size 38 210 180
+0.05 TRIG #1779 script_brushmodel/script_brushmodel name=clip_grenade_training at 34579 8679 3816 size 16 80 100
+0.05 TRIG #1781 trigger_multiple/trigger_multiple name=trigger_building_traverse_crush_gag2 at 35412 8504 3792 size 418 378 162
+0.05 TRIG #1789 trigger_multiple/trigger_multiple name=trigger_lesser_allies_encounter_01b at 34356 8332 3696 size 98 130 82
+0.05 TRIG #1790 trigger_multiple/trigger_multiple_flag_set name=- flags=flag_second_land_assist_go at 35292 8596 3712 size 754 594 82
+0.05 TRIG #1791 trigger_multiple/trigger_multiple name=trigger_building_traverse_exit_start_anim at 34924 8724 1464 size 722 722 322
+0.05 TRIG #1793 info_volume/info_volume name=vol_cqb_volume at 35524 10116 4376 size 418 1042 130
+0.05 TRIG #1794 info_volume/info_volume name=vol_cqb_volume at 34452 8916 3832 size 738 850 290
+0.05 TRIG #1795 info_volume/info_volume name=vol_cqb_volume at 36172 8540 3088 size 1202 514 306
+0.05 TRIG #1800 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 34516 9180 3848 size 18 210 178
+0.05 TRIG #1804 trigger_multiple/trigger_multiple name=seoul_exterior at 34484 9180 3848 size 18 210 178
+0.05 TRIG #1805 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 34494 8708 3848 size 18 194 178
+0.05 TRIG #1806 trigger_multiple/trigger_multiple name=seoul_exterior at 34462 8825 3848 size 18 428 178
+0.05 TRIG #1809 script_brushmodel/script_brushmodel name=exo_punch_door_clip at 34576 9220 3816 size 7 56 98
+0.05 TRIG #1810 trigger_damage/trigger_damage name=exo_punch_door_trigger at 34576 9220 3817 size 26 54 59
+0.05 TRIG #1811 trigger_use/trigger_use name=exo_punch_door_usetrigger at 34600 9220 3818 size 54 76 64
+0.05 TRIG #1819 trigger_multiple/trigger_multiple name=seoul_hotel_fall at 35740 8962 3056 size 18 198 178
+0.05 TRIG #1823 trigger_multiple/trigger_multiple_flag_set name=- flags=flag_first_land_assist at 35236 9660 4376 size 226 322 162
+0.05 TRIG #1825 trigger_multiple/trigger_multiple name=seoul_vista at 35472 10048 4424 size 218 26 210
+0.05 TRIG #1828 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 35472 9976 4424 size 218 26 210
+0.05 TRIG #1831 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 34913 10144 4424 size 10 170 210
+0.05 TRIG #1839 trigger_multiple/trigger_multiple name=trigger_starte_first_fight at 35548 10300 4368 size 434 354 50
+0.05 TRIG #1842 trigger_multiple/trigger_multiple name=trigger_lesser_allies_encounter_01c at 34836 7988 3664 size 98 114 178
+0.05 TRIG #1844 trigger_multiple/trigger_multiple name=fall_to_hotel_lobby at 35324 9080 4220 size 1042 946 106
+0.05 TRIG #1845 info_volume/info_volume name=vol_enemy_flanker_goto at 35302 8150 3824 size 286 350 162
+0.05 TRIG #1847 trigger_multiple/trigger_multiple name=trigger_start_script_color_will at 35820 10712 4368 size 18 26 50
+0.05 TRIG #1852 trigger_multiple/trigger_multiple name=trig_break_first_fight_anims at 35456 9796 4368 size 106 82 82
+0.05 TRIG #1853 trigger_multiple/trigger_multiple_flag_set name=- flags=begin_looping_fob_functions at 35340 9060 1584 size 1554 1522 114
+0.05 TRIG #1854 trigger_multiple/trigger_multiple name=exit_hotel_to_fob_02 at 35327 9153 1738 size 1195 1219 62
+0.05 TRIG #1856 trigger_multiple/trigger_multiple_flag_set name=- flags=dof_fob at 34573 8378 1480 size 504 501 290
+0.05 TRIG #1857 trigger_multiple/trigger_multiple_flag_clear name=- flags=dof_fob at 34470 8283 1480 size 455 455 354
+0.05 TRIG #1858 trigger_multiple/trigger_multiple name=enter_hotel_lobby at 34781 8448 1484 size 385 405 322
+0.05 TRIG #1859 trigger_multiple/trigger_multiple name=exit_hotel_to_fob at 34526 8331 1492 size 369 388 338
+0.05 TRIG #1863 trigger_use/trigger_use name=trigger_exo_rappel_mechanic at 34772 8780 3328 size 130 130 178
+0.05 TRIG #1864 trigger_multiple/trigger_multiple name=trigger_exo_rappel_mechanic_a at 34772 8844 3328 size 162 34 210
+0.05 TRIG #1865 trigger_multiple/trigger_multiple name=trigger_exo_rappel_mechanic_b at 34772 8876 3328 size 194 34 210
+0.05 TRIG #1866 script_brushmodel/script_brushmodel name=hide_screens at 32675 6113 1984 size 433 433 344
+0.05 TRIG #1867 script_brushmodel/script_brushmodel name=hide_screens at 32194 6389 1851 size 256 6 100
+0.05 TRIG #1868 script_brushmodel/script_brushmodel name=hide_screens at 32822 5966 2419 size 139 139 534
+0.05 TRIG #1870 script_brushmodel/script_brushmodel name=seo_advertisement_01 at 32641 8063 1860 size 411 411 364
+0.05 TRIG #1871 script_brushmodel/script_brushmodel name=hide_screens at 32643 8061 1860 size 413 413 364
+0.05 TRIG #1872 trigger_multiple/trigger_multiple name=dof_fob_autofocus_enable at 32736 6848 1392 size 66 290 162
+0.05 TRIG #1875 script_brushmodel/script_brushmodel name=pod_land_debris_02 at 33283 8256 1321 size 197 191 25
+0.05 TRIG #1876 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 41568 18052 8648 size 18 210 178
+0.05 TRIG #1879 trigger_multiple/trigger_multiple name=seoul_exterior at 41536 18052 8648 size 18 210 178
+0.05 TRIG #1880 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 41584 17564 8648 size 18 162 178
+0.05 TRIG #1881 trigger_multiple/trigger_multiple name=seoul_exterior at 41552 17564 8648 size 18 162 178
+0.05 TRIG #1882 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 41468 17512 8376 size 210 18 178
+0.05 TRIG #1884 trigger_radius/trigger_radius name=- at 32512 13866 1312 size 2548 2548 1802
+0.05 TRIG #1885 trigger_multiple/trigger_multiple name=seoul_exterior at 41468 17544 8376 size 210 18 178
+0.05 TRIG #1886 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 40980 17496 8376 size 162 18 178
+0.05 TRIG #1887 trigger_multiple/trigger_multiple name=seoul_exterior at 40980 17528 8376 size 162 18 178
+0.05 TRIG #1888 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 41128 17620 8064 size 18 210 178
+0.05 TRIG #1891 trigger_multiple/trigger_multiple name=seoul_exterior at 41160 17620 8064 size 18 210 178
+0.05 TRIG #1892 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 41112 18108 8064 size 18 162 178
+0.05 TRIG #1893 trigger_multiple/trigger_multiple name=seoul_exterior at 41144 18108 8064 size 18 162 178
+0.05 TRIG #1894 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 41236 17832 7712 size 210 18 178
+0.05 TRIG #1897 trigger_multiple/trigger_multiple name=seoul_exterior at 41236 17800 7712 size 210 18 178
+0.05 TRIG #1898 trigger_multiple/trigger_multiple name=seoul_hotel_interior at 41724 17848 7712 size 162 18 178
+0.05 TRIG #1899 trigger_multiple/trigger_multiple name=seoul_exterior at 41724 17816 7712 size 162 18 178
+0.05 TRIG #1924 script_brushmodel/script_brushmodel name=bldg_before_hit at 31680 8444 3887 size 500 1036 954
+0.05 TRIG #1928 script_brushmodel/script_brushmodel name=pod_land_debris_01 at 33662 7962 1322 size 193 191 27
+0.05 TRIG #1943 trigger_multiple/trigger_multiple_flag_set name=- flags=force_light_01 at 33016 6840 1384 size 18 338 146
+0.05 TRIG #1944 trigger_multiple/trigger_multiple_flag_clear name=- flags=force_light_01 at 32984 6840 1384 size 18 370 146
+0.05 TRIG #1945 trigger_multiple/trigger_multiple_flag_set name=- flags=force_light_01 at 34319 8157 1384 size 248 252 146
+0.05 TRIG #1946 trigger_multiple/trigger_multiple_flag_clear name=- flags=force_light_01 at 34348 8191 1384 size 269 278 146
+0.05 TRIG #1947 trigger_multiple/trigger_multiple name=seoul_streets_02 at 32235 6794 1839 size 154 943 926
+0.05 TRIG #1948 trigger_multiple/trigger_multiple name=dof_fob_moment_start at 33072 6848 1392 size 162 290 162
+0.05 TRIG #1949 trigger_multiple/trigger_multiple name=exit_hotel_to_fob at 32500 6657 1823 size 106 941 894
+0.05 TRIG #1959 script_brushmodel/script_brushmodel name=pod_land_debris_01 at 33662 7962 1322 size 193 191 27
+0.05 TRIG #1977 trigger_multiple/trigger_multiple name=dof_fob_autofocus_enable at 31032 7080 1704 size 50 1746 818
+0.05 TRIG #1978 trigger_multiple/trigger_multiple name=dof_fob_autofocus_disable at 30944 7144 1688 size 34 1714 786
+0.05 TRIG #1979 trigger_multiple/trigger_multiple name=dof_fob_autofocus_enable at 33184 6848 1392 size 34 290 162
+0.05 TRIG #1980 script_brushmodel/script_brushmodel name=pod_land_debris_02 at 33283 8256 1321 size 197 191 25
+0.05 TRIG #1981 script_brushmodel/script_brushmodel name=temp_clip_for_walker_anim_scene at 31530 7356 1408 size 712 436 132
+0.05 TRIG #2004 trigger_multiple/trigger_multiple_flag_set_touching name=drone_swarm_retreat flags=player_leaving_map at 32616 7083 11824 size 147 2030 1090
+0.05 TRIG #2031 script_brushmodel/script_brushmodel name=entry_pod_connector_ring at 12546 -276 37609 size 208 208 102
+0.05 TRIG #2032 script_brushmodel/script_brushmodel name=entry_pod_connector_ring at 12546 -276 37560 size 216 216 4
+0.05 TRIG #2033 script_brushmodel/script_brushmodel name=entry_pod_connector_ring at 12546 -276 37609 size 216 216 102
+0.05 TRIG #2034 script_brushmodel/script_brushmodel name=entry_pod_connector_ring at 12546 -276 37650 size 208 208 4
+0.05 TRIG #2035 script_brushmodel/script_brushmodel name=entry_pod_connector_ring at 12546 -276 37658 size 216 216 4
+0.05 TRIG #2037 script_brushmodel/script_brushmodel name=reentry_fire_01 at 12544 -275 37534 size 84 82 4
+0.05 TRIG #2038 script_brushmodel/script_brushmodel name=reentry_fire_02 at 12545 -274 37532 size 82 84 4
+0.05 TRIG #2039 script_brushmodel/script_brushmodel name=reentry_fire_03 at 12546 -273 37530 size 84 82 4
+0.05 TRIG #2043 script_brushmodel/script_brushmodel name=reentry_gray_brush at 12544 -268 37596 size 2052 1540 2052
+0.05 TRIG #2044 script_brushmodel/script_brushmodel name=reentry_fire_brush at 12599 -279 37586 size 114 236 308
+0.05 TRIG #2045 script_brushmodel/script_brushmodel name=reentrypods2 at 12546 -276 37742 size 180 180 4
+0.05 TRIG #2046 script_brushmodel/script_brushmodel name=reentrypods2 at 12546 -276 37726 size 196 196 4
+0.05 TRIG #2047 script_brushmodel/script_brushmodel name=reentrypods2 at 12546 -176 37662 size 36 44 52
+0.05 TRIG #2048 script_brushmodel/script_brushmodel name=reentrypods2 at 12646 -276 37662 size 44 36 52
+0.05 TRIG #2049 script_brushmodel/script_brushmodel name=reentrypods2 at 12546 -376 37662 size 36 44 52
+0.05 TRIG #2050 script_brushmodel/script_brushmodel name=reentrypods2 at 12446 -276 37662 size 44 36 52
+0.05 TRIG #2052 script_brushmodel/script_brushmodel name=reentrypods2 at 12546 -276 37646 size 180 180 4
+0.05 TRIG #2053 script_brushmodel/script_brushmodel name=reentrypods2 at 12546 -276 37654 size 180 180 20
+0.05 TRIG #2054 script_brushmodel/script_brushmodel name=reentrypods2 at 12546 -276 37734 size 180 180 20
+0.05 TRIG #2055 script_brushmodel/script_brushmodel name=reentrypods2 at 12546 -276 37662 size 196 196 4
+0.05 TRIG #2056 script_brushmodel/script_brushmodel name=reentrypods2 at 12546 -276 37694 size 196 196 68
+0.05 TRIG #2058 script_brushmodel/script_brushmodel name=reentrypods3 at 12546 -276 37534 size 180 180 4
+0.05 TRIG #2059 script_brushmodel/script_brushmodel name=reentrypods3 at 12546 -276 37518 size 196 196 4
+0.05 TRIG #2060 script_brushmodel/script_brushmodel name=reentrypods3 at 12546 -176 37454 size 36 44 52
+0.05 TRIG #2061 script_brushmodel/script_brushmodel name=reentrypods3 at 12646 -276 37454 size 44 36 52
+0.05 TRIG #2062 script_brushmodel/script_brushmodel name=reentrypods3 at 12546 -376 37454 size 36 44 52
+0.05 TRIG #2063 script_brushmodel/script_brushmodel name=reentrypods3 at 12446 -276 37454 size 44 36 52
+0.05 TRIG #2065 script_brushmodel/script_brushmodel name=reentrypods3 at 12546 -276 37438 size 180 180 4
+0.05 TRIG #2066 script_brushmodel/script_brushmodel name=reentrypods3 at 12546 -276 37446 size 180 180 20
+0.05 TRIG #2067 script_brushmodel/script_brushmodel name=reentrypods3 at 12546 -276 37526 size 180 180 20
+0.05 TRIG #2068 script_brushmodel/script_brushmodel name=reentrypods3 at 12546 -276 37454 size 196 196 4
+0.05 TRIG #2069 script_brushmodel/script_brushmodel name=reentrypods3 at 12546 -276 37486 size 196 196 68
+0.05 TRIG #2070 script_brushmodel/script_brushmodel name=reentrypods4 at 12546 -276 37378 size 180 180 4
+0.05 TRIG #2071 script_brushmodel/script_brushmodel name=reentrypods4 at 12546 -276 37362 size 196 196 4
+0.05 TRIG #2072 script_brushmodel/script_brushmodel name=reentrypods4 at 12546 -176 37298 size 36 44 52
+0.05 TRIG #2073 script_brushmodel/script_brushmodel name=reentrypods4 at 12646 -276 37298 size 44 36 52
+0.05 TRIG #2074 script_brushmodel/script_brushmodel name=reentrypods4 at 12546 -376 37298 size 36 44 52
+0.05 TRIG #2075 script_brushmodel/script_brushmodel name=reentrypods4 at 12446 -276 37298 size 44 36 52
+0.05 TRIG #2077 script_brushmodel/script_brushmodel name=reentrypods4 at 12546 -276 37282 size 180 180 4
+0.05 TRIG #2078 script_brushmodel/script_brushmodel name=reentrypods4 at 12546 -276 37290 size 180 180 20
+0.05 TRIG #2079 script_brushmodel/script_brushmodel name=reentrypods4 at 12546 -276 37370 size 180 180 20
+0.05 TRIG #2080 script_brushmodel/script_brushmodel name=reentrypods4 at 12546 -276 37298 size 196 196 4
+0.05 TRIG #2081 script_brushmodel/script_brushmodel name=reentrypods4 at 12546 -276 37330 size 196 196 68
+0.05 TRIG #2082 script_brushmodel/script_brushmodel name=reentrypods at 12546 -276 37838 size 180 180 4
+0.05 TRIG #2083 script_brushmodel/script_brushmodel name=reentrypods at 12546 -276 37822 size 196 196 4
+0.05 TRIG #2084 script_brushmodel/script_brushmodel name=reentrypods at 12546 -176 37758 size 36 44 52
+0.05 TRIG #2085 script_brushmodel/script_brushmodel name=reentrypods at 12646 -276 37758 size 44 36 52
+0.05 TRIG #2086 script_brushmodel/script_brushmodel name=reentrypods at 12546 -376 37758 size 36 44 52
+0.05 TRIG #2087 script_brushmodel/script_brushmodel name=reentrypods at 12446 -276 37758 size 44 36 52
+0.05 TRIG #2089 script_brushmodel/script_brushmodel name=reentrypods at 12546 -276 37742 size 180 180 4
+0.05 TRIG #2090 script_brushmodel/script_brushmodel name=reentrypods at 12546 -276 37750 size 180 180 20
+0.05 TRIG #2091 script_brushmodel/script_brushmodel name=reentrypods at 12546 -276 37830 size 180 180 20
+0.05 TRIG #2092 script_brushmodel/script_brushmodel name=reentrypods at 12546 -276 37758 size 196 196 4
+0.05 TRIG #2093 script_brushmodel/script_brushmodel name=reentrypods at 12546 -276 37790 size 196 196 68
+0.05 TRIG #2094 script_brushmodel/script_brushmodel name=reentry_fire_brush at 12599 -279 37586 size 114 236 308
+0.05 TRIG #2095 script_brushmodel/script_brushmodel name=reentry_fire_brush at 12489 -279 37586 size 114 236 308
+0.05 TRIG #2097 script_brushmodel/script_brushmodel name=reentry_fire_brush at 12489 -279 37586 size 114 236 308
+0.05 TRIG #2098 script_brushmodel/script_brushmodel name=reentry_fire_brush at 12544 -278 37908 size 324 372 628
+0.05 TRIG #2099 script_brushmodel/script_brushmodel name=reentry_fire_brush at 12536 -278 37908 size 340 372 628
+0.05 TRIG #2100 script_brushmodel/script_brushmodel name=reentry_fire_brush at 12536 -278 37908 size 372 340 628
+0.05 TRIG #2101 script_brushmodel/script_brushmodel name=brush_seoul_city_view_ems at 9952 7658 48832 size 210852 213428 4
+0.05 TRIG #2102 script_brushmodel/script_brushmodel name=brush_seoul_city_view at 9952 7658 48832 size 210852 213428 4
+0.05 TRIG #2110 trigger_multiple/trigger_multiple name=trigger_vista_scene_end at 34965 8677 1488 size 1752 1528 450
+0.05 TRIG #2116 script_brushmodel/script_brushmodel name=pf11672_auto1 at 29335 7483 1354 size 8 41 40
+0.05 TRIG #2117 trigger_use/trigger_use name=trig_door_shield at 29344 7488 1359 size 6 19 14
+0.05 TRIG #2118 script_brushmodel/script_brushmodel name=car_door_vehicle_clip at 29376 7470 1356 size 120 111 52
+0.05 TRIG #2119 script_brushmodel/script_brushmodel name=brush_blocker_fob_droppod_landing_guys at 32172 6864 1380 size 44 308 156
+0.05 TRIG #2125 trigger_multiple/trigger_multiple name=trigger_stop_ally_vehicle_01 at 28248 7690 1454 size 722 278 414
+0.05 TRIG #2126 trigger_multiple/trigger_multiple_flag_set_touching name=drone_swarm_skip flags=player_leaving_map at 28112 8744 1672 size 1356 147 786
+0.05 TRIG #2127 info_volume/info_volume name=vol_ally_battle_volume_01 at 33564 4628 1324 size 330 386 410
+0.05 TRIG #2128 info_volume/info_volume name=vol_ally_battle_volume_01 at 33572 5316 1324 size 330 386 410
+0.05 TRIG #2129 trigger_multiple/trigger_multiple name=trigger_hill_setup at 32512 6636 1520 size 258 922 418
+0.05 TRIG #2132 trigger_multiple/trigger_multiple name=trigger_vista_scene_start at 35520 9120 3280 size 130 98 130
+0.05 TRIG #2134 script_brushmodel/script_brushmodel name=brush_enemy_guide_group1 at 27488 7680 1456 size 580 708 292
+0.05 TRIG #2137 trigger_multiple/trigger_multiple name=player_exit_pod_trigger at 26480 7136 1224 size 130 162 130
+0.05 TRIG #2138 trigger_multiple/trigger_multiple name=trigger_opening_view_off_02 at 28880 7264 1816 size 162 2274 1138
+0.05 TRIG #2139 trigger_multiple/trigger_multiple name=trig_start_sinkhole_intersection at 24155 11736 1544 size 248 978 530
+0.05 TRIG #2142 script_brushmodel/script_brushmodel name=pf11677_auto3 at 29362 7353 1355 size 26 42 34
+0.05 TRIG #2143 trigger_use/trigger_use name=trig_door_shield at 29372 7356 1354 size 10 18 14
+0.05 TRIG #2144 script_brushmodel/script_brushmodel name=car_door_vehicle_clip at 29387 7380 1356 size 97 120 52
+0.05 TRIG #2148 trigger_multiple/trigger_multiple name=trig_sinkhole_animation at 23320 6760 1260 size 866 450 378
+0.05 TRIG #2149 trigger_multiple/trigger_multiple name=hault_column at 33488 7104 1344 size 1474 930 98
+0.05 TRIG #2151 trigger_multiple/trigger_multiple name=trigger_fob_scene at 33224 6944 1344 size 466 546 98
+0.05 TRIG #2152 script_brushmodel/script_brushmodel name=brush_car_door_blocker_01 at 29462 7271 1342 size 51 53 64
+0.05 TRIG #2160 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=turn_on_seo_advertisement at 35462 9928 4445 size 214 18 196
+0.05 TRIG #2161 trigger_multiple/trigger_multiple name=smart_missile_attack_trigger at 23708 8080 1832 size 186 1858 242
+0.05 TRIG #2162 trigger_multiple/trigger_multiple_flag_set_touching name=drone_swarm_skip flags=player_leaving_map at 28062 8446 1664 size 1258 94 770
+0.05 TRIG #2163 trigger_multiple/trigger_multiple_flag_set name=- flags=player_landed_in_hotel at 35024 8736 1392 size 1890 1730 162
+0.05 TRIG #2164 trigger_multiple/trigger_multiple_flag_set name=- flags=player_inplace_for_will_door_grab at 29076 6940 1796 size 106 2170 970
+0.05 TRIG #2165 trigger_multiple/trigger_multiple_flag_set name=- flags=player_inplace_for_will_door_grab_2 at 28884 7020 1772 size 106 2330 922
+0.05 TRIG #2166 trigger_multiple/trigger_multiple name=trig_irons_reach_anim_a at 23320 6696 1080 size 146 178 178
+0.05 TRIG #2167 info_volume/info_volume name=vol_irons_reach_anim_a at 23320 6696 1080 size 146 146 210
+0.05 TRIG #2169 trigger_multiple/trigger_multiple name=end_level_trigger at 14344 3672 1464 size 306 242 114
+0.05 TRIG #2172 info_volume/info_volume name=vol_drone_swarm_boundary at 28168 7112 1952 size 1010 1682 1282
+0.05 TRIG #2173 trigger_multiple/trigger_multiple name=- at 25544 7468 1388 size 506 130 162
+0.05 TRIG #2174 info_volume/info_volume name=vol_drone_swarm_boundary at 25792 7144 1952 size 3746 1554 1282
+0.05 TRIG #2175 info_volume/info_volume name=volume_elevator_invincibility at 34536 8824 2328 size 370 178 2162
+0.05 TRIG #2177 trigger_multiple/trigger_multiple_flag_set name=- flags=warbird_gag_02 at 35080 9128 3312 size 82 210 226
+0.05 TRIG #2178 trigger_multiple/trigger_multiple_flag_set name=- flags=warbird_gag_03 at 34456 8168 1472 size 370 370 354
+0.05 TRIG #2179 trigger_multiple/trigger_multiple name=trigger_vista_elevator_jump at 34800 9104 3280 size 130 354 130
+0.05 TRIG #2180 trigger_multiple/trigger_multiple name=trigger_hill_event_01 at 31937 7020 1661 size 1006 1503 700
+0.05 TRIG #2188 trigger_multiple/trigger_multiple name=trigger_start_street_crumble_02 at 24136 13756 1128 size 242 258 146
+0.05 TRIG #2190 info_volume/info_volume name=vol_jump_training_drone_street at 28098 7835 1344 size 850 364 386
+0.05 TRIG #2191 info_volume/info_volume name=vol_jump_training_vo_01 at 28114 7963 1504 size 850 204 162
+0.05 TRIG #2195 trigger_multiple/trigger_multiple name=trigger_hotel_push_vo at 27094 9735 1516 size 1825 1430 538
+0.05 TRIG #2196 trigger_multiple/trigger_multiple name=trigger_player_on left_street at 30282 6414 1980 size 994 1318 1402
+0.05 TRIG #2197 info_volume/info_volume name=drone_formation_volume at 25245 7381 1434 size 301 260 178
+0.05 TRIG #2199 info_volume/info_volume name=drone_formation_volume at 25793 7687 1528 size 244 184 246
+0.05 TRIG #2200 info_volume/info_volume name=drone_formation_volume at 24593 7261 1528 size 244 184 246
+0.05 TRIG #2201 info_volume/info_volume name=vol_drone_swarm_boundary at 28952 7144 1952 size 562 1618 1282
+0.05 TRIG #2202 info_volume/info_volume name=vol_drone_swarm_boundary at 29448 6968 1952 size 434 2194 1282
+0.05 TRIG #2203 trigger_multiple/trigger_multiple_flag_set name=- flags=begin_fob_combat_vignette at 34672 8432 1488 size 578 578 354
+0.05 TRIG #2218 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 36904 9776 4608 size 1426 162 962
+0.05 TRIG #2219 trigger_multiple/trigger_multiple name=trigger_setup_guide_kill at 27820 9536 1424 size 890 770 354
+0.05 TRIG #2229 trigger_multiple/trigger_multiple name=trigger_exo_car_push_gag at 28094 8070 1408 size 302 110 202
+0.05 TRIG #2244 trigger_multiple/trigger_multiple name=trigger_weapons_platform_takeoff_hotel at 27984 9248 1400 size 674 194 226
+0.05 TRIG #2247 trigger_multiple/trigger_multiple name=trigger_cardoor_strafe at 29072 6952 1980 size 962 2322 1402
+0.05 TRIG #2248 info_volume/info_volume name=vol_ally_slow_vol_01 at 33945 7912 1376 size 377 403 130
+0.05 TRIG #2251 trigger_multiple/trigger_multiple name=trigger_building_exit_allies at 34644 8452 1458 size 1210 1210 322
+0.05 TRIG #2259 trigger_multiple/trigger_multiple_flag_set_touching name=drone_swarm_retreat flags=player_leaving_map at 32318 7120 11824 size 94 1600 1090
+0.05 TRIG #2260 trigger_multiple/trigger_multiple name=leaving_cpk at 21760 5256 1344 size 370 370 98
+0.05 TRIG #2264 trigger_multiple/trigger_multiple_flag_set_touching name=drone_swarm_retreat flags=player_leaving_map at 32939 7132 11832 size 124 2665 1074
+0.05 TRIG #2275 trigger_multiple/trigger_multiple name=trigger_hill_event_00 at 32592 6814 1392 size 354 382 162
+0.05 TRIG #2290 trigger_multiple/trigger_multiple_flag_set name=- flags=flag_start_fob_meet_scene at 33254 7154 1352 size 558 870 82
+0.05 TRIG #2304 trigger_multiple/trigger_multiple_flag_set name=- flags=start_cinematic_rocket_scene at 33450 6436 1390 size 1518 10 150
+0.05 TRIG #2311 trigger_multiple/trigger_multiple name=- at 24423 7658 1404 size 553 502 194
+0.05 TRIG #2312 trigger_multiple/trigger_multiple name=- at 24026 8541 1348 size 439 438 182
+0.05 TRIG #2313 trigger_multiple/trigger_multiple_flag_set name=- flags=corner_rally_begin at 27976 9136 1408 size 658 322 258
+0.05 TRIG #2314 trigger_multiple/trigger_multiple name=end_army_view_trigger at 15244 2440 1648 size 842 450 194
+0.05 TRIG #2319 script_brushmodel/script_brushmodel name=fob_player_clipblock at 32890 6846 1384 size 131 318 140
+0.05 TRIG #2323 trigger_multiple/trigger_multiple_flag_set name=stop_flooding_grunts flags=stop_flooding_grunts at 34324 8158 1394 size 269 270 158
+0.05 TRIG #2324 trigger_multiple/trigger_multiple_flag_set name=- flags=cleanup_injury_team_now at 30954 7426 1432 size 38 1486 290
+0.05 TRIG #2335 trigger_multiple/trigger_multiple_flag_set name=- flags=walker_walkby_jets_rockets at 30388 7075 1687 size 105 1783 756
+0.05 TRIG #2337 script_brushmodel/script_brushmodel name=fob_passed_blocking at 31910 6983 1408 size 172 243 164
+0.05 TRIG #2338 trigger_multiple/trigger_multiple_flag_set name=- flags=player_passed_fob at 31310 7428 1408 size 117 310 162
+0.05 TRIG #2349 info_volume/info_volume name=enemy_vol_x4_combat at 23232 11920 1328 size 2050 706 226
+0.05 TRIG #2350 info_volume/info_volume name=vol_swarm_follow_01 at 29640 7560 1416 size 354 1138 274
+0.05 TRIG #2351 info_volume/info_volume name=vol_mech_slow_vol_01 at 33946 7658 1376 size 310 198 130
+0.05 TRIG #2353 trigger_multiple/trigger_multiple name=trig_x4_jet_bombers at 14260 3812 1676 size 1946 218 218
+0.05 TRIG #2354 script_brushmodel/script_brushmodel name=brush_fob_path_blocker_trench at 32261 7592 1376 size 281 267 196
+0.05 TRIG #2355 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 35848 11264 4184 size 818 1250 338
+0.05 TRIG #2356 script_brushmodel/script_brushmodel name=brush_mech_path_blocker_fob1 at 33685 7472 1352 size 319 260 116
+0.05 TRIG #2357 info_volume/info_volume name=ai_cleanup_volume_for_jerk_testers at 33720 7168 2384 size 4914 4002 3682
+0.05 TRIG #2358 trigger_multiple/trigger_multiple name=pf2_auto2670 at 28008 8920 1712 size 914 338 1058
+0.05 TRIG #2382 info_volume/info_volume name=e3_vol_enemey_retreat at 28990 7280 1352 size 370 1442 466
+0.05 TRIG #2387 info_volume/info_volume name=e3_vol_enemey_retreat2 at 28816 7264 1352 size 738 1442 466
+0.05 TRIG #2392 trigger_multiple/trigger_multiple_flag_set_touching name=hotel_retreat_left_map flags=player_leaving_map at 27952 8840 11672 size 1356 147 786
+0.05 TRIG #2402 info_volume/info_volume name=vol_cardoor_objective_vol_a at 30834 7280 1824 size 3214 506 1346
+0.05 TRIG #2409 trigger_multiple/trigger_multiple name=trigger_e3_fallback_01 at 29852 7628 2032 size 374 4466 1794
+0.05 TRIG #2418 info_volume/info_volume name=e3_vol_enemy_bus_vol at 30222 7170 1496 size 206 142 102
+0.05 TRIG #2423 trigger_multiple/trigger_multiple name=trigger_mech_blocker_fob1 at 33808 7712 1376 size 162 322 194
+0.05 TRIG #2427 info_volume/info_volume name=vol_swarm_follow_02 at 29160 7560 1344 size 610 1138 386
+0.05 TRIG #2428 info_volume/info_volume name=vol_swarm_follow_03 at 28608 7560 1344 size 498 1138 386
+0.05 TRIG #2429 trigger_multiple/trigger_multiple name=trigger_drone_street_move_position2 at 30323 7624 1832 size 232 4466 1202
+0.05 TRIG #2432 trigger_multiple/trigger_multiple_flag_set name=special_jets_flyby flags=special_jets_flyby at 33452 7570 1402 size 625 35 190
+0.05 TRIG #2433 trigger_multiple/trigger_multiple name=trig_start_subway_traverse at 23360 7172 1224 size 498 1162 306
+0.05 TRIG #2441 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 35975 10371 4176 size 528 568 90
+0.05 TRIG #2442 trigger_multiple/trigger_multiple name=trigger_missile_launchers_for_drones at 26160 7952 1584 size 258 290 194
+0.05 TRIG #2443 trigger_multiple/trigger_multiple name=start_pod_landings at 34340 8132 1434 size 602 602 274
+0.05 TRIG #2444 trigger_multiple/trigger_multiple name=trigger_brush_guide_group1 at 28696 7340 1864 size 178 2130 1234
+0.05 TRIG #2445 trigger_multiple/trigger_multiple name=trig_color_ro5 at 26512 8476 1588 size 106 130 210
+0.05 TRIG #2446 info_volume/info_volume name=drone_formation_volume at 21123 5199 1431 size 244 184 140
+0.05 TRIG #2447 info_volume/info_volume name=drone_formation_volume at 21219 5279 1623 size 244 184 140
+0.05 TRIG #2448 info_volume/info_volume name=drone_formation_volume at 21579 5689 1887 size 244 184 140
+0.05 TRIG #2452 trigger_multiple/trigger_multiple name=- at 25344 6924 1388 size 970 130 162
+0.05 TRIG #2453 trigger_multiple/trigger_multiple name=- at 24511 6743 1404 size 388 542 194
+0.05 TRIG #2454 trigger_multiple/trigger_multiple name=trigger_will_subway_dropdown at 23531 8525 1324 size 482 455 162
+0.05 TRIG #2455 trigger_multiple/trigger_multiple name=- at 21366 6594 1052 size 542 515 226
+0.05 TRIG #2456 trigger_multiple/trigger_multiple name=- at 21671 6243 1372 size 506 453 226
+0.05 TRIG #2457 trigger_multiple/trigger_multiple name=trigger_x4_walker_obj at 21063 5043 1372 size 506 453 226
+0.05 TRIG #2471 info_volume/info_volume name=ai_cleanup_volume_for_jerk_testers at 29624 7152 2384 size 4914 4002 3682
+0.05 TRIG #2486 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 27476 6928 2014 size 1150 2211 2170
+0.05 TRIG #2492 trigger_damage/trigger_damage name=damage_trigger_drone_snake at 27216 8240 2480 size 162 162 162
+0.05 TRIG #2505 trigger_multiple/trigger_multiple name=- at 21232 -304 1360 size 930 226 226
+0.05 TRIG #2507 trigger_multiple/trigger_multiple name=- at 16736 176 1360 size 162 1122 226
+0.05 TRIG #2508 trigger_multiple/trigger_multiple name=- at 15952 2160 1360 size 514 610 226
+0.05 TRIG #2509 trigger_multiple/trigger_multiple name=- at 15888 2528 1504 size 130 194 194
+0.05 TRIG #2510 trigger_multiple/trigger_multiple name=- at 15504 2336 1664 size 66 194 322
+0.05 TRIG #2511 trigger_multiple/trigger_multiple name=- at 15056 2848 1680 size 450 194 290
+0.05 TRIG #2512 trigger_multiple/trigger_multiple name=trig_teleport_ally_squad_shopping at 23204 -1852 1408 size 1946 218 386
+0.05 TRIG #2513 trigger_multiple/trigger_multiple name=trigger_end_looping_anims at 34916 8690 1458 size 1178 1178 322
+0.05 TRIG #2522 info_volume/info_volume name=vol_swarm_follow_04 at 28112 7544 1344 size 498 1138 386
+0.05 TRIG #2523 info_volume/info_volume name=pf2_auto753 at 14176 856 1336 size 962 562 210
+0.05 TRIG #2524 trigger_multiple/trigger_multiple name=trigger_drone_swarm_flank at 30011 7640 1832 size 440 4466 1394
+0.05 TRIG #2528 trigger_multiple/trigger_multiple name=pf2_auto2671 at 25800 10472 1712 size 914 850 1058
+0.05 TRIG #2535 info_volume/info_volume name=ai_cleanup_volume_for_jerk_testers at 25544 10624 2384 size 4914 4002 3682
+0.05 TRIG #2536 trigger_multiple/trigger_multiple name=start_pod_landings_group_2 at 32864 7424 1520 size 450 1666 418
+0.05 TRIG #2538 script_brushmodel/script_brushmodel name=pf11716_auto3 at 29257 7683 1359 size 21 44 34
+0.05 TRIG #2539 trigger_use/trigger_use name=trig_door_shield at 29267 7684 1358 size 7 18 14
+0.05 TRIG #2540 script_brushmodel/script_brushmodel name=car_door_vehicle_clip at 29291 7705 1360 size 100 108 52
+0.05 TRIG #2542 info_volume/info_volume name=vol_cardoor_objective_vol_b at 30834 7766 1824 size 3214 470 1346
+0.05 TRIG #2543 info_volume/info_volume name=vol_cardoor_objective_vol_c at 30834 6454 1824 size 3214 1150 1346
+0.05 TRIG #2544 trigger_multiple/trigger_multiple name=trigger_seoul_video_log at 28016 8760 1640 size 994 338 786
+0.05 TRIG #2551 trigger_multiple/trigger_multiple name=start_pod_landings_group_3 at 30887 7640 2008 size 1172 4466 1426
+0.05 TRIG #2553 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 27731 7141 2006 size 1011 1853 2186
+0.05 TRIG #2554 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 27989 7193 1998 size 949 1961 2170
+0.05 TRIG #2555 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 26432 9521 1688 size 613 957 770
+0.05 TRIG #2556 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 26802 9424 1680 size 723 988 786
+0.05 TRIG #2557 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 27011 9519 1672 size 668 1023 770
+0.05 TRIG #2559 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 28828 9564 1688 size 124 838 770
+0.05 TRIG #2561 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 28576 9554 1680 size 147 838 786
+0.05 TRIG #2562 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 28357 9544 1672 size 94 890 770
+0.05 TRIG #2563 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 28828 9564 1688 size 124 838 770
+0.05 TRIG #2564 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 28692 9902 1688 size 397 124 770
+0.05 TRIG #2565 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 33546 6006 1828 size 2085 214 1082
+0.05 TRIG #2566 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 33664 6258 1828 size 2527 94 1082
+0.05 TRIG #2567 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 33580 5787 1836 size 1501 124 1066
+0.05 TRIG #2568 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 35108 7155 1820 size 214 1492 1066
+0.05 TRIG #2569 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 34910 7166 1840 size 62 1615 1058
+0.05 TRIG #2570 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 35296 7155 1828 size 66 1492 1050
+0.05 TRIG #2571 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_leaving_map at 33520 8677 1840 size 1282 148 1058
+0.05 TRIG #2572 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_returning_to_map at 33471 8474 1840 size 1196 94 1058
+0.05 TRIG #2573 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 33456 8875 1840 size 1411 124 1058
+0.05 TRIG #2574 trigger_multiple/trigger_multiple name=trigger_stop_vehicles_hill at 28734 5676 1352 size 383 64 434
+0.05 TRIG #2575 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 36528 10792 4056 size 2178 2194 82
+0.05 TRIG #2576 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29288 7688 1344 size 82 82 98
+0.05 TRIG #2577 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29352 7480 1344 size 82 82 98
+0.05 TRIG #2578 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29384 7368 1344 size 82 82 98
+0.05 TRIG #2579 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29734 7588 1344 size 82 82 98
+0.05 TRIG #2580 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29610 7206 1344 size 82 82 98
+0.05 TRIG #2581 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29492 7440 1344 size 82 82 98
+0.05 TRIG #2582 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29484 7258 1344 size 82 58 98
+0.05 TRIG #2583 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29792 7382 1344 size 82 58 98
+0.05 TRIG #2584 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29240 7999 1344 size 74 172 98
+0.05 TRIG #2585 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29381 7774 1344 size 64 86 98
+0.05 TRIG #2587 trigger_multiple/trigger_multiple_flag_set_touching name=drone_swarm_skip flags=player_leaving_map at 27990 9067 1680 size 1569 124 770
+0.05 TRIG #2589 info_volume/info_volume name=vol_safe_drone_strafe_vol at 29758 7463 1344 size 192 182 98
+0.05 TRIG #2590 trigger_multiple/trigger_multiple_flag_set_touching name=hotel_retreat_left_map flags=player_leaving_map at 28002 9138 11664 size 1258 94 770
+0.05 TRIG #2595 trigger_multiple/trigger_multiple_flag_set_touching name=hotel_retreat_left_map flags=player_leaving_map at 28074 8517 11680 size 1569 124 770
+0.05 TRIG #2596 script_brushmodel/script_brushmodel name=clip_only_when_boost_off at 32646 7452 1408 size 888 956 196
+0.05 TRIG #2597 info_volume/info_volume name=vol_cardoor_objective_vol_a2 at 28514 7280 1824 size 1422 506 1346
+0.05 TRIG #2598 info_volume/info_volume name=vol_cardoor_objective_vol_b2 at 28514 7766 1824 size 1422 470 1346
+0.05 TRIG #2599 info_volume/info_volume name=vol_cardoor_objective_vol_c2 at 28514 6454 1824 size 1422 1150 1346
+0.05 TRIG #2600 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 37416 10872 4592 size 402 2034 994
+0.05 TRIG #2601 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 36336 11856 4592 size 1762 66 994
+0.05 TRIG #2602 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=player_left_map at 35488 11240 4608 size 66 1170 962
+0.05 TRIG #2603 info_volume/info_volume name=vol_no_prone at 28108 7476 1396 size 202 266 202
+0.05 TRIG #2604 trigger_multiple/trigger_multiple_flag_set_touching name=pac_jerk_skip flags=player_leaving_squad at 24962 13236 1674 size 1356 139 1026
+0.05 TRIG #2605 trigger_multiple/trigger_multiple_flag_set_touching name=pac_jerk_skip flags=player_leaving_squad at 24924 12566 1664 size 1258 70 770
+0.05 TRIG #2606 trigger_multiple/trigger_multiple_flag_set_touching name=pac_jerk_skip flags=player_leaving_squad at 24948 13779 1760 size 1569 580 930
+0.05 TRIG #2607 trigger_multiple/trigger_multiple_flag_set_touching name=pac_retraversal_fail flags=player_leaving_map at 24442 10783 101674 size 1502 1216 1026
+0.05 TRIG #2608 trigger_multiple/trigger_multiple_flag_set_touching name=pac_retraversal_fail flags=player_leaving_map at 24351 10937 101664 size 1434 1143 770
+0.05 TRIG #2609 trigger_multiple/trigger_multiple_flag_set_touching name=pac_retraversal_fail flags=player_leaving_map at 24879 10457 101760 size 1798 1524 930
+0.05 TRIG #2614 trigger_multiple/trigger_multiple name=trigger_jump_training_done at 28048 8073 1484 size 786 396 362
+0.05 TRIG #2615 trigger_multiple/trigger_multiple name=pf2_auto2672 at 23432 14112 1448 size 914 1666 1586
+0.05 TRIG #2618 info_volume/info_volume name=ai_cleanup_volume_for_jerk_testers at 22504 15168 2384 size 4914 4002 3682
+0.05 TRIG #2619 trigger_multiple/trigger_multiple name=pf2_auto2673 at 18712 17872 1448 size 914 1666 1586
+0.05 TRIG #2620 info_volume/info_volume name=ai_cleanup_volume_for_jerk_testers at 18232 18512 2384 size 4914 4002 3682
+0.05 TRIG #2621 trigger_multiple/trigger_multiple name=pf2_auto2674 at 14616 19696 1448 size 1170 1666 1586
+0.05 TRIG #2622 trigger_multiple/trigger_multiple_bcs_seo_bus name=- at 30208 7173 1495 size 262 128 152
+0.05 TRIG #2623 trigger_multiple/trigger_multiple name=- at 35462 9842 4451 size 210 110 218
+0.05 TRIG #2624 trigger_multiple/trigger_multiple name=- at 35739 10207 4451 size 85 828 218
+0.05 TRIG #2625 trigger_multiple/trigger_multiple name=- at 34545 9232 3848 size 122 131 192
+0.05 TRIG #2626 trigger_multiple/trigger_multiple name=- at 34530 8685 3849 size 156 138 192
+0.05 TRIG #2627 trigger_multiple/trigger_multiple name=- at 35785 8477 3089 size 598 187 182
+0.05 TRIG #2628 trigger_multiple/trigger_multiple name=- at 36244 8886 3089 size 405 344 182
+0.05 TRIG #2629 trigger_multiple/trigger_multiple name=- at 34455 8308 1478 size 905 896 320
+0.05 TRIG #2630 trigger_multiple/trigger_multiple name=- at 31710 7305 1472 size 423 582 322
+0.05 TRIG #2631 trigger_multiple/trigger_multiple name=- at 27953 8413 1440 size 918 596 321
+0.05 TRIG #2632 trigger_multiple/trigger_multiple name=- at 26745 10500 1399 size 182 777 162
+0.05 TRIG #2633 trigger_multiple/trigger_multiple name=pf1_auto99 at 24834 12442 1934 size 524 268 162
+0.05 TRIG #2634 trigger_multiple/trigger_multiple name=- at 25002 13174 1754 size 828 254 312
+0.05 TRIG #2635 trigger_multiple/trigger_multiple name=- at 25116 13850 1815 size 311 259 180
+0.05 TRIG #2636 trigger_multiple/trigger_multiple name=- at 25278 14322 1688 size 272 291 165
+0.05 TRIG #2637 trigger_multiple/trigger_multiple name=- at 25306 15168 1686 size 983 596 168
+0.05 TRIG #2638 trigger_multiple/trigger_multiple name=- at 22703 15307 906 size 166 254 99
+0.05 TRIG #2639 trigger_multiple/trigger_multiple name=- at 22639 15883 914 size 36 318 106
+0.05 TRIG #2640 trigger_multiple/trigger_multiple name=- at 22248 16204 1038 size 269 393 353
+0.05 TRIG #2641 trigger_multiple/trigger_multiple name=- at 19538 16456 1288 size 274 641 460
+0.05 TRIG #2642 trigger_multiple/trigger_multiple name=- at 19280 18225 1458 size 214 202 282
+0.05 TRIG #2643 trigger_multiple/trigger_multiple name=- at 16872 20161 1482 size 254 97 220
+0.05 TRIG #2644 trigger_multiple/trigger_multiple name=- at 15934 20466 1696 size 85 372 360
+0.05 TRIG #2645 trigger_multiple/trigger_multiple name=- at 15635 20488 1772 size 432 486 188
+0.05 TRIG #2646 trigger_multiple/trigger_multiple name=- at 15119 20137 1801 size 278 273 182
+0.05 TRIG #2647 trigger_multiple/trigger_multiple name=- at 12941 19849 1388 size 330 331 147
+0.05 TRIG #2648 trigger_multiple/trigger_multiple name=- at 12987 20491 1388 size 42 124 144
+0.05 TRIG #2649 trigger_multiple/trigger_multiple name=- at 14009 19451 1220 size 800 94 155
+0.05 TRIG #2650 trigger_multiple/trigger_multiple name=- at 14011 19844 1220 size 800 94 155
+0.05 TRIG #2651 trigger_multiple/trigger_multiple name=- at 14329 17954 1217 size 103 146 126
+0.05 TRIG #2652 trigger_multiple/trigger_multiple name=- at 14324 17652 1226 size 113 278 143
+0.05 TRIG #2653 trigger_multiple/trigger_multiple name=- at 19352 18594 1456 size 170 571 290
+0.05 TRIG #2654 trigger_multiple/trigger_multiple name=- at 18844 18167 1456 size 660 104 290
+0.05 TRIG #2655 trigger_multiple/trigger_multiple name=- at 18438 18189 1508 size 115 106 380
+0.05 TRIG #2656 trigger_multiple/trigger_multiple name=pf1_auto148 at 18086 18150 1467 size 553 62 301
+0.05 TRIG #2657 trigger_multiple/trigger_multiple name=- at 16781 19144 1470 size 436 417 318
+0.05 TRIG #2658 trigger_multiple/trigger_multiple name=- at 18433 18508 1594 size 137 47 178
+0.05 TRIG #2659 trigger_multiple/trigger_multiple name=- at 14036 17947 1206 size 468 78 140
+0.05 TRIG #2660 trigger_multiple/trigger_multiple name=- at 36037 10404 4454 size 223 218 179
+0.05 TRIG #2661 trigger_multiple/trigger_multiple name=- at 36008 10090 4432 size 361 131 194
+0.05 TRIG #2662 trigger_multiple/trigger_multiple_flag_set name=- flags=msg_kill_vista_effects at 35048 9530 4286 size 554 366 46
+0.05 TRIG #2663 trigger_multiple/trigger_multiple_fx_fxzone name=- at 35536 10182 4412 size 418 886 186
+0.05 TRIG #2664 trigger_multiple/trigger_multiple_fx_fxzone name=- at 31902 6894 1502 size 806 606 342
+0.05 TRIG #2665 trigger_multiple/trigger_multiple_fx_fxzone name=- at 35276 9352 4184 size 1618 882 850
+0.05 TRIG #2666 trigger_multiple/trigger_multiple_fx_fxzone name=- at 35288 8608 3656 size 1586 578 946
+0.05 TRIG #2667 trigger_multiple/trigger_multiple_fx_fxzone name=- at 35424 8504 3128 size 1698 402 306
+0.05 TRIG #2668 trigger_multiple/trigger_multiple_fx_fxzone name=- at 36396 8624 3080 size 618 994 210
+0.05 TRIG #2669 trigger_multiple/trigger_multiple_fx_fxzone name=- at 35528 9248 3118 size 1362 1090 326
+0.05 TRIG #2670 trigger_multiple/trigger_multiple_fx_fxzone name=- at 35288 9088 2150 size 1426 1506 1646
+0.05 TRIG #2671 trigger_multiple/trigger_multiple_fx_fxzone name=- at 34581 8349 1520 size 1141 1141 386
+0.05 TRIG #2672 trigger_multiple/trigger_multiple_fx_fxzone name=- at 34320 9046 3908 size 610 934 338
+0.05 TRIG #2673 trigger_multiple/trigger_multiple_fx_fxzone name=- at 33506 7268 1484 size 2926 2962 378
+0.05 TRIG #2674 trigger_multiple/trigger_multiple_fx_fxzone name=- at 31424 7416 1488 size 930 690 386
+0.05 TRIG #2675 trigger_multiple/trigger_multiple_fx_fxzone name=- at 28928 7120 1512 size 4418 2530 562
+0.05 TRIG #2676 trigger_multiple/trigger_multiple_fx_fxzone name=- at 27984 8464 1512 size 1122 1794 562
+0.05 TRIG #2677 trigger_multiple/trigger_multiple_fx_fxzone name=- at 28320 10120 1512 size 3586 2130 562
+0.05 TRIG #2678 trigger_multiple/trigger_multiple_fx_fxzone name=- at 25756 10961 1776 size 3770 2272 962
+0.05 TRIG #2679 trigger_multiple/trigger_multiple_fx_fxzone name=- at 24904 12040 1776 size 1394 1106 962
+0.05 TRIG #2680 trigger_multiple/trigger_multiple_fx_fxzone name=- at 25008 12848 1776 size 1474 2658 962
+0.05 TRIG #2681 trigger_multiple/trigger_multiple_fx_fxzone name=- at 24312 14504 952 size 3794 2450 2610
+0.05 TRIG #2682 trigger_multiple/trigger_multiple_fx_fxzone name=- at 22616 16024 912 size 978 1490 258
+0.05 TRIG #2683 trigger_multiple/trigger_multiple_fx_fxzone name=- at 21472 16560 1136 size 2338 1346 226
+0.05 TRIG #2684 trigger_multiple/trigger_multiple_fx_fxzone name=- at 20158 15866 1136 size 840 840 226
+0.05 TRIG #2685 trigger_multiple/trigger_multiple_fx_fxzone name=- at 19692 17612 1464 size 1482 2426 386
+0.05 TRIG #2686 trigger_multiple/trigger_multiple_fx_fxzone name=- at 17304 18125 1560 size 4114 2104 578
+0.05 TRIG #2687 trigger_multiple/trigger_multiple_fx_fxzone name=- at 16744 19072 1560 size 1570 2738 578
+0.05 TRIG #2688 trigger_multiple/trigger_multiple_fx_fxzone name=- at 16788 19628 1568 size 3002 746 594
+0.05 TRIG #2689 trigger_multiple/trigger_multiple_fx_fxzone name=- at 15496 20660 1568 size 962 1338 594
+0.05 TRIG #2690 trigger_multiple/trigger_multiple_fx_fxzone name=- at 13852 19412 1844 size 2762 5898 1626
+0.05 TRIG #2691 trigger_multiple/trigger_multiple_fx_fxzone name=- at 37390 11146 3174 size 4174 3108 3031
+0.05 TRIG #2692 trigger_multiple/trigger_multiple_flag_set name=- flags=dialogue_player_landassist_jump at 35304 9170 4270 size 1034 1086 46
+0.05 TRIG #2693 trigger_multiple/trigger_multiple_fx_fxzone name=- at 25456 14408 1776 size 1026 946 962
+0.05 TRIG #2694 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=performingarts_exit_explosions at 24826 12750 2004 size 382 268 360
+0.05 TRIG #2695 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=midjump_pipe_burst at 25203 14009 1805 size 280 180 166
+0.05 TRIG #2696 trigger_multiple/trigger_multiple_fx_fallingwatervolume name=- at 14026 17993 1208 size 420 24 107
+0.05 TRIG #2697 trigger_multiple/trigger_multiple_flag_set_touching name=- flags=fx_prepipe_burst_debris at 24868 13354 1804 size 854 92 162
+0.05 TRIG #2721 trigger_radius/trigger_radius name=- at 22632 14160 868 size 642 642 74
+0.05 TRIG #2723 trigger_radius/trigger_radius name=- at 14707 19796 1344 size 642 642 74
+0.05 TRIG #2725 trigger_radius/trigger_radius name=- at 17478 17795 1355 size 642 642 74
+0.05 TRIG #2746 trigger_radius/trigger_radius name=- at 36347 13996 1312 size 2548 2548 1802
+0.05 TRIG #2748 trigger_radius/trigger_radius name=- at 34328 13244 1312 size 2548 2548 1802
+0.05 TRIG #2750 trigger_radius/trigger_radius name=- at 39900 13969 1312 size 2548 2548 1802
+0.05 TRIG #2751 trigger_radius/trigger_radius name=- at 38097 13197 1312 size 2548 2548 1802
+0.05 TRIG #5272 trigger_multiple_fx_volume_on/- name=- at 13900659451520789058757807046656 1186851486425336492345786368 71011315669568397966391115776 size 563664864677784977408 9061868402433658572514302315462656 144275227992214109945856
+0.05 TRIG #5301 trigger_multiple_fx_volume_on/- name=- at 985215664128 16926454940298838540288 0 size 5537367707786141499392 37230784556963873169604608 126598608461984167886848
+0.05 TRIG #5304 trigger_lookat/- name=- at 17749261169514291474638831616 297102901434655329206438471925760 3950299608588232955848116142080 size 147974386902296095971481688735744 0 0
+0.05 TRIG #5527 trigger_disk/- name=- at 0 19483650600115520929792 -218532724736 size 2147500800 5 47403
+0.05 TRIG #5715 trigger_multiple_bcs_mp_slr_inparkinglot/- name=- at 33 385 19524 size 38273 1612440 0
+0.05 TRIG #5838 trigger_lookat/- name=- at 49274 6846 -0 size -0 0 -0
+0.05 TRIG #5910 trigger_multiple_flag_lookat/- name=- at 221362125153165639680 0 2011177856 size -1073750784 -68295192 0
+0.05 TRIG #6120 trigger_multiple_fx_volume_on/- name=- at 16533392630751428608 274952446660943756165906432 265601811125570109440 size 36120540646235965442712666112 2115769572102940655616 0
+0.05 TRIG #6432 trigger_multiple_bcs_mp_trq_utilitywalkway/- name=- at -2494075603354459278671872 -159620838614685393834999808 -2615227819863005492592636854272 size 0 0 0
+0.05 TRIG #6447 trigger_disk/- name=- at 1090137568430118748045705216 -0 48173218031564401851491315351552 size 492691554304 34065613810134475037736960 2251736114772118471704576
+0.05 TRIG #6511 trigger_multiple_bcs_ns_intsec_3w/- name=- at 3137514 6985244025738317791232 0 size -24771461450248179016800403456 -0 106711692284526592
+0.05 TRIG #6602 trigger_multiple_bcs_ns_intsec_3w/- name=- at 0 0 -167338796266971758502357455863808 size 0 0 -2
+0.05 TRIG #6860 trigger_multiple_bcs_ns_stairs_up/- name=- at 0 41540989397641591751384557584121856 3173474100049362613911295098880 size 99171065626542581684727971840 1269592588441712851437221838848 -0
+0.05 TRIG #6864 trigger_multiple_bcs_ns_stairs_up/- name=- at 0 -13 2 size -0 -0 2048
+0.05 TRIG #6977 trigger_mech_blocker_fob1/- name=- at -0 0 -0 size 0 0 0
+0.05 TRIG #7027 trigger_multiple_bcs_generic_rooftop/- name=- at 1 0 0 size 0 0 0
+0.05 TRIG #7123 trigger_multiple_bcs_mp_vns_inpool/- name=- at 1 12 -nan size -0 -0 0
+0.05 TRIG #7142 trigger_multiple_bcs_lag_dogs/- name=- at -172806170387931439315371428851358892032 -260528666891433907437475759867696250880 20529 size -0 -0 85823
+0.05 TRIG #7187 trigger_radius_bird_startle/- name=- at 290614671866434231992320 72956260321971954253824 18525693777161787062093873152 size 554387801289122643968 27801896769583353910261123645440 2286132589383959001260097536
+0.05 TRIG #7492 trigger_building_traverse_crush_gag_setup/- name=- at 0 0 -0 size 97 4 0
+0.05 TRIG #7541 trigger_start_script_color_will/- name=- at 0 -172811322119970766839659111453185540096 -260528666891433907437475759867696250880 size -inf 0 -105981823128597601579857608704
+0.05 TRIG #7565 trigger_multiple_bcs_mp_dam_factoryrooftop/- name=- at -251892599423885459035992835795372212224 0 0 size 0 3395225247521089717826593226752 -544222833249200870785024
+0.05 TRIG #7969 trigger_vista_elevator_jump/- name=- at -54982 -879749 -14076502 size -450464448 -7207693312 -115327287296
+0.05 TRIG #8150 trigger_multiple_bcs_mp_lab_behindvehicle/- name=- at 1625 44 1 size 84 -0 -0
+0.05 TRIG #8185 trigger_enter_subway_station_03/- name=- at -0 0 -0 size 8 -6 -0
