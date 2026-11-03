@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.03 RECORDER"
+	#define ADDON_VERSION "1.04 RECORDER"
 	#else
-	#define ADDON_VERSION "1.03"
+	#define ADDON_VERSION "1.04"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -7050,7 +7050,9 @@ namespace
 						static double epos_time[MAX_ENTITIES];
 						const double s3 = now_seconds() - g_bbt_time;
 						const float ex = r.pos[0] - 35440.0f, ey = r.pos[1] - 9790.0f;
-						if (s3 >= -2.0 && s3 <= 30.0 && ex * ex + ey * ey < 1500.0f * 1500.0f && std::fabs(r.pos[2] - 4350.0f) < 400.0f && now_seconds() - epos_time[slot] >= 0.1)
+						const float qx = r.pos[0] - 25300.0f, qy = r.pos[1] - 10700.0f;
+						const bool centre = s3 > 40.0 && s3 <= 260.0 && qx * qx + qy * qy < 1800.0f * 1800.0f && r.pos[2] > 1100.0f && r.pos[2] < 2500.0f && now_seconds() - epos_time[slot] >= 0.5;
+						if (centre || (s3 >= -2.0 && s3 <= 30.0 && ex * ex + ey * ey < 1500.0f * 1500.0f && std::fabs(r.pos[2] - 4350.0f) < 400.0f && now_seconds() - epos_time[slot] >= 0.1))
 						{
 							epos_time[slot] = now_seconds();
 							rec_line("EPOS #%d %.1f %.1f %.1f", slot, r.pos[0], r.pos[1], r.pos[2]);
