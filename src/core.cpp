@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.00 RECORDER"
+	#define ADDON_VERSION "1.01 RECORDER"
 	#else
-	#define ADDON_VERSION "1.00"
+	#define ADDON_VERSION "1.01"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -7019,10 +7019,23 @@ namespace
 							class_name(tid, tn, sizeof(tn));
 							if (strstr(tn, "hero") && strstr(tn, "will")) hero_kind[slot] = 1;
 							else if (strstr(tn, "hero") && strstr(tn, "cormack")) hero_kind[slot] = 2;
+							else if (strstr(tn, "enemy")) hero_kind[slot] = 3;
 						}
 					}
 					// v0.98: Will's / Cormack's destination (actor +0x15A8) - logged whenever it changes, plus fast positions early on
-					if (hero_kind[slot] > 0)
+					// v1.01: enemies near the start doorway, 10 times a second for 30 s after the start
+					if (hero_kind[slot] == 3 && g_bbt_time > 0.0)
+					{
+						static double epos_time[MAX_ENTITIES];
+						const double s3 = now_seconds() - g_bbt_time;
+						const float ex = r.pos[0] - 35440.0f, ey = r.pos[1] - 9790.0f;
+						if (s3 >= -2.0 && s3 <= 30.0 && ex * ex + ey * ey < 1500.0f * 1500.0f && std::fabs(r.pos[2] - 4350.0f) < 400.0f && now_seconds() - epos_time[slot] >= 0.1)
+						{
+							epos_time[slot] = now_seconds();
+							rec_line("EPOS #%d %.1f %.1f %.1f", slot, r.pos[0], r.pos[1], r.pos[2]);
+						}
+					}
+					if (hero_kind[slot] == 1 || hero_kind[slot] == 2)
 					{
 						unsigned long long actor = 0;
 						memcpy(&actor, buffer + 0x120, 8);
@@ -7065,7 +7078,7 @@ namespace
 					static double last_snap[MAX_ENTITIES];
 					const double hnow2 = now_seconds();
 					const double since = hnow2 - g_bbt_time;
-					if (hero_kind[slot] > 0 && g_bbt_time > 0.0 && since >= 0.0 && since <= 30.0 && hnow2 - last_snap[slot] >= 0.5)
+					if ((hero_kind[slot] == 1 || hero_kind[slot] == 2) && g_bbt_time > 0.0 && since >= 0.0 && since <= 30.0 && hnow2 - last_snap[slot] >= 0.5)
 					{
 						last_snap[slot] = hnow2;
 						if (hf_bbt != g_bbt_time)
