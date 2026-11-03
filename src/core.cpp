@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.10 RECORDER"
+	#define ADDON_VERSION "1.11 RECORDER"
 	#else
-	#define ADDON_VERSION "1.10"
+	#define ADDON_VERSION "1.11"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -570,6 +570,7 @@ namespace
 	volatile double g_wave_time = 0.0, g_press_time = 0.0, g_prompt_time = 0.0;
 	volatile double g_will_van_time = 0.0, g_will_cc_time = 0.0, g_will_camp_time = 0.0;   // v1.03
 	volatile double g_will_left_van_time = 0.0;   // v1.08
+	volatile double g_blocker_time = 0.0;         // v1.11: a soldier standing on/next to Will's doorway goal
 	volatile double g_enter2_time = 0.0;          // v1.10: Will's opening jump (second ledge enter)   // v1.02: finale plant timing
 	volatile float g_wg_goal[3] = {}, g_wg_pos[3] = {};   // v0.98: Will's walking destination and position (set by the recorder)
 	volatile double g_wg_time = 0.0, g_wg_still_since = 0.0;
@@ -3526,6 +3527,14 @@ namespace
 				draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.25f, "CORMACK LATE IN DOORWAY", sc, cy);
 				if (!logged || logged_bbt != g_bbt_time) { logged = true; logged_bbt = g_bbt_time; log_line("Cormack still in the doorway %.1f s after start", since); }
 			}
+		}
+
+		// v1.11: a first-fight soldier standing on Will's doorway spot when Will gets there is what froze him
+		if (strcmp(g_rec_map, "seoul") == 0 && g_blocker_time > g_bbt_time && now_seconds() - g_blocker_time < 1.0)
+		{
+			const float sc = g_h >= 1200.0f ? 4.0f : 3.0f;
+			const float mg[4] = {1.0f, 0.3f, 1.0f, 1.0f};
+			draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.21f + 14.0f * sc, "SOLDIER ON WILLS SPOT", sc, mg);
 		}
 
 		// v0.95: big labels on the two start triggers
@@ -7071,6 +7080,14 @@ namespace
 						const float ex = r.pos[0] - 35440.0f, ey = r.pos[1] - 9790.0f;
 						const float qx = r.pos[0] - 25300.0f, qy = r.pos[1] - 10700.0f;
 						const bool centre = s3 > 40.0 && s3 <= 260.0 && qx * qx + qy * qy < 1800.0f * 1800.0f && r.pos[2] > 1100.0f && r.pos[2] < 2500.0f && now_seconds() - epos_time[slot] >= 0.5;
+						{
+							const float bx = r.pos[0] - 35466.0f, by = r.pos[1] - 9792.0f;
+							if (s3 >= 8.0 && s3 <= 14.0 && bx * bx + by * by < 24.0f * 24.0f && std::fabs(r.pos[2] - 4344.0f) < 40.0f)
+							{
+								if (now_seconds() - g_blocker_time > 2.0) rec_line("BLOCKER #%d on Will's doorway spot at %.1f s", slot, s3);
+								g_blocker_time = now_seconds();
+							}
+						}
 						if (centre || (s3 >= -2.0 && s3 <= 30.0 && ex * ex + ey * ey < 1500.0f * 1500.0f && std::fabs(r.pos[2] - 4350.0f) < 400.0f && now_seconds() - epos_time[slot] >= 0.1))
 						{
 							epos_time[slot] = now_seconds();
