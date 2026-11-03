@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.97 RECORDER"
+	#define ADDON_VERSION "0.98 RECORDER"
 	#else
-	#define ADDON_VERSION "0.97"
+	#define ADDON_VERSION "0.98"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -567,6 +567,8 @@ namespace
 	volatile double g_in_time = 0.0;  // v0.83: when the player entered player_leaving_map after that
 	volatile double g_s_time = 0.0;   // v0.86: canal_strategy_scene_complete (Will is sent to the platform)
 	volatile double g_f2_time = 0.0;
+	volatile float g_wg_goal[3] = {}, g_wg_pos[3] = {};   // v0.98: Will's walking destination and position (set by the recorder)
+	volatile double g_wg_time = 0.0, g_wg_still_since = 0.0;
 	volatile double g_bbt_time = 0.0;   // v0.91: begin_building_traversal (start of the level, also after a restart)
 	volatile double g_enter1_time = 0.0; // v0.91: first first_landassist_enter (Cormack at the ledge)
 	volatile int g_enter_count = 0;      // v0.91: how many ledge "enter" animations finished
@@ -3420,6 +3422,40 @@ namespace
 		for (int i = count - 1; i >= 0; --i)
 		{
 			draw_box(hits[i]);
+		}
+
+		// v0.98: Will's destination (yellow cross + line) and a warning when he stops short of it
+		if (strcmp(g_rec_map, "seoul") == 0 && g_wg_time > 0.0 && now_seconds() - g_wg_time < 1.0 && now_seconds() - g_bbt_time < 45.0)
+		{
+			const vec3 gp = {g_wg_goal[0], g_wg_goal[1], g_wg_goal[2]};
+			const vec3 wp = {g_wg_pos[0], g_wg_pos[1], g_wg_pos[2] + 40.0f};
+			const float yel[4] = {1.0f, 0.9f, 0.1f, 1.0f};
+			if (std::fabs(gp.x) > 1.0f)
+			{
+				g_thin_lines = true;
+				edge({gp.x - 25.0f, gp.y, gp.z + 2.0f}, {gp.x + 25.0f, gp.y, gp.z + 2.0f}, yel);
+				edge({gp.x, gp.y - 25.0f, gp.z + 2.0f}, {gp.x, gp.y + 25.0f, gp.z + 2.0f}, yel);
+				edge({gp.x, gp.y, gp.z}, {gp.x, gp.y, gp.z + 80.0f}, yel);
+				edge(wp, {gp.x, gp.y, gp.z + 40.0f}, yel);
+				g_thin_lines = false;
+				const vec3 c = to_camera({gp.x, gp.y, gp.z + 90.0f});
+				if (c.z > 20.0f)
+				{
+					float sx, sy;
+					to_screen(c, &sx, &sy);
+					draw_text(sx - 9.0f * 6.0f, sy, "WILL GOAL", 2.0f, yel);
+				}
+				const float dx = g_wg_pos[0] - gp.x, dy = g_wg_pos[1] - gp.y;
+				const float dist = std::sqrt(dx * dx + dy * dy);
+				if (dist > 8.0f && dist < 300.0f && now_seconds() - g_wg_still_since > 1.5)
+				{
+					char buf[64];
+					snprintf(buf, sizeof(buf), "WILL STUCK %d UNITS FROM HIS GOAL", static_cast<int>(dist));
+					const float sc = g_h >= 1200.0f ? 4.0f : 3.0f;
+					const float org[4] = {1.0f, 0.6f, 0.1f, 1.0f};
+					draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.21f, buf, sc, org);
+				}
+			}
 		}
 
 		// v0.95: big labels on the two start triggers
@@ -6953,6 +6989,40 @@ namespace
 							class_name(tid, tn, sizeof(tn));
 							if (strstr(tn, "hero") && strstr(tn, "will")) hero_kind[slot] = 1;
 							else if (strstr(tn, "hero") && strstr(tn, "cormack")) hero_kind[slot] = 2;
+						}
+					}
+					// v0.98: Will's / Cormack's destination (actor +0x15A8) - logged whenever it changes, plus fast positions early on
+					if (hero_kind[slot] > 0)
+					{
+						unsigned long long actor = 0;
+						memcpy(&actor, buffer + 0x120, 8);
+						static float gprev[MAX_ENTITIES][12];
+						static double wpos_time[MAX_ENTITIES];
+						float gv[12] = {};
+						if (actor >= 0x140000000ull && actor < 0x150000000ull && read_fast(static_cast<uintptr_t>(actor) + 0x15A8, gv, sizeof(gv)))
+						{
+							if (memcmp(gv, gprev[slot], sizeof(gv)) != 0 && std::fabs(gv[0]) < 200000.0f)
+							{
+								rec_line("GOAL #%d %s goal %.0f %.0f %.0f | %.3f %.3f %.0f | end %.0f %.0f %.0f | %.0f | me-to-goal %.0f", slot, hero_kind[slot] == 1 ? "will" : "cormack",
+									gv[0], gv[1], gv[2], gv[3], gv[4], gv[5], gv[7], gv[8], gv[9], gv[10],
+									std::sqrt((r.pos[0] - gv[0]) * (r.pos[0] - gv[0]) + (r.pos[1] - gv[1]) * (r.pos[1] - gv[1])));
+								memcpy(gprev[slot], gv, sizeof(gv));
+							}
+							if (hero_kind[slot] == 1)
+							{
+								const double tn = now_seconds();
+								const float mv = std::fabs(r.pos[0] - g_wg_pos[0]) + std::fabs(r.pos[1] - g_wg_pos[1]);
+								if (mv > 2.0f || g_wg_still_since == 0.0) g_wg_still_since = tn;
+								g_wg_goal[0] = gv[0]; g_wg_goal[1] = gv[1]; g_wg_goal[2] = gv[2];
+								g_wg_pos[0] = r.pos[0]; g_wg_pos[1] = r.pos[1]; g_wg_pos[2] = r.pos[2];
+								g_wg_time = tn;
+							}
+						}
+						const double since0 = now_seconds() - g_bbt_time;
+						if (g_bbt_time > 0.0 && since0 >= 0.0 && since0 <= 30.0 && now_seconds() - wpos_time[slot] >= 0.1)
+						{
+							wpos_time[slot] = now_seconds();
+							rec_line("HPOS #%d %s %.1f %.1f %.1f", slot, hero_kind[slot] == 1 ? "will" : "cormack", r.pos[0], r.pos[1], r.pos[2]);
 						}
 					}
 					static FILE* hf = nullptr;
