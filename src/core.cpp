@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.04 RECORDER"
+	#define ADDON_VERSION "1.05 RECORDER"
 	#else
-	#define ADDON_VERSION "1.04"
+	#define ADDON_VERSION "1.05"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3867,15 +3867,15 @@ namespace
 			if (g_v_time > 0.0 && g_s_time < g_v_time && now - g_v_time < 900.0)
 			{
 				// v0.87: camp scene stage before the binoculars. Started-but-not-finished = Will gets grabbed.
-				if (g_fe_time > g_v_time)
+				if (false)
 					draw_text(g_w * 0.5f - 22.0f * 3.0f * sc, g_h * 0.38f, "CAMP SCENE DONE - BINOCULARS OK", sc, grn);
-				else if (g_f1_time > g_v_time)
+				else if (false)
 					draw_text(g_w * 0.5f - 28.0f * 3.0f * sc, g_h * 0.38f, "CAMP SCENE MID-WAY - BINOCULARS NOW = NO WILL", sc, red);
-				else
+				else if (false)
 					draw_text(g_w * 0.5f - 24.0f * 3.0f * sc, g_h * 0.38f, "CAMP SCENE NOT STARTED - BINOCULARS OK", sc, grn);
 			}
 
-			if (g_s_time > g_v_time && now - g_s_time < 90.0)
+			if (false && g_s_time > g_v_time && now - g_s_time < 90.0)   // v1.05: old head-start readout retired
 			{
 				char gb[96];
 				if (g_f2_time > g_v_time)
