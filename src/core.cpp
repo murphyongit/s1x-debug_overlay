@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.05 RECORDER"
+	#define ADDON_VERSION "1.06 RECORDER"
 	#else
-	#define ADDON_VERSION "1.05"
+	#define ADDON_VERSION "1.06"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3860,7 +3860,8 @@ namespace
 						draw_text(g_w * 0.5f - 14.0f * 3.0f * sc, g_h * 0.30f, "RACE WON - WILL OK SO FAR", sc, grn);
 				}
 				const double ct = g_will_cc_time;
-				if (ct > g_bbt_time && now - ct < 8.0)
+				const bool race_won = vt > g_bbt_time && g_t_time > g_bbt_time && std::fabs(g_t_time - vt) <= 2.0;
+				if (ct > g_bbt_time && now - ct < 8.0 && race_won)
 					draw_text(g_w * 0.5f - 22.0f * 3.0f * sc, g_h * 0.30f + 14.0f * sc, "WILL REACHED HIS CENTRE SPOT - LIKELY CAMP", sc, red);
 			}
 
