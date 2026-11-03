@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.94 RECORDER"
+	#define ADDON_VERSION "0.95 RECORDER"
 	#else
-	#define ADDON_VERSION "0.94"
+	#define ADDON_VERSION "0.95"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -865,6 +865,25 @@ namespace
 	{
 		const float* color = color_for(h);
 		g_line_override = h.flag == 1 ? 6.0f : 0.0f;
+		// v0.95: Seoul start - make the two Will/Cormack start triggers easy to spot
+		{
+			static float hl[4] = {1.0f, 0.5f, 0.0f, 1.0f};
+			static const float cyan[4] = {0.0f, 1.0f, 1.0f, 1.0f};
+			const bool will_box = std::fabs(h.mid.x - 35456.0f) < 10.0f && std::fabs(h.mid.y - 9764.0f) < 10.0f && std::fabs(h.mid.z - 4368.0f) < 10.0f;
+			const bool corm_box = std::fabs(h.mid.x - 35500.0f) < 10.0f && std::fabs(h.mid.y - 9976.0f) < 10.0f && std::fabs(h.mid.z - 4344.0f) < 10.0f;
+			if (will_box)
+			{
+				const bool blink = std::fmod(now_seconds(), 0.5) < 0.25;
+				hl[0] = 1.0f; hl[1] = blink ? 0.55f : 0.1f; hl[2] = blink ? 0.0f : 0.6f;
+				if (!h.inside) color = hl;
+				g_line_override = 6.0f;
+			}
+			else if (corm_box)
+			{
+				if (!h.inside) color = cyan;
+				g_line_override = 4.0f;
+			}
+		}
 
 		vec3 c[8];
 		for (int i = 0; i < 8; ++i)
@@ -933,6 +952,16 @@ namespace
 		if (c >= 'A' && c <= 'Z') return kLetters[c - 'A'];
 		if (c >= '0' && c <= '9') return kDigits[c - '0'];
 		if (c == '_') return kUnderscore;
+		static const unsigned char kPlus[7] = {0,0x04,0x04,0x1F,0x04,0x04,0};
+		static const unsigned char kOpen[7] = {0x02,0x04,0x08,0x08,0x08,0x04,0x02};
+		static const unsigned char kClose[7] = {0x08,0x04,0x02,0x02,0x02,0x04,0x08};
+		static const unsigned char kColon[7] = {0,0x0C,0x0C,0,0x0C,0x0C,0};
+		static const unsigned char kSemi[7] = {0,0x0C,0x0C,0,0x0C,0x04,0x08};
+		if (c == '+') return kPlus;
+		if (c == '(') return kOpen;
+		if (c == ')') return kClose;
+		if (c == ':') return kColon;
+		if (c == ';') return kSemi;
 		if (c == '#') return kHash;
 		if (c == '-') return kDash;
 		if (c == '.') return kDot;
@@ -3388,6 +3417,29 @@ namespace
 		for (int i = count - 1; i >= 0; --i)
 		{
 			draw_box(hits[i]);
+		}
+
+		// v0.95: big labels on the two start triggers
+		if (strcmp(g_rec_map, "seoul") == 0)
+		{
+			struct lbl { float x, y, z; const char* text; float r, g, b; };
+			static const lbl L[] = {
+				{35456.0f, 9764.0f, 4368.0f + 70.0f, "JUMP OVER THIS (WILL BOX)", 1.0f, 0.55f, 0.0f},
+				{35500.0f, 9976.0f, 4344.0f + 80.0f, "TOUCH THIS (CORMACK GO)", 0.0f, 1.0f, 1.0f},
+			};
+			for (const lbl& l : L)
+			{
+				const vec3 c = to_camera({l.x, l.y, l.z});
+				const float dx = l.x - origin[0], dy = l.y - origin[1];
+				if (c.z > 20.0f && dx * dx + dy * dy < 3000.0f * 3000.0f)
+				{
+					float sx, sy;
+					to_screen(c, &sx, &sy);
+					const float col[4] = {l.r, l.g, l.b, 1.0f};
+					const float sc = g_h >= 1200.0f ? 3.0f : 2.0f;
+					draw_text(sx - static_cast<float>(strlen(l.text)) * 3.0f * sc, sy - 10.0f * sc, l.text, sc, col);
+				}
+			}
 		}
 
 		// v0.92: route guide - thin white straight lines between the key points of the Seoul route (\\ key toggles)
