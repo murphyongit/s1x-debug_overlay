@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.09 RECORDER"
+	#define ADDON_VERSION "1.10 RECORDER"
 	#else
-	#define ADDON_VERSION "1.09"
+	#define ADDON_VERSION "1.10"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -569,7 +569,8 @@ namespace
 	volatile double g_f2_time = 0.0;
 	volatile double g_wave_time = 0.0, g_press_time = 0.0, g_prompt_time = 0.0;
 	volatile double g_will_van_time = 0.0, g_will_cc_time = 0.0, g_will_camp_time = 0.0;   // v1.03
-	volatile double g_will_left_van_time = 0.0;   // v1.08   // v1.02: finale plant timing
+	volatile double g_will_left_van_time = 0.0;   // v1.08
+	volatile double g_enter2_time = 0.0;          // v1.10: Will's opening jump (second ledge enter)   // v1.02: finale plant timing
 	volatile float g_wg_goal[3] = {}, g_wg_pos[3] = {};   // v0.98: Will's walking destination and position (set by the recorder)
 	volatile double g_wg_time = 0.0, g_wg_still_since = 0.0;
 	volatile float g_wc_pos[3] = {};   // v1.00: Cormack position (set by the recorder)
@@ -3475,35 +3476,38 @@ namespace
 			const float gry[4] = {0.85f, 0.85f, 0.85f, 1.0f};
 			char buf[96];
 			const bool setup = g_f2_time >= g_s_time - 0.5 && g_f2_time - g_s_time < 6.0;
+			// v1.10: the Oct 29 skip also needed Will to have MISSED his opening jump (stuck at the start).
+			// A wave alone (Will did his jump) gives a normal finale - but planting before the wave still soft-locks.
+			const bool froze = g_enter2_time < g_bbt_time || g_enter2_time > g_s_time - 1.0;
+			const float org[4] = {1.0f, 0.55f, 0.1f, 1.0f};
 			if (g_will_camp_time > g_s_time)
 			{
 				draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.36f, "WILL SENT TO CAMP - NO PLANT - RESTART", sc, red);
 			}
 			else if (g_prompt_time < g_s_time)
 			{
-				// prompt not up yet: say nothing
 			}
 			else if (setup && g_wave_time < g_s_time)
 			{
 				const double eta = (g_f2_time + 16.8) - now2;
-				snprintf(buf, sizeof(buf), "SKIP SETUP - DO NOT PLANT YET  %.1f", eta > 0.0 ? eta : 0.0);
-				draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.36f, buf, sc, red);
+				snprintf(buf, sizeof(buf), froze ? "SKIP SETUP - DO NOT PLANT YET  %.1f" : "WAVE COMING - DO NOT PLANT YET  %.1f", eta > 0.0 ? eta : 0.0);
+				draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.36f, buf, sc, froze ? red : org);
 			}
 			else if (setup && g_wave_time >= g_s_time && now2 - g_wave_time < 2.5)
 			{
-				// v1.07: right after the wave Will plays a short run animation; planting during it soft-locks
-				// (pressed 0.3 s after the wave = soft lock; 2.5 s after = skip in seoul_20261029_215054)
 				const float yel[4] = {1.0f, 0.85f, 0.1f, 1.0f};
 				snprintf(buf, sizeof(buf), "WAVE - GET READY  %.1f", 2.5 - (now2 - g_wave_time));
 				draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.36f, buf, sc, yel);
 			}
 			else if (setup && g_wave_time >= g_s_time)
 			{
-				draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.36f, "PLANT NOW - SKIP", sc, grn);
+				if (froze)
+					draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.36f, "PLANT NOW - SKIP", sc, grn);
+				else
+					draw_text(g_w * 0.5f - 30.0f * 3.0f * sc, g_h * 0.36f, "PLANT NOW - NO SKIP (WILL DID HIS JUMP)", sc, gry);
 			}
 			else if (!setup)
 			{
-				// v1.09: prompt is up and no wave is coming (camp dialogue already played, or never will)
 				draw_text(g_w * 0.5f - 24.0f * 3.0f * sc, g_h * 0.36f, "NO SKIP THIS RUN - NORMAL FINALE", sc, gry);
 			}
 		}
@@ -6415,7 +6419,7 @@ namespace
 		}
 		if (strcmp(name, "begin_building_traversal") == 0)
 		{
-			g_bbt_time = now_seconds(); g_enter1_time = 0.0; g_enter_count = 0; g_will_msg = 0; g_will_msg_time = 0.0;
+			g_bbt_time = now_seconds(); g_enter2_time = 0.0; g_enter1_time = 0.0; g_enter_count = 0; g_will_msg = 0; g_will_msg_time = 0.0;
 		}
 		if (strcmp(name, "first_landassist_enter") == 0 && g_bbt_time > 0.0)
 		{
@@ -6424,6 +6428,7 @@ namespace
 			if (g_enter_count == 1) g_enter1_time = t;
 			else if (g_enter_count == 2)
 			{
+				g_enter2_time = t;
 				if (t - g_enter1_time < 8.0) { g_will_msg = 1; g_will_msg_time = t; }
 				else if (g_s_time > g_v_time && t - g_s_time < 25.0) { g_will_msg = 4; g_will_msg_time = t; }
 				else { g_will_msg = 3; g_will_msg_time = t; }
