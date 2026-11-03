@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.06 RECORDER"
+	#define ADDON_VERSION "1.07 RECORDER"
 	#else
-	#define ADDON_VERSION "1.06"
+	#define ADDON_VERSION "1.07"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3487,6 +3487,14 @@ namespace
 				const double eta = (g_f2_time + 16.8) - now2;
 				snprintf(buf, sizeof(buf), "SKIP SETUP - DO NOT PLANT YET  %.1f", eta > 0.0 ? eta : 0.0);
 				draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.36f, buf, sc, red);
+			}
+			else if (setup && g_wave_time >= g_s_time && now2 - g_wave_time < 2.5)
+			{
+				// v1.07: right after the wave Will plays a short run animation; planting during it soft-locks
+				// (pressed 0.3 s after the wave = soft lock; 2.5 s after = skip in seoul_20261029_215054)
+				const float yel[4] = {1.0f, 0.85f, 0.1f, 1.0f};
+				snprintf(buf, sizeof(buf), "WAVE - GET READY  %.1f", 2.5 - (now2 - g_wave_time));
+				draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.36f, buf, sc, yel);
 			}
 			else if (setup && g_wave_time >= g_s_time)
 			{
