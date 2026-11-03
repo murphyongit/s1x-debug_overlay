@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.11 RECORDER"
+	#define ADDON_VERSION "1.12 RECORDER"
 	#else
-	#define ADDON_VERSION "1.11"
+	#define ADDON_VERSION "1.12"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -570,6 +570,7 @@ namespace
 	volatile double g_wave_time = 0.0, g_press_time = 0.0, g_prompt_time = 0.0;
 	volatile double g_will_van_time = 0.0, g_will_cc_time = 0.0, g_will_camp_time = 0.0;   // v1.03
 	volatile double g_will_left_van_time = 0.0;   // v1.08
+	volatile double g_will_ledge_time = 0.0;      // v1.12: Will reached his ledge spot (from his position)
 	volatile double g_blocker_time = 0.0;         // v1.11: a soldier standing on/next to Will's doorway goal
 	volatile double g_enter2_time = 0.0;          // v1.10: Will's opening jump (second ledge enter)   // v1.02: finale plant timing
 	volatile float g_wg_goal[3] = {}, g_wg_pos[3] = {};   // v0.98: Will's walking destination and position (set by the recorder)
@@ -3852,10 +3853,6 @@ namespace
 			// v0.91: Will's opening jump status (short-lived messages)
 			{
 				const double tnow = now_seconds();
-				if (g_enter_count == 1 && g_enter1_time > 0.0 && tnow - g_enter1_time > 8.0 && g_will_msg == 0)
-				{
-					g_will_msg = 2; g_will_msg_time = g_enter1_time + 8.0;
-				}
 				const double shown = tnow - g_will_msg_time;
 				const float yel[4] = {1.0f, 0.8f, 0.2f, 1.0f};
 				if (g_will_msg == 1 && shown < 3.0)
@@ -6435,14 +6432,8 @@ namespace
 			const double t = now_seconds();
 			++g_enter_count;
 			if (g_enter_count == 1) g_enter1_time = t;
-			else if (g_enter_count == 2)
-			{
-				g_enter2_time = t;
-				if (t - g_enter1_time < 8.0) { g_will_msg = 1; g_will_msg_time = t; }
-				else if (g_s_time > g_v_time && t - g_s_time < 25.0) { g_will_msg = 4; g_will_msg_time = t; }
-				else { g_will_msg = 3; g_will_msg_time = t; }
-				if (g_rec) rec_line("WILLJUMP second ledge enter %.2f s after the first (msg %d)", t - g_enter1_time, g_will_msg);
-			}
+			// v1.12: this notify comes from Cormack AND Will, in either order, so it no longer drives Will's messages (log only)
+			if (g_rec) rec_line("LEDGEANIM ledge enter #%d at %.1f s", g_enter_count, t - g_bbt_time);
 		}
 		if (strcmp(name, "fob_cormack_wave") == 0) { g_wave_time = now_seconds(); if (g_rec) rec_line("PLANTWIN wave at %.2f (S+%.2f)", g_wave_time, g_wave_time - g_s_time); }
 		if (strcmp(name, "canal_bomb_plant_trigger_on") == 0) { g_prompt_time = now_seconds(); if (g_rec) rec_line("PLANTWIN prompt at S+%.2f", g_prompt_time - g_s_time); }
@@ -7117,6 +7108,32 @@ namespace
 							}
 							if (hero_kind[slot] == 1 && g_bbt_time > 0.0)
 							{
+								// v1.12: Will's opening jump, judged from where Will actually is
+								{
+									const double tn = now_seconds(), since = tn - g_bbt_time;
+									const float lx = r.pos[0] - 35169.0f, ly = r.pos[1] - 9573.0f;
+									if (g_will_ledge_time < g_bbt_time && lx * lx + ly * ly < 60.0f * 60.0f && r.pos[2] > 4300.0f)
+									{
+										g_will_ledge_time = tn;
+										if (g_s_time > g_bbt_time) { g_will_msg = 4; g_will_msg_time = tn; }
+										else if (g_will_msg == 2) { g_will_msg = 3; g_will_msg_time = tn; }
+										rec_line("WILLJUMP Will reached the ledge at %.1f s (msg %d)", since, g_will_msg);
+									}
+									const float jx = r.pos[0] - 35150.0f, jy = r.pos[1] - 9200.0f;
+									if (g_enter2_time < g_bbt_time && jx * jx + jy * jy < 500.0f * 500.0f && r.pos[2] < 3000.0f)
+									{
+										g_enter2_time = tn;
+										if (g_will_msg == 0) { g_will_msg = 1; g_will_msg_time = tn; }
+										rec_line("WILLJUMP Will jumped down at %.1f s (msg %d)", since, g_will_msg);
+									}
+									if (g_will_msg == 0 && g_will_ledge_time < g_bbt_time && g_enter2_time < g_bbt_time && g_s_time < g_bbt_time &&
+										since > 32.0 && since < 120.0 && r.pos[2] > 4300.0f &&
+										(r.pos[0] - 35458.0f) * (r.pos[0] - 35458.0f) + (r.pos[1] - 9700.0f) * (r.pos[1] - 9700.0f) < 300.0f * 300.0f)
+									{
+										g_will_msg = 2; g_will_msg_time = tn;
+										rec_line("WILLJUMP Will still stuck in the top building, no jump (missed) at %.1f s (msg 2)", since);
+									}
+								}
 								const float vx = r.pos[0] - 28100.0f, vy = r.pos[1] - 7970.0f;
 								if (vx * vx + vy * vy < 80.0f * 80.0f && std::fabs(r.pos[2] - 1451.0f) < 40.0f && g_will_van_time < g_bbt_time)
 								{
