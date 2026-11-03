@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.96 RECORDER"
+	#define ADDON_VERSION "0.97 RECORDER"
 	#else
-	#define ADDON_VERSION "0.96"
+	#define ADDON_VERSION "0.97"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -6934,6 +6934,80 @@ namespace
 							}
 							memcpy(corm_prev[slot], full, sizeof(full));
 							corm_have[slot] = true;
+						}
+					}
+				}
+
+				// v0.97: Will / Cormack memory snapshots for the first 30 s after the level starts (twice a second),
+				// to find where the game keeps their walking destination. Written to speedrun_data\heroes_<map>_<time>.bin
+				{
+					static signed char hero_kind[MAX_ENTITIES];   // 0 unknown, 1 will, 2 cormack, -1 other
+					if (hero_kind[slot] == 0)
+					{
+						unsigned int tid = 0;
+						memcpy(&tid, buffer + OFF_TYPE, 4);
+						hero_kind[slot] = -1;
+						if (tid > 1 && tid < 0x1000000)
+						{
+							char tn[64] = {};
+							class_name(tid, tn, sizeof(tn));
+							if (strstr(tn, "hero") && strstr(tn, "will")) hero_kind[slot] = 1;
+							else if (strstr(tn, "hero") && strstr(tn, "cormack")) hero_kind[slot] = 2;
+						}
+					}
+					static FILE* hf = nullptr;
+					static double hf_bbt = -1.0;
+					static double last_snap[MAX_ENTITIES];
+					const double hnow2 = now_seconds();
+					const double since = hnow2 - g_bbt_time;
+					if (hero_kind[slot] > 0 && g_bbt_time > 0.0 && since >= 0.0 && since <= 30.0 && hnow2 - last_snap[slot] >= 0.5)
+					{
+						last_snap[slot] = hnow2;
+						if (hf_bbt != g_bbt_time)
+						{
+							if (hf) { fclose(hf); hf = nullptr; }
+							hf_bbt = g_bbt_time;
+							char nm[96];
+							SYSTEMTIME stt; GetLocalTime(&stt);
+							snprintf(nm, sizeof(nm), "heroes_%s_%04d%02d%02d_%02d%02d%02d.bin", g_rec_map[0] ? g_rec_map : "map", stt.wYear, stt.wMonth, stt.wDay, stt.wHour, stt.wMinute, stt.wSecond);
+							const char* old_sub = g_subdir;
+							g_subdir = "speedrun_data\\";
+							char path[MAX_PATH];
+							make_path(path, nm);
+							g_subdir = old_sub;
+							if (fopen_s(&hf, path, "wb") != 0) hf = nullptr;
+							rec_line("HEROSNAP file %s", nm);
+						}
+						if (hf)
+						{
+							unsigned char full[0x2F8];
+							if (read_fast(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, full, sizeof(full)))
+							{
+								// record: "HSNP", float time since start, int slot, int kind, entity bytes, then up to 8 pointer targets
+								const float tf = static_cast<float>(since);
+								const int sl = slot, kd = hero_kind[slot];
+								fwrite("HSNP", 1, 4, hf); fwrite(&tf, 4, 1, hf); fwrite(&sl, 4, 1, hf); fwrite(&kd, 4, 1, hf);
+								const unsigned int esz = sizeof(full);
+								fwrite(&esz, 4, 1, hf); fwrite(full, 1, sizeof(full), hf);
+								static unsigned char tgt[0x1800];
+								int npt = 0;
+								for (unsigned int off = 0; off + 8 <= sizeof(full) && npt < 8; off += 8)
+								{
+									unsigned long long v = 0;
+									memcpy(&v, full + off, 8);
+									if (v >= 0x140000000ull && v < 0x150000000ull && (v & 3) == 0)
+									{
+										if (read_fast(static_cast<uintptr_t>(v), tgt, sizeof(tgt)))
+										{
+											const unsigned int tsz = sizeof(tgt);
+											fwrite("PTR_", 1, 4, hf); fwrite(&off, 4, 1, hf); fwrite(&v, 8, 1, hf); fwrite(&tsz, 4, 1, hf); fwrite(tgt, 1, sizeof(tgt), hf);
+											++npt;
+										}
+									}
+								}
+								fwrite("END_", 1, 4, hf);
+								fflush(hf);
+							}
 						}
 					}
 				}
