@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.07 RECORDER"
+	#define ADDON_VERSION "1.08 RECORDER"
 	#else
-	#define ADDON_VERSION "1.07"
+	#define ADDON_VERSION "1.08"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -568,7 +568,8 @@ namespace
 	volatile double g_s_time = 0.0;   // v0.86: canal_strategy_scene_complete (Will is sent to the platform)
 	volatile double g_f2_time = 0.0;
 	volatile double g_wave_time = 0.0, g_press_time = 0.0, g_prompt_time = 0.0;
-	volatile double g_will_van_time = 0.0, g_will_cc_time = 0.0, g_will_camp_time = 0.0;   // v1.03   // v1.02: finale plant timing
+	volatile double g_will_van_time = 0.0, g_will_cc_time = 0.0, g_will_camp_time = 0.0;   // v1.03
+	volatile double g_will_left_van_time = 0.0;   // v1.08   // v1.02: finale plant timing
 	volatile float g_wg_goal[3] = {}, g_wg_pos[3] = {};   // v0.98: Will's walking destination and position (set by the recorder)
 	volatile double g_wg_time = 0.0, g_wg_still_since = 0.0;
 	volatile float g_wc_pos[3] = {};   // v1.00: Cormack position (set by the recorder)
@@ -3867,6 +3868,9 @@ namespace
 					else if (t_with)
 						draw_text(g_w * 0.5f - 14.0f * 3.0f * sc, g_h * 0.30f, "RACE WON - WILL OK SO FAR", sc, grn);
 				}
+				const double lt = g_will_left_van_time;
+				if (lt > g_bbt_time && now - lt < 8.0 && std::fabs(g_t_time - vt) <= 2.0)
+					draw_text(g_w * 0.5f - 25.0f * 3.0f * sc, g_h * 0.30f + 28.0f * sc, "WILL LEFT THE VAN - DONT TOUCH COMBAT_06", sc, red);
 				const double ct = g_will_cc_time;
 				const bool race_won = vt > g_bbt_time && g_t_time > g_bbt_time && std::fabs(g_t_time - vt) <= 2.0;
 				if (ct > g_bbt_time && now - ct < 8.0 && race_won)
@@ -6428,7 +6432,7 @@ namespace
 		if (strcmp(name, "fob_cormack_wave") == 0) { g_wave_time = now_seconds(); if (g_rec) rec_line("PLANTWIN wave at %.2f (S+%.2f)", g_wave_time, g_wave_time - g_s_time); }
 		if (strcmp(name, "canal_bomb_plant_trigger_on") == 0) { g_prompt_time = now_seconds(); if (g_rec) rec_line("PLANTWIN prompt at S+%.2f", g_prompt_time - g_s_time); }
 		if (strcmp(name, "bomb_plant_start") == 0) { g_press_time = now_seconds(); if (g_rec) rec_line("PLANTWIN pressed at S+%.2f (wave %s)", g_press_time - g_s_time, g_wave_time > g_s_time && g_s_time > 0.0 ? "already happened" : "not yet"); }
-		if (strcmp(name, "begin_building_traversal") == 0) { g_wave_time = 0.0; g_press_time = 0.0; g_prompt_time = 0.0; g_will_van_time = 0.0; g_will_cc_time = 0.0; g_will_camp_time = 0.0; }
+		if (strcmp(name, "begin_building_traversal") == 0) { g_wave_time = 0.0; g_press_time = 0.0; g_prompt_time = 0.0; g_will_van_time = 0.0; g_will_cc_time = 0.0; g_will_camp_time = 0.0; g_will_left_van_time = 0.0; }
 		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_start") == 0) g_f1_time = now_seconds();
 		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_end") == 0) g_fe_time = now_seconds();
 		if (g_v_time > 0.0 && strcmp(name, "dialogue_start_fob_meetup") == 0)
@@ -7095,6 +7099,12 @@ namespace
 								{
 									g_will_van_time = now_seconds();
 									rec_line("WILLRACE Will at the van; T %s (T-van %.2f s)", g_t_time > g_bbt_time ? "already fired" : "not yet", g_t_time > g_bbt_time ? g_t_time - g_will_van_time : 0.0);
+								}
+								if (g_will_van_time > g_bbt_time && g_will_left_van_time < g_will_van_time && g_s_time < g_bbt_time &&
+									vx * vx + vy * vy > 400.0f * 400.0f && r.pos[2] < 1700.0f && now_seconds() - g_will_van_time > 3.0)
+								{
+									g_will_left_van_time = now_seconds();
+									rec_line("WILLRACE Will left the van (sent into the convention centre)");
 								}
 								const float cx = r.pos[0] - 24788.0f, cy = r.pos[1] - 12114.0f;
 								if (cx * cx + cy * cy < 40.0f * 40.0f && g_will_cc_time < g_bbt_time)
