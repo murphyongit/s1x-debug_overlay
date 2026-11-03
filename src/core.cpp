@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.02 RECORDER"
+	#define ADDON_VERSION "1.03 RECORDER"
 	#else
-	#define ADDON_VERSION "1.02"
+	#define ADDON_VERSION "1.03"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -567,7 +567,8 @@ namespace
 	volatile double g_in_time = 0.0;  // v0.83: when the player entered player_leaving_map after that
 	volatile double g_s_time = 0.0;   // v0.86: canal_strategy_scene_complete (Will is sent to the platform)
 	volatile double g_f2_time = 0.0;
-	volatile double g_wave_time = 0.0, g_press_time = 0.0, g_prompt_time = 0.0;   // v1.02: finale plant timing
+	volatile double g_wave_time = 0.0, g_press_time = 0.0, g_prompt_time = 0.0;
+	volatile double g_will_van_time = 0.0, g_will_cc_time = 0.0, g_will_camp_time = 0.0;   // v1.03   // v1.02: finale plant timing
 	volatile float g_wg_goal[3] = {}, g_wg_pos[3] = {};   // v0.98: Will's walking destination and position (set by the recorder)
 	volatile double g_wg_time = 0.0, g_wg_still_since = 0.0;
 	volatile float g_wc_pos[3] = {};   // v1.00: Cormack position (set by the recorder)
@@ -3473,7 +3474,15 @@ namespace
 			const float gry[4] = {0.85f, 0.85f, 0.85f, 1.0f};
 			char buf[96];
 			const bool setup = g_f2_time >= g_s_time - 0.5 && g_f2_time - g_s_time < 6.0;
-			if (setup && g_wave_time < g_s_time)
+			if (g_will_camp_time > g_s_time)
+			{
+				draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.36f, "WILL SENT TO CAMP - NO PLANT - RESTART", sc, red);
+			}
+			else if (g_prompt_time < g_s_time)
+			{
+				// prompt not up yet: say nothing
+			}
+			else if (setup && g_wave_time < g_s_time)
 			{
 				const double eta = (g_f2_time + 16.8) - now2;
 				snprintf(buf, sizeof(buf), "SKIP SETUP - DO NOT PLANT YET  %.1f", eta > 0.0 ? eta : 0.0);
@@ -3625,16 +3634,16 @@ namespace
 				g_line_override = 0.0f;
 				const bool inside = dx == 0.0f && dy == 0.0f && pz > z0 - 70.0f && pz < z1;
 				const float sc = g_h >= 1200.0f ? 6.0f : 4.0f;
-				if (rescue)
+				if (rescue && false)
 				{
 					if (inside)
 						draw_text(g_w * 0.5f - 13.0f * 3.0f * sc, g_h * 0.12f, "TOUCHED - GOOD", sc, gr2);
 					else if (hd < 1500.0f)
 						draw_text(g_w * 0.5f - 18.0f * 3.0f * sc, g_h * 0.12f, "TOUCH THIS BOX - SAVES WILL", sc, gr2);
 				}
-				else if (inside)
+				else if (inside && false)
 					draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.12f, "NO WILL BOX - BACK OUT", sc, red);
-				else if (hd < 250.0f && pz > z0 - 70.0f && pz < z1)
+				else if (false && hd < 250.0f && pz > z0 - 70.0f && pz < z1)
 					draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.12f, "CLOSE TO WILL BOX", sc, yel);
 			}
 		}
@@ -3836,44 +3845,23 @@ namespace
 					draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.16f, "WILL ON BALCONY - WAIT FOR THE PLANT SIGNAL", sc, grn);
 			}
 
-			// v0.88: race between you entering the leaving-map box and Cormack reaching his door spot.
-			// The game warps him away ~3.2-4.0 s after you enter the box. If he reaches the door first,
-			// the camp scene starts early and Will gets grabbed later. So: enter the box before (his ETA - 4 s).
+			// v1.03: race check from what actually happened (replaces the v0.88 box countdown, which was unreliable).
+			// Good: Cormack's "allies to camp" signal (T) fires at the moment Will is warped to the van (after the turret).
+			// Bad: T fired earlier (Cormack reached his door spot on his own) -> Will is sent back to the camp at the end.
 			{
-				char buf[96];
-				const bool t_seen = g_t_time > g_v_time;
-				if (g_box_time > g_v_time)
+				const double vt = g_will_van_time;
+				if (vt > g_bbt_time && now - vt < 10.0)
 				{
-					const double since = now - g_box_time;
-					if (since < 60.0)
-					{
-						if (t_seen && g_t_time - g_box_time < 5.0)
-							draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.30f, "CORMACK BEAT THE WARP - NO WILL", sc, red);
-						else if (since > 5.5 || (t_seen && g_t_time - g_box_time >= 5.0))
-							draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.30f, "WARP BEAT CORMACK - WILL OK", sc, grn);
-						else
-							draw_text(g_w * 0.5f - 14.0f * 3.0f * sc, g_h * 0.30f, "IN BOX - WAITING...", sc, gry);
-					}
+					const bool t_before = g_t_time > g_bbt_time && g_t_time < vt - 2.0;
+					const bool t_with = g_t_time > g_bbt_time && std::fabs(g_t_time - vt) <= 2.0;
+					if (t_before)
+						draw_text(g_w * 0.5f - 23.0f * 3.0f * sc, g_h * 0.30f, "CORMACK WON - WILL GOES TO CAMP - RESTART", sc, red);
+					else if (t_with)
+						draw_text(g_w * 0.5f - 14.0f * 3.0f * sc, g_h * 0.30f, "RACE WON - WILL OK SO FAR", sc, grn);
 				}
-				else if (t_seen)
-				{
-					if (now - g_t_time < 60.0)
-						draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.30f, "CORMACK BEAT THE WARP - NO WILL", sc, red);
-				}
-				else if (age < 90.0 && g_corm_dist >= 0.0 && now - g_corm_seen < 2.0)
-				{
-					if (g_corm_speed > 30.0)
-					{
-						const double rem = (g_corm_dist - 30.0) / g_corm_speed - 4.0;
-						snprintf(buf, sizeof(buf), "ENTER BOX IN %.1f S", rem > 0.0 ? rem : 0.0);
-						draw_text(g_w * 0.5f - 11.0f * 3.0f * sc, g_h * 0.30f, buf, sc, rem > 1.0 ? grn : red);
-					}
-					else
-					{
-						snprintf(buf, sizeof(buf), "CORMACK %.0f FROM DOOR", g_corm_dist);
-						draw_text(g_w * 0.5f - 13.0f * 3.0f * sc, g_h * 0.30f, buf, sc, gry);
-					}
-				}
+				const double ct = g_will_cc_time;
+				if (ct > g_bbt_time && now - ct < 8.0)
+					draw_text(g_w * 0.5f - 22.0f * 3.0f * sc, g_h * 0.30f + 14.0f * sc, "WILL REACHED HIS CENTRE SPOT - LIKELY CAMP", sc, red);
 			}
 
 			if (g_v_time > 0.0 && g_s_time < g_v_time && now - g_v_time < 900.0)
@@ -6431,7 +6419,7 @@ namespace
 		if (strcmp(name, "fob_cormack_wave") == 0) { g_wave_time = now_seconds(); if (g_rec) rec_line("PLANTWIN wave at %.2f (S+%.2f)", g_wave_time, g_wave_time - g_s_time); }
 		if (strcmp(name, "canal_bomb_plant_trigger_on") == 0) { g_prompt_time = now_seconds(); if (g_rec) rec_line("PLANTWIN prompt at S+%.2f", g_prompt_time - g_s_time); }
 		if (strcmp(name, "bomb_plant_start") == 0) { g_press_time = now_seconds(); if (g_rec) rec_line("PLANTWIN pressed at S+%.2f (wave %s)", g_press_time - g_s_time, g_wave_time > g_s_time && g_s_time > 0.0 ? "already happened" : "not yet"); }
-		if (strcmp(name, "begin_building_traversal") == 0) { g_wave_time = 0.0; g_press_time = 0.0; g_prompt_time = 0.0; }
+		if (strcmp(name, "begin_building_traversal") == 0) { g_wave_time = 0.0; g_press_time = 0.0; g_prompt_time = 0.0; g_will_van_time = 0.0; g_will_cc_time = 0.0; g_will_camp_time = 0.0; }
 		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_start") == 0) g_f1_time = now_seconds();
 		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_end") == 0) g_fe_time = now_seconds();
 		if (g_v_time > 0.0 && strcmp(name, "dialogue_start_fob_meetup") == 0)
@@ -7088,6 +7076,27 @@ namespace
 							{
 								g_wc_pos[0] = r.pos[0]; g_wc_pos[1] = r.pos[1]; g_wc_pos[2] = r.pos[2];
 								g_wc_time = now_seconds();
+							}
+							if (hero_kind[slot] == 1 && g_bbt_time > 0.0)
+							{
+								const float vx = r.pos[0] - 28100.0f, vy = r.pos[1] - 7970.0f;
+								if (vx * vx + vy * vy < 80.0f * 80.0f && std::fabs(r.pos[2] - 1451.0f) < 40.0f && g_will_van_time < g_bbt_time)
+								{
+									g_will_van_time = now_seconds();
+									rec_line("WILLRACE Will at the van; T %s (T-van %.2f s)", g_t_time > g_bbt_time ? "already fired" : "not yet", g_t_time > g_bbt_time ? g_t_time - g_will_van_time : 0.0);
+								}
+								const float cx = r.pos[0] - 24788.0f, cy = r.pos[1] - 12114.0f;
+								if (cx * cx + cy * cy < 40.0f * 40.0f && g_will_cc_time < g_bbt_time)
+								{
+									g_will_cc_time = now_seconds();
+									rec_line("WILLRACE Will reached his convention-centre spot (bad sign)");
+								}
+								const float kx = r.pos[0] - 33087.0f, ky = r.pos[1] - 6831.0f;
+								if (g_s_time > g_bbt_time && now_seconds() - g_s_time < 40.0 && kx * kx + ky * ky < 600.0f * 600.0f && g_will_camp_time < g_s_time)
+								{
+									g_will_camp_time = now_seconds();
+									rec_line("WILLRACE Will sent back to the camp %.1f s after the binoculars", g_will_camp_time - g_s_time);
+								}
 							}
 							if (hero_kind[slot] == 1)
 							{
