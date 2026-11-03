@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.08 RECORDER"
+	#define ADDON_VERSION "1.09 RECORDER"
 	#else
-	#define ADDON_VERSION "1.08"
+	#define ADDON_VERSION "1.09"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3501,9 +3501,10 @@ namespace
 			{
 				draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.36f, "PLANT NOW - SKIP", sc, grn);
 			}
-			else if (g_f2_time > 0.0 && g_f2_time < g_s_time - 0.5 && now2 - g_s_time > 6.0 && now2 - g_s_time < 14.0)
+			else if (!setup)
 			{
-				draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.36f, "NORMAL FINALE - PLANT WHEN READY", sc, gry);
+				// v1.09: prompt is up and no wave is coming (camp dialogue already played, or never will)
+				draw_text(g_w * 0.5f - 24.0f * 3.0f * sc, g_h * 0.36f, "NO SKIP THIS RUN - NORMAL FINALE", sc, gry);
 			}
 		}
 
