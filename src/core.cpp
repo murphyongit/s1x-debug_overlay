@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.95 RECORDER"
+	#define ADDON_VERSION "0.96 RECORDER"
 	#else
-	#define ADDON_VERSION "0.95"
+	#define ADDON_VERSION "0.96"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2342,7 +2342,10 @@ namespace
 				const bool pink = kind == 7 && barrier;
 				const bool magenta = !leave && kind != 7 && special == 2;
 				const bool green = !leave && kind == 2 && special == 1;
-				const int mode = g_show_mode;
+				// v0.96: the two Seoul start triggers stay visible in every [ mode (e.g. leave-area only)
+				const bool start_hl = (std::fabs(h.mid.x - 35456.0f) < 10.0f && std::fabs(h.mid.y - 9764.0f) < 10.0f && std::fabs(h.mid.z - 4368.0f) < 10.0f) ||
+					(std::fabs(h.mid.x - 35500.0f) < 10.0f && std::fabs(h.mid.y - 9976.0f) < 10.0f && std::fabs(h.mid.z - 4344.0f) < 10.0f);
+				const int mode = start_hl ? 0 : g_show_mode;
 				if ((mode == 1 && !green && !leave) || (mode == 2 && !pink && !leave) ||
 					(mode == 3 && !magenta && !leave) || (mode == 4 && !leave))
 				{
