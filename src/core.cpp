@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.99 RECORDER"
+	#define ADDON_VERSION "1.00 RECORDER"
 	#else
-	#define ADDON_VERSION "0.99"
+	#define ADDON_VERSION "1.00"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -569,6 +569,8 @@ namespace
 	volatile double g_f2_time = 0.0;
 	volatile float g_wg_goal[3] = {}, g_wg_pos[3] = {};   // v0.98: Will's walking destination and position (set by the recorder)
 	volatile double g_wg_time = 0.0, g_wg_still_since = 0.0;
+	volatile float g_wc_pos[3] = {};   // v1.00: Cormack position (set by the recorder)
+	volatile double g_wc_time = 0.0;
 	volatile double g_bbt_time = 0.0;   // v0.91: begin_building_traversal (start of the level, also after a restart)
 	volatile double g_enter1_time = 0.0; // v0.91: first first_landassist_enter (Cormack at the ledge)
 	volatile int g_enter_count = 0;      // v0.91: how many ledge "enter" animations finished
@@ -3455,6 +3457,22 @@ namespace
 					const float org[4] = {1.0f, 0.6f, 0.1f, 1.0f};
 					draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.21f, buf, sc, org);
 				}
+			}
+		}
+
+		// v1.00: Cormack still in the doorway after 10.5 s = likely Will/Cormack jam (what preceded Will freezing)
+		if (strcmp(g_rec_map, "seoul") == 0 && g_wc_time > 0.0 && now_seconds() - g_wc_time < 1.0)
+		{
+			const double since = now_seconds() - g_bbt_time;
+			const float dx = g_wc_pos[0] - 35440.0f, dy = g_wc_pos[1] - 9810.0f;
+			static bool logged = false;
+			static double logged_bbt = 0.0;
+			if (since > 10.5 && since < 20.0 && dx * dx + dy * dy < 120.0f * 120.0f && std::fabs(g_wc_pos[2] - 4344.0f) < 60.0f)
+			{
+				const float sc = g_h >= 1200.0f ? 4.0f : 3.0f;
+				const float cy[4] = {0.3f, 0.9f, 1.0f, 1.0f};
+				draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.25f, "CORMACK LATE IN DOORWAY", sc, cy);
+				if (!logged || logged_bbt != g_bbt_time) { logged = true; logged_bbt = g_bbt_time; log_line("Cormack still in the doorway %.1f s after start", since); }
 			}
 		}
 
@@ -7019,6 +7037,11 @@ namespace
 									gv[0], gv[1], gv[2], gv[3], gv[4], gv[5], gv[7], gv[8], gv[9], gv[10],
 									std::sqrt((r.pos[0] - gv[0]) * (r.pos[0] - gv[0]) + (r.pos[1] - gv[1]) * (r.pos[1] - gv[1])));
 								memcpy(gprev[slot], gv, sizeof(gv));
+							}
+							if (hero_kind[slot] == 2)
+							{
+								g_wc_pos[0] = r.pos[0]; g_wc_pos[1] = r.pos[1]; g_wc_pos[2] = r.pos[2];
+								g_wc_time = now_seconds();
 							}
 							if (hero_kind[slot] == 1)
 							{
