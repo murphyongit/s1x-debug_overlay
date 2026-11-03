@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.01 RECORDER"
+	#define ADDON_VERSION "1.02 RECORDER"
 	#else
-	#define ADDON_VERSION "1.01"
+	#define ADDON_VERSION "1.02"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -567,6 +567,7 @@ namespace
 	volatile double g_in_time = 0.0;  // v0.83: when the player entered player_leaving_map after that
 	volatile double g_s_time = 0.0;   // v0.86: canal_strategy_scene_complete (Will is sent to the platform)
 	volatile double g_f2_time = 0.0;
+	volatile double g_wave_time = 0.0, g_press_time = 0.0, g_prompt_time = 0.0;   // v1.02: finale plant timing
 	volatile float g_wg_goal[3] = {}, g_wg_pos[3] = {};   // v0.98: Will's walking destination and position (set by the recorder)
 	volatile double g_wg_time = 0.0, g_wg_still_since = 0.0;
 	volatile float g_wc_pos[3] = {};   // v1.00: Cormack position (set by the recorder)
@@ -3460,6 +3461,34 @@ namespace
 			}
 		}
 
+		// v1.02: finale plant timing. If the camp dialogue starts right after the binoculars (S), Cormack's wave
+		// comes ~17.3 s after S and pulls Will away. Planting BEFORE the wave = soft lock (wave lands mid-plant);
+		// planting AFTER the wave = part 2 skipped (seoul_20261029_215054).
+		if (g_s_time > 0.0 && now_seconds() - g_s_time < 60.0 && g_press_time < g_s_time)
+		{
+			const double now2 = now_seconds();
+			const float sc = g_h >= 1200.0f ? 4.0f : 3.0f;
+			const float red[4] = {1.0f, 0.15f, 0.15f, 1.0f};
+			const float grn[4] = {0.2f, 1.0f, 0.2f, 1.0f};
+			const float gry[4] = {0.85f, 0.85f, 0.85f, 1.0f};
+			char buf[96];
+			const bool setup = g_f2_time >= g_s_time - 0.5 && g_f2_time - g_s_time < 6.0;
+			if (setup && g_wave_time < g_s_time)
+			{
+				const double eta = (g_f2_time + 16.8) - now2;
+				snprintf(buf, sizeof(buf), "SKIP SETUP - DO NOT PLANT YET  %.1f", eta > 0.0 ? eta : 0.0);
+				draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.36f, buf, sc, red);
+			}
+			else if (setup && g_wave_time >= g_s_time)
+			{
+				draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.36f, "PLANT NOW - SKIP", sc, grn);
+			}
+			else if (g_f2_time > 0.0 && g_f2_time < g_s_time - 0.5 && now2 - g_s_time > 6.0 && now2 - g_s_time < 14.0)
+			{
+				draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.36f, "NORMAL FINALE - PLANT WHEN READY", sc, gry);
+			}
+		}
+
 		// v1.00: Cormack still in the doorway after 10.5 s = likely Will/Cormack jam (what preceded Will freezing)
 		if (strcmp(g_rec_map, "seoul") == 0 && g_wc_time > 0.0 && now_seconds() - g_wc_time < 1.0)
 		{
@@ -3804,7 +3833,7 @@ namespace
 				else if (g_will_msg == 3 && shown < 5.0)
 					draw_text(g_w * 0.5f - 19.0f * 3.0f * sc, g_h * 0.16f, "WILL SNAPPED BACK TO BALCONY - SKIP LOST", sc, red);
 				else if (g_will_msg == 4 && shown < 6.0)
-					draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.16f, "WILL ON BALCONY - PLANT AS SOON AS PROMPT SHOWS", sc, grn);
+					draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.16f, "WILL ON BALCONY - WAIT FOR THE PLANT SIGNAL", sc, grn);
 			}
 
 			// v0.88: race between you entering the leaving-map box and Cormack reaching his door spot.
@@ -6399,6 +6428,10 @@ namespace
 				if (g_rec) rec_line("WILLJUMP second ledge enter %.2f s after the first (msg %d)", t - g_enter1_time, g_will_msg);
 			}
 		}
+		if (strcmp(name, "fob_cormack_wave") == 0) { g_wave_time = now_seconds(); if (g_rec) rec_line("PLANTWIN wave at %.2f (S+%.2f)", g_wave_time, g_wave_time - g_s_time); }
+		if (strcmp(name, "canal_bomb_plant_trigger_on") == 0) { g_prompt_time = now_seconds(); if (g_rec) rec_line("PLANTWIN prompt at S+%.2f", g_prompt_time - g_s_time); }
+		if (strcmp(name, "bomb_plant_start") == 0) { g_press_time = now_seconds(); if (g_rec) rec_line("PLANTWIN pressed at S+%.2f (wave %s)", g_press_time - g_s_time, g_wave_time > g_s_time && g_s_time > 0.0 ? "already happened" : "not yet"); }
+		if (strcmp(name, "begin_building_traversal") == 0) { g_wave_time = 0.0; g_press_time = 0.0; g_prompt_time = 0.0; }
 		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_start") == 0) g_f1_time = now_seconds();
 		if (g_v_time > 0.0 && strcmp(name, "fob_talk_scene_end") == 0) g_fe_time = now_seconds();
 		if (g_v_time > 0.0 && strcmp(name, "dialogue_start_fob_meetup") == 0)
