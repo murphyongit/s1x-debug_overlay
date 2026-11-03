@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "0.98 RECORDER"
+	#define ADDON_VERSION "0.99 RECORDER"
 	#else
-	#define ADDON_VERSION "0.98"
+	#define ADDON_VERSION "0.99"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3465,6 +3465,8 @@ namespace
 			static const lbl L[] = {
 				{35456.0f, 9764.0f, 4368.0f + 70.0f, "JUMP OVER THIS (WILL BOX)", 1.0f, 0.55f, 0.0f},
 				{35500.0f, 9976.0f, 4344.0f + 80.0f, "TOUCH THIS (CORMACK GO)", 0.0f, 1.0f, 1.0f},
+				{35571.0f, 9392.0f, 4422.0f + 40.0f, "TEST: WAIT HERE TILL 17 S", 1.0f, 0.3f, 1.0f},
+				{35571.0f, 9392.0f, 4057.0f + 40.0f, "TEST: THEN DROP HERE", 1.0f, 0.3f, 1.0f},
 			};
 			for (const lbl& l : L)
 			{
@@ -3477,6 +3479,16 @@ namespace
 					const float col[4] = {l.r, l.g, l.b, 1.0f};
 					const float sc = g_h >= 1200.0f ? 3.0f : 2.0f;
 					draw_text(sx - static_cast<float>(strlen(l.text)) * 3.0f * sc, sy - 10.0f * sc, l.text, sc, col);
+				}
+				if (l.r == 1.0f && l.g == 0.3f)
+				{
+					const float mg[4] = {1.0f, 0.3f, 1.0f, 1.0f};
+					const float bz = l.z - 40.0f;
+					g_thin_lines = true;
+					edge({l.x - 30.0f, l.y, bz}, {l.x + 30.0f, l.y, bz}, mg);
+					edge({l.x, l.y - 30.0f, bz}, {l.x, l.y + 30.0f, bz}, mg);
+					edge({l.x, l.y, bz}, {l.x, l.y, bz + 70.0f}, mg);
+					g_thin_lines = false;
 				}
 			}
 		}
