@@ -53,7 +53,7 @@ EXTRA = {
   ("3. Shooting range: press the console the instant it lights up", "The console turns on 1 s after Gideon's two lines (~10 s after you first switch to a gun). Your run: 7.9 s between it lighting up and your press.", "~5–8 s for you."),
   ("4. Run ahead of Gideon after the arm repair", "After yellow door 01 Gideon walks to the exo-sparring spot and waits up to 6 s unless you've already hit the range 'stairs down' trigger (-2783, 3314). The range door only opens when Gideon reaches it.", "~3–5 s (WR follows Gideon, so this may beat it)."),
   ("5. Arm repair: hold a movement key the whole time", "The 3 'move your arm' tests need 2.0, 2.5 and 3.0 s of movement input each, counted only while you're pressing.", "1–3 s if you hesitate now."),
-  ("6. Grenade tutorial / minigame", "Tutorial waits on your throws (threat 1 hit... threat 2 hits, EMP 3 hits, smart 1 hit). The console re-enables 4 s after the tutorial; minigame is fixed ~43 s.", "Execution only."),
+  ("6. Grenade tutorial / minigame", "Tutorial waits on your throws (throw a threat grenade, then 2 target hits, then 3 EMP hits, then 1 smart-grenade hit). The console re-enables 4 s after the tutorial; minigame is fixed ~43 s.", "Execution only."),
   ("Fixed, can't be cut", "Shooting range rounds (79 s), grenade minigame (43 s), Gideon's walk + 27 s elevator animation, elevator ride, warbird landing.", "—"),
  ])],
 "seoul": [("Cutscene parts — what can be skipped", [
