@@ -1,0 +1,15 @@
+[project]
+name = "glitchlab"
+version = "0.1.0"
+description = "Glitch and route candidate miner for CoD: Advanced Warfare (S1x) campaign speedrunning"
+requires-python = ">=3.10"
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+glitchlab = "glitchlab.cli:main"
+
+[tool.setuptools]
+packages = ["glitchlab", "glitchlab.miners"]

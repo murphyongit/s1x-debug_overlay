@@ -1,0 +1,13 @@
+{
+  "game_dir": "D:\\GAMES\\AW",
+  "scripts_dir": "C:\\path\\to\\s1-gsc-dump\\decompiled\\maps",
+  "db": "glitchlab.sqlite",
+  "max_logs": 12,
+  "map_ents": {},
+  "known_spots": {
+    "recovery": {
+      "void_entry": [-2704, -293, 158],
+      "target": [1506, -2115, -10456]
+    }
+  }
+}

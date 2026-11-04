@@ -1,0 +1,4 @@
+config.json
+*.sqlite
+reports/
+__pycache__/
