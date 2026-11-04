@@ -82,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.20 RECORDER"
+	#define ADDON_VERSION "1.21 RECORDER"
 	#else
-	#define ADDON_VERSION "1.20"
+	#define ADDON_VERSION "1.21"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5718,21 +5718,10 @@ namespace
 		return reinterpret_cast<T*>(out);
 	}
 
+	bool enum_clipmap_safe();
 	void refresh_brushes()
 	{
-		g_found_count = 0;
-		using enum_t = void (*)(int, void (*)(void*, void*), void*, bool);
-		bool ok = true;
-		__try
-		{
-			reinterpret_cast<enum_t>(SP_DB_ENUM_XASSETS)(ASSET_TYPE_CLIPMAP_INDEX, &found_asset_callback, nullptr, false);
-		}
-		__except (EXCEPTION_EXECUTE_HANDLER)
-		{
-			ok = false;
-		}
-
-		if (!ok || g_found_count == 0)
+		if (!enum_clipmap_safe())
 		{
 			log_line("brushes: no level collision data found");
 			return;
@@ -6032,7 +6021,8 @@ namespace
 
 		// triangle groups with a clip material
 		unsigned int total = brush_count;
-		int tri_walls = 0, tri_drawn = 0, skip_range = 0, skip_verts = 0, verts_in = 0, verts_out = 0;
+		int tri_walls = 0, tri_drawn = 0, skip_range = 0, skip_verts = 0, verts_in = 0, verts_out = 0, searched = 0, shown_bases = 0;
+		long long last_base = -1;
 		if (tree)
 		{
 			unsigned char* used = static_cast<unsigned char*>(calloc(part_count, 1));
@@ -6066,12 +6056,49 @@ namespace
 				d.first_edge = edge_total;
 				vec3 tri_pts[256 * 3];
 				int good = 0;
-				for (int t = 0; t < count; ++t)
+				// v1.21: where this group's corners start. The 3rd header byte is not always right, so check the corners
+				// land inside the group's box, and if not, search for the starting point that makes them fit.
+				float nm0[3], nh0[3];
+				memcpy(nm0, node, 12); memcpy(nh0, node + 16, 12);
+				const unsigned short* gi = tidx + static_cast<size_t>(first) * 3;
+				unsigned int max_i = 0;
+				for (int q = 0; q < count * 3; ++q) if (gi[q] > max_i) max_i = gi[q];
+				auto fits = [&](unsigned long long b) -> bool {
+					if (b + max_i >= vert_count) return false;
+					for (int q = 0; q < count * 3; ++q)
+					{
+						const float* v = tverts + (b + gi[q]) * 3;
+						if (!(std::fabs(v[0] - nm0[0]) <= nh0[0] + 2.0f && std::fabs(v[1] - nm0[1]) <= nh0[1] + 2.0f && std::fabs(v[2] - nm0[2]) <= nh0[2] + 2.0f)) return false;
+					}
+					return true;
+				};
+				long long base = -1;
+				if (fits(static_cast<unsigned long long>(seg) << 16)) base = static_cast<long long>(seg) << 16;
+				else if (last_base >= 0 && fits(static_cast<unsigned long long>(last_base))) base = last_base;
+				else
+				{
+					const unsigned int first_i = gi[0];
+					for (unsigned long long b = 0; b + max_i < vert_count; ++b)
+					{
+						const float* v = tverts + (b + first_i) * 3;
+						if (std::fabs(v[0] - nm0[0]) > nh0[0] + 2.0f || std::fabs(v[1] - nm0[1]) > nh0[1] + 2.0f || std::fabs(v[2] - nm0[2]) > nh0[2] + 2.0f) continue;
+						if (fits(b)) { base = static_cast<long long>(b); ++searched; break; }
+					}
+				}
+
+				if (base >= 0) last_base = base;
+				if (base >= 0 && base != (static_cast<long long>(seg) << 16) && shown_bases < 12)
+				{
+					++shown_bases;
+					log_line("brushes: group %u header %02X %02X %02X %02X first %d -> corners start at %lld (seg byte %u)", part, pp[0], pp[1], pp[2], pp[3], first, base, seg);
+				}
+
+				for (int t = 0; t < count && base >= 0; ++t)
 				{
 					bool ok_tri = true;
 					for (int k = 0; k < 3; ++k)
 					{
-						const unsigned int vi = (seg << 16) + tidx[(static_cast<size_t>(first) + t) * 3 + k];
+						const unsigned int vi = static_cast<unsigned int>(base) + tidx[(static_cast<size_t>(first) + t) * 3 + k];
 						if (vi >= vert_count) { ok_tri = false; break; }
 						const float* v = tverts + static_cast<size_t>(vi) * 3;
 						tri_pts[good * 3 + k] = {v[0], v[1], v[2]};
@@ -6141,8 +6168,8 @@ namespace
 			free(tree); free(tverts); free(tidx); free(parts);
 		}
 
-		log_line("brushes: %d invisible triangle groups (%d triangles); skipped %d (range) %d (corners); corners inside their box %d, outside %d",
-		         tri_walls, tri_drawn, skip_range, skip_verts, verts_in, verts_out);
+		log_line("brushes: %d invisible triangle groups (%d triangles); skipped %d (range) %d (corners); corners inside their box %d, outside %d; %d found by search",
+		         tri_walls, tri_drawn, skip_range, skip_verts, verts_in, verts_out, searched);
 
 		// save for the 3D map: invisible walls and mantle brushes as faces / edges
 		{
