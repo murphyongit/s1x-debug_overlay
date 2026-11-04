@@ -82,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.24 RECORDER"
+	#define ADDON_VERSION "1.25 RECORDER"
 	#else
-	#define ADDON_VERSION "1.24"
+	#define ADDON_VERSION "1.25"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -8897,6 +8897,24 @@ namespace
 			{
 				g_collision_refresh = false;
 				refresh_collision();
+			}
+
+			// v1.25: every new mission, save everything about the map automatically (full collision, invisible walls,
+			// hidden objects, movement settings) 20 s after it loads - no key needed.
+			{
+				static char dumped_map[64] = {};
+				static int seen_tick = 0;
+				if (g_rec_map[0] && strcmp(g_rec_map, dumped_map) != 0)
+				{
+					if (seen_tick == 0) seen_tick = tick;
+					else if (tick - seen_tick >= 200)
+					{
+						log_line("map data: saving everything for %s", g_rec_map);
+						refresh_brushes();
+						strcpy_s(dumped_map, sizeof(dumped_map), g_rec_map);
+						seen_tick = 0;
+					}
+				}
 			}
 
 			if (g_here_requested)
