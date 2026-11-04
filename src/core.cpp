@@ -82,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.18 RECORDER"
+	#define ADDON_VERSION "1.19 RECORDER"
 	#else
-	#define ADDON_VERSION "1.18"
+	#define ADDON_VERSION "1.19"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2001,7 +2001,7 @@ namespace
 		const double now = now_seconds();
 		const float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
 		const float line_height = 11.0f * scale;
-		float y = 10.0f;
+		float y = 10.0f + 2.0f * (7.0f * scale + 12.0f);   // v1.19: below the coordinates
 
 		// newest first
 		for (int n = 1; n <= EVENT_SLOTS; ++n)
@@ -2051,7 +2051,9 @@ namespace
 	volatile bool g_collision_on = false;   // Delete
 	volatile bool g_collision_refresh = false;
 	volatile int g_collision_range = 0;   // PageDown
-	const float kCollisionRanges[3] = {600.0f, 1400.0f, 2600.0f};
+	const float kCollisionRanges[4] = {180.0f, 500.0f, 1200.0f, 3000.0f};   // v1.19: shortest = about 15 feet
+	vec3 g_feet = {0, 0, 0};   // v1.19: player feet position (for the coordinates display and the ' key)
+	volatile bool g_here_requested = false;
 
 	void draw_collision_blocks(const vec3& player)
 	{
@@ -2202,7 +2204,7 @@ namespace
 		float best_dist[KEEP];
 		int best_index[KEEP];
 		int kept = 0;
-		const float max_distance = kCollisionRanges[g_collision_range] * 2.5f;
+		const float max_distance = kCollisionRanges[g_collision_range];
 		for (int i = 0; i < count; ++i)
 		{
 			const cbrush_draw& b = brushes[i];
@@ -3298,7 +3300,7 @@ namespace
 
 		if (pagedown)
 		{
-			g_collision_range = (g_collision_range + 1) % 3;
+			g_collision_range = (g_collision_range + 1) % 4;
 			log_line("PageDown: collision blocks range %d", static_cast<int>(g_collision_range));
 		}
 
@@ -3309,6 +3311,15 @@ namespace
 			g_collision_refresh = g_collision_mode != 0;
 			static const char* const kModes[] = {"OFF", "INVISIBLE WALLS", "INVISIBLE WALLS + ALL SOLID BRUSHES", "OLD COLLISION BLOCKS"};
 			log_line("Delete: collision view %s", kModes[g_collision_mode]);
+		}
+
+		{
+			static bool was_quote;
+			if (key_pressed(0xDE, &was_quote))   // ' key
+			{
+				g_here_requested = true;
+				log_line("': saving the collision pieces around X %.0f Y %.0f Z %.0f", g_feet.x, g_feet.y, g_feet.z);
+			}
 		}
 
 		if (key_pressed(VK_OEM_4, &was_lbracket))
@@ -4018,6 +4029,25 @@ namespace
 			}
 		}
 
+		g_feet = {origin[0], origin[1], origin[2] - (eye_height == 0.0f ? EYE_HEIGHT : 0.0f)};
+		{
+			const float cs = g_h >= 1200.0f ? 2.0f : 1.0f;
+			char coords[96];
+			snprintf(coords, sizeof(coords), "X %.0f  Y %.0f  Z %.0f", g_feet.x, g_feet.y, g_feet.z);
+			const float cw = static_cast<float>(strlen(coords)) * 6.0f * cs;
+			const float cback[4] = {0.0f, 0.0f, 0.0f, 0.6f};
+			const float cwhite[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+			add_rect(g_w - cw - 18.0f, 4.0f, cw + 8.0f, 7.0f * cs + 8.0f, cback);
+			draw_text(g_w - cw - 14.0f, 8.0f, coords, cs, cwhite);
+			if (g_collision_mode == 1 || g_collision_mode == 2)
+			{
+				static const char* const kRangeNames[4] = {"WALLS: 15 FT", "WALLS: 40 FT", "WALLS: 100 FT", "WALLS: 250 FT"};
+				const char* rn = kRangeNames[g_collision_range];
+				const float rw = static_cast<float>(strlen(rn)) * 6.0f * cs;
+				draw_text(g_w - rw - 14.0f, 8.0f + 7.0f * cs + 10.0f, rn, cs, cwhite);
+			}
+		}
+
 		if (g_collision_mode == 1 || g_collision_mode == 2)
 		{
 			draw_collision_brushes({origin[0], origin[1], origin[2] + 30.0f - (eye_height == 0.0f ? EYE_HEIGHT : 0.0f)});
@@ -4040,7 +4070,7 @@ namespace
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
 				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "[ show all/green/pink/magenta/leave-area", "] leave-area boxes on/off", "F9 save data files",
-				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete collision: off / invisible walls / + all solid / old blocks", "PageDown collision range", "PageUp save collision data", "\\ route guide lines (Seoul)", "; speedometer / strafe helper", "End this help (or console: overlay_help)"};
+				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete collision: off / invisible walls / + all solid / old blocks", "PageDown wall distance (15/40/100/250 ft)", "' save collision pieces around me", "PageUp save collision data", "\\ route guide lines (Seoul)", "; speedometer / strafe helper", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
 			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));
@@ -5760,7 +5790,10 @@ namespace
 				strcpy_s(mat_names[m], 64, "?");
 			}
 
-			invisible[m] = material_is_invisible(mat_names[m]);
+			unsigned int mc = 0;
+			memcpy(&mc, materials + m * 16 + 12, 4);
+			// v1.19: also count anything that blocks the player only by "player clip" and is not ordinary solid
+			invisible[m] = material_is_invisible(mat_names[m]) || ((mc & 0x10000u) != 0 && (mc & 1u) == 0);
 		}
 
 		// v1.18: most of the level's collision is not brushes but triangle groups ("partitions"), found through the
@@ -6123,6 +6156,13 @@ namespace
 				fprintf(f, "# class 1 = invisible wall, 2 = mantle, 3 = visible solid\n");
 				for (unsigned int m = 0; m < material_count && m < 4096; ++m)
 					if (material_use[m] > 0) fprintf(f, "# wall material %u %s used %d\n", m, mat_names[m], material_use[m]);
+				for (unsigned int m = 0; m < material_count; ++m)
+				{
+					unsigned int sf = 0, mc = 0;
+					memcpy(&sf, materials + m * 16 + 8, 4);
+					memcpy(&mc, materials + m * 16 + 12, 4);
+					fprintf(f, "# material %u %s flags %08X contents %08X%s\n", m, mat_names[m], sf, mc, invisible[m] ? " INVISIBLE" : "");
+				}
 				for (unsigned int bi = 0; bi < total; ++bi)
 				{
 					const cbrush_draw& d = out[bi];
@@ -6164,6 +6204,123 @@ namespace
 		g_bbrushes = out;
 		g_bbrush_count = static_cast<int>(total);
 		last_header = header;
+	}
+
+
+	// v1.19: ' key - writes every collision piece (brushes and triangle groups, any material) near the player
+	bool enum_clipmap_safe()
+	{
+		g_found_count = 0;
+		using enum_t = void (*)(int, void (*)(void*, void*), void*, bool);
+		__try
+		{
+			reinterpret_cast<enum_t>(SP_DB_ENUM_XASSETS)(ASSET_TYPE_CLIPMAP_INDEX, &found_asset_callback, nullptr, false);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return false;
+		}
+
+		return g_found_count > 0;
+	}
+
+	void dump_collision_here()
+	{
+		const vec3 at = g_feet;
+		const float R = 400.0f;
+		if (!enum_clipmap_safe()) return;
+		const uintptr_t header = reinterpret_cast<uintptr_t>(g_found_assets[0]);
+		unsigned int material_count = 0, side_count = 0, brush_count = 0, tree_count = 0, part_count = 0;
+		unsigned long long materials_p = 0, sides_p = 0, brushes_p = 0, bounds_p = 0, contents_p = 0, tree_p = 0, parts_p = 0;
+		read_bytes(header + 0x20, &material_count, 4); read_bytes(header + 0x28, &materials_p, 8);
+		read_bytes(header + 0x70, &side_count, 4); read_bytes(header + 0x78, &sides_p, 8);
+		read_bytes(header + 0x90, &brush_count, 4); read_bytes(header + 0x98, &brushes_p, 8);
+		read_bytes(header + 0xA0, &bounds_p, 8); read_bytes(header + 0xA8, &contents_p, 8);
+		read_bytes(header + 0x50, &tree_count, 4); read_bytes(header + 0x58, &tree_p, 8);
+		read_bytes(header + 0xE8, &part_count, 4); read_bytes(header + 0xF0, &parts_p, 8);
+		if (brush_count > 400000) brush_count &= 0xFFFF;
+		if (material_count == 0 || material_count > 20000) return;
+
+		char path[MAX_PATH];
+		const char* old_sub = g_subdir;
+		g_subdir = "speedrun_data\\";
+		make_path(path, "collision_here.txt");
+		g_subdir = old_sub;
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "a") != 0 || !f) return;
+		fprintf(f, "\n=== HERE map %s  X %.0f Y %.0f Z %.0f (tool %s) ===\n", g_rec_map[0] ? g_rec_map : "?", at.x, at.y, at.z, ADDON_VERSION);
+
+		auto mat_name = [&](unsigned int m, char* out, unsigned int* contents_out) {
+			strcpy_s(out, 64, "?");
+			*contents_out = 0;
+			if (m >= material_count) return;
+			unsigned long long np = 0;
+			read_bytes(static_cast<uintptr_t>(materials_p) + m * 16ull, &np, 8);
+			read_bytes(static_cast<uintptr_t>(materials_p) + m * 16ull + 12, contents_out, 4);
+			safe_copy_string(reinterpret_cast<const char*>(np), out, 64);
+		};
+
+		int nb = 0;
+		float* bounds = copy_array<float>(static_cast<uintptr_t>(bounds_p), brush_count ? brush_count : 1, 24);
+		for (unsigned int bi = 0; bounds && bi < brush_count; ++bi)
+		{
+			const float* bb = bounds + bi * 6;
+			const float dx = std::fabs(at.x - bb[0]) - bb[3], dy = std::fabs(at.y - bb[1]) - bb[4], dz = std::fabs(at.z - bb[2]) - bb[5];
+			if (dx > R || dy > R || dz > R) continue;
+			unsigned int contents = 0;
+			read_bytes(static_cast<uintptr_t>(contents_p) + bi * 4ull, &contents, 4);
+			unsigned char br[48];
+			if (!read_bytes(static_cast<uintptr_t>(brushes_p) + bi * 48ull, br, 48)) continue;
+			unsigned short numsides = 0; unsigned long long side_ptr = 0; short axial[6];
+			memcpy(&numsides, br, 2); memcpy(&side_ptr, br + 8, 8); memcpy(axial, br + 24, 12);
+			fprintf(f, "BRUSH %u contents %08X  lo %.0f %.0f %.0f  hi %.0f %.0f %.0f  materials:", bi, contents, bb[0] - bb[3], bb[1] - bb[4],
+			        bb[2] - bb[5], bb[0] + bb[3], bb[1] + bb[4], bb[2] + bb[5]);
+			unsigned int seen[70]; int ns = 0;
+			for (int s = 0; s < 6 + numsides && s < 70; ++s)
+			{
+				unsigned int m = 0;
+				if (s < 6) m = static_cast<unsigned short>(axial[s]);
+				else
+				{
+					unsigned short mm = 0;
+					read_bytes(static_cast<uintptr_t>(side_ptr) + (s - 6) * 8ull + 4, &mm, 2);
+					m = mm;
+				}
+				bool dup = false;
+				for (int q = 0; q < ns; ++q) if (seen[q] == m) dup = true;
+				if (dup) continue;
+				seen[ns++] = m;
+				char name[64]; unsigned int mc = 0;
+				mat_name(m, name, &mc);
+				fprintf(f, " %s", name);
+			}
+			fprintf(f, "\n");
+			++nb;
+		}
+		free(bounds);
+
+		int nt = 0;
+		unsigned char* tree = copy_array<unsigned char>(static_cast<uintptr_t>(tree_p), tree_count ? tree_count : 1, 32);
+		for (unsigned int ti = 0; tree && ti < tree_count; ++ti)
+		{
+			const unsigned char* node = tree + static_cast<size_t>(ti) * 32;
+			float mid[3], half[3];
+			unsigned short mat = 0, child_count = 0;
+			unsigned int part = 0;
+			memcpy(mid, node, 12); memcpy(&mat, node + 12, 2); memcpy(&child_count, node + 14, 2); memcpy(half, node + 16, 12); memcpy(&part, node + 28, 4);
+			if (child_count != 0) continue;
+			if (std::fabs(at.x - mid[0]) - half[0] > R || std::fabs(at.y - mid[1]) - half[1] > R || std::fabs(at.z - mid[2]) - half[2] > R) continue;
+			unsigned char tris = 0;
+			if (part < part_count) read_bytes(static_cast<uintptr_t>(parts_p) + part * 16ull, &tris, 1);
+			char name[64]; unsigned int mc = 0;
+			mat_name(mat, name, &mc);
+			fprintf(f, "TRIS group %u  %d triangles  material %s contents %08X  lo %.0f %.0f %.0f  hi %.0f %.0f %.0f\n", part, tris, name, mc,
+			        mid[0] - half[0], mid[1] - half[1], mid[2] - half[2], mid[0] + half[0], mid[1] + half[1], mid[2] + half[2]);
+			++nt;
+		}
+		free(tree);
+		fclose(f);
+		log_line("': wrote %d brushes and %d triangle groups near you to collision_here.txt", nb, nt);
 	}
 
 	// Console command: overlay_help
@@ -8327,6 +8484,12 @@ namespace
 			{
 				g_collision_refresh = false;
 				refresh_collision();
+			}
+
+			if (g_here_requested)
+			{
+				g_here_requested = false;
+				dump_collision_here();
 			}
 
 			if ((g_collision_mode == 1 || g_collision_mode == 2) && (g_collision_refresh || tick % 150 == 0))
