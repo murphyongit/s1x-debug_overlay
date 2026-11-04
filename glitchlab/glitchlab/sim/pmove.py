@@ -278,6 +278,7 @@ class Mover:
         if P.boost_enabled and cmd.boost and not st.boost_held and not st.boost_used:
             st.velocity[2] = E.boost_base + E.boost_carry * st.velocity[2]
             st.boost_used = True
+            st.hover_phase = None                       # a boost throws you out of the hover cycle
             st.events.append((st.time_ms, "boost", st.origin.round(1).tolist()))
         st.boost_held = cmd.boost
         if P.dash_enabled and cmd.dash is not None and st.dash_left <= 0:
@@ -297,6 +298,8 @@ class Mover:
                     st.velocity[2] = E.hover_floor
                     st.hover_phase = 0.0
                     self._gz = E.hover_rise
+            elif vz > E.hover_floor + E.hover_rise * E.hover_period + 5:
+                st.hover_phase = None                   # moving up faster than hover allows: back to gravity
             else:
                 st.hover_phase += dt
                 if st.hover_phase >= E.hover_period:
