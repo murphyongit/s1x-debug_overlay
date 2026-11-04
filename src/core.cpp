@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.15 RECORDER"
+	#define ADDON_VERSION "1.16 RECORDER"
 	#else
-	#define ADDON_VERSION "1.15"
+	#define ADDON_VERSION "1.16"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -3394,6 +3394,27 @@ namespace
 		{
 			g_tan_y = std::tan(half_fov);
 			g_tan_x = g_tan_y * aspect;
+		}
+
+		// v1.16: scripts change the real field of view (lerpfov: drones, cutscenes, the warbird) without touching
+		// cg_fov, so the boxes drift. The game's render view keeps x, y, width, height and the two half-FOV tangents
+		// just before the eye position that camera sources 1-3 point at - use those when they look valid.
+		if (g_source >= 1 && g_source <= 3)
+		{
+			struct { int x, y, w, h; float tx, ty; } rd = {};
+			if (read_bytes(kSources[g_source].address - 0x18, &rd, sizeof(rd)) && rd.w >= 320 && rd.w <= 16384 && rd.h >= 200 && rd.h <= 16384 &&
+				rd.tx > 0.05f && rd.tx < 20.0f && rd.ty > 0.05f && rd.ty < 20.0f && std::fabs(rd.tx / rd.ty - static_cast<float>(rd.w) / rd.h) < 0.08f)
+			{
+				static double last_log = 0.0;
+				static float last_tx = 0.0f;
+				if (std::fabs(rd.tx - last_tx) > 0.01f && now_seconds() - last_log > 5.0)
+				{
+					log_line("view: game FOV tangents %.3f %.3f (%dx%d) - cg_fov says %.1f", rd.tx, rd.ty, rd.w, rd.h, g_fov);
+					last_log = now_seconds(); last_tx = rd.tx;
+				}
+				g_tan_x = rd.tx;
+				g_tan_y = rd.ty;
+			}
 		}
 
 		// Little squares in the corner show the F7 / F5 / F6 settings.
