@@ -82,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.25 RECORDER"
+	#define ADDON_VERSION "1.26 RECORDER"
 	#else
-	#define ADDON_VERSION "1.25"
+	#define ADDON_VERSION "1.26"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -886,7 +886,16 @@ namespace
 		{"recovery", 380.0f, -2002.0f, 270.0f, "SIM 2: TRUCK TRIGGER"},
 		{"recovery", 579.0f, -1500.0f, 660.0f, "SIM 2 TEST: EARLY AMBUSH (TOUCH IN THE AIR)"},
 		{"recovery", 1973.0f, -2774.0f, 110.0f, "SIM 2: WARBIRD BOARDING SPOT"},
+		{"recovery", 1506.0f, -2115.0f, -10360.0f, "ATLAS END CUBE - TOUCH = MISSION COMPLETE"},
 	};
+	// v1.26: Atlas's hidden ending trigger (#1714, sets outro_start -> nextmission). Box 903 x 936 x 178, parked far below.
+	constexpr float END_CUBE_X = 1506.0f, END_CUBE_Y = -2115.0f, END_CUBE_Z = -10456.0f;
+	constexpr float END_CUBE_HX = 451.5f, END_CUBE_HY = 468.0f, END_CUBE_HZ = 89.0f;
+	bool is_end_cube(const float x, const float y)
+	{
+		return strcmp(g_rec_map, "recovery") == 0 && std::fabs(x - END_CUBE_X) < 10.0f && std::fabs(y - END_CUBE_Y) < 10.0f;
+	}
+
 	int binoc_index(const hit& h)
 	{
 		const int n = static_cast<int>(sizeof(kKeyTrigs) / sizeof(kKeyTrigs[0]));
@@ -905,6 +914,16 @@ namespace
 			static const float yel[4] = {1.0f, 0.85f, 0.0f, 1.0f};
 			if (!h.inside) color = yel;
 			g_line_override = 6.0f;
+		}
+
+		if (is_end_cube(h.mid.x, h.mid.y))
+		{
+			// flashing bright cyan / white, very thick
+			static float flash[4] = {0.0f, 1.0f, 1.0f, 1.0f};
+			const bool on = std::fmod(now_seconds(), 0.6) < 0.3;
+			flash[0] = on ? 1.0f : 0.0f; flash[1] = 1.0f; flash[2] = 1.0f;
+			color = flash;
+			g_line_override = 12.0f;
 		}
 
 		vec3 c[8];
@@ -2001,7 +2020,7 @@ namespace
 		const double now = now_seconds();
 		const float scale = g_h >= 1200.0f ? 2.0f : 1.0f;
 		const float line_height = 11.0f * scale;
-		float y = 10.0f + 2.0f * (7.0f * scale + 12.0f);   // v1.19: below the coordinates
+		float y = 10.0f + 3.0f * (7.0f * scale + 12.0f);   // v1.19/v1.26: below the coordinates and end-cube line
 
 		// newest first
 		for (int n = 1; n <= EVENT_SLOTS; ++n)
@@ -2530,7 +2549,8 @@ namespace
 
 			// The game moves a switched-off trigger 10000 units up. Draw those where they will be once switched on.
 			bool switched_off = false;
-			if (end_candidate && b[2] - player.z > 8000.0f && b[2] - player.z < 14000.0f)
+			const bool end_cube = is_end_cube(b[0], b[1]);
+			if (end_candidate && !end_cube && b[2] - player.z > 8000.0f && b[2] - player.z < 14000.0f)
 			{
 				b[2] -= 10000.0f;
 				switched_off = true;
@@ -2544,14 +2564,14 @@ namespace
 			const float ey = oy > 0.0f ? oy : 0.0f;
 			const float ez = oz > 0.0f ? oz : 0.0f;
 			const float dist = std::sqrt(ex * ex + ey * ey + ez * ez);
-			if (dist > max_distance && !end_candidate && !(kind == 3 && dist < 6000.0f) && !(barrier && dist < (g_show_mode == 2 ? 20000.0f : 4000.0f)))
+			if (dist > max_distance && !end_candidate && !end_cube && !(kind == 3 && dist < 6000.0f) && !(barrier && dist < (g_show_mode == 2 ? 20000.0f : 4000.0f)))
 			{
 				continue;
 			}
 
 			hit h;
 			h.dist = dist;
-			h.key = end_candidate ? dist - 1.0e9f : dist;
+			h.key = end_cube ? -2.0e9f : (end_candidate ? dist - 1.0e9f : dist);
 			h.flag = end_candidate ? 1 : 0;
 			h.barrier = barrier;
 			h.disabled = switched_off;
@@ -3734,7 +3754,7 @@ namespace
 			if (strcmp(g_rec_map, l.map) != 0) continue;
 			const vec3 c = to_camera({l.x, l.y, l.lz});
 			const float dx = l.x - origin[0], dy = l.y - origin[1];
-			if (c.z > 20.0f && dx * dx + dy * dy < 6000.0f * 6000.0f)
+			if (c.z > 20.0f && (dx * dx + dy * dy < 6000.0f * 6000.0f || is_end_cube(l.x, l.y)))
 			{
 				float sx, sy;
 				to_screen(c, &sx, &sy);
@@ -4099,6 +4119,23 @@ namespace
 			const float cwhite[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 			add_rect(g_w - cw - 18.0f, 4.0f, cw + 8.0f, 7.0f * cs + 8.0f, cback);
 			draw_text(g_w - cw - 14.0f, 8.0f, coords, cs, cwhite);
+			if (strcmp(g_rec_map, "recovery") == 0)
+			{
+				const float ex = std::fabs(g_feet.x - END_CUBE_X) - END_CUBE_HX;
+				const float ey = std::fabs(g_feet.y - END_CUBE_Y) - END_CUBE_HY;
+				const float side = std::sqrt((ex > 0 ? ex * ex : 0.0f) + (ey > 0 ? ey * ey : 0.0f));
+				const float below = g_feet.z - (END_CUBE_Z + END_CUBE_HZ);
+				char eb[96];
+				const bool over = ex <= 0.0f && ey <= 0.0f;
+				if (over) snprintf(eb, sizeof(eb), "OVER THE END CUBE - %.0f ABOVE IT", below > 0 ? below : 0.0f);
+				else snprintf(eb, sizeof(eb), "END CUBE: %.0f TO THE SIDE, %.0f BELOW", side, below);
+				const float gcol[4] = {0.2f, 1.0f, 0.3f, 1.0f};
+				const float ccol[4] = {0.0f, 1.0f, 1.0f, 1.0f};
+				const float ew = static_cast<float>(strlen(eb)) * 6.0f * cs;
+				add_rect(g_w - ew - 18.0f, 8.0f + 2.0f * (7.0f * cs + 10.0f) - 4.0f, ew + 8.0f, 7.0f * cs + 8.0f, cback);
+				draw_text(g_w - ew - 14.0f, 8.0f + 2.0f * (7.0f * cs + 10.0f), eb, cs, over ? gcol : ccol);
+			}
+
 			if (g_collision_mode == 1 || g_collision_mode == 2)
 			{
 				static const char* const kRangeNames[4] = {"WALLS: 15 FT", "WALLS: 40 FT", "WALLS: 100 FT", "WALLS: 250 FT"};
