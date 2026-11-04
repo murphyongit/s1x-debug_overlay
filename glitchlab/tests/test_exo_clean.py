@@ -87,7 +87,7 @@ def test_dash_then_240():
     st = State(np.zeros(3), np.array([350.0, 0.0, 0.0]))
     m.step(st, Cmd(dash=(0, 127)))
     assert abs(st.speed2d - P.exo.dash_speed) < 1
-    for _ in range(int(0.3 / 0.004)):
+    for _ in range(int((P.exo.dash_time + 0.06) / 0.004)):
         m.step(st, Cmd())
     assert abs(st.speed2d - P.exo.dash_end) < 5
 
