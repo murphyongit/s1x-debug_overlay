@@ -31,7 +31,7 @@ OVERVIEW = {
   ("Fail rules", "player_left_map boxes = instant fail. player_leaving_map boxes = warning text only. player_left_squad = fail.", "—", "Some fail boxes are only active in parts of the level."),
  ]},
 "recovery": {
- "source": "Decompiled scripts (maps/recovery*.gsc), the WR video (10:27.016 by-route notes from you) and your first full run log recovery_20261103_212912.txt (Nov 3). Times: seconds between script events in your log; WR times read off the video (about ±5 s).",
+ "source": "Decompiled scripts (maps/recovery*.gsc), the WR video (10:27.016) with your route notes and your first full run log recovery_20261103_212912.txt (Nov 3). Times: seconds between script events in your log; WR times read off the video (about ±5 s).",
  "rows": [
   ("Funeral", "Fixed cutscene + casket/Irons prompts.", "None.", "Unskippable; trimmed from the WR video."),
   ("Training sim 1 (Camp David)", "WR: jump onto the house ~0:25, out of map into the grass (glowing white gun), follow the map edge (invisible trees further in), blind jump ~1:15 to the base, land in-map.", "Skips almost all of sim 1's kill gates and the jeep ride.", "Your log: many tries, landed in the base about 3.5 min after the first attempt. Missing the blind jump is the main time risk."),
