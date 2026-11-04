@@ -82,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.17 RECORDER"
+	#define ADDON_VERSION "1.18 RECORDER"
 	#else
-	#define ADDON_VERSION "1.17"
+	#define ADDON_VERSION "1.18"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2198,11 +2198,11 @@ namespace
 		}
 
 		const bool all = g_collision_mode == 2;
-		constexpr int KEEP = 400;
+		constexpr int KEEP = 700;
 		float best_dist[KEEP];
 		int best_index[KEEP];
 		int kept = 0;
-		const float max_distance = kCollisionRanges[g_collision_range] * 1.5f;
+		const float max_distance = kCollisionRanges[g_collision_range] * 2.5f;
 		for (int i = 0; i < count; ++i)
 		{
 			const cbrush_draw& b = brushes[i];
@@ -5763,13 +5763,40 @@ namespace
 			invisible[m] = material_is_invisible(mat_names[m]);
 		}
 
-		const int max_edges = static_cast<int>(brush_count) * 18 + 1024;
-		const int max_points = static_cast<int>(brush_count) * 30 + 1024;
-		cbrush_draw* out = static_cast<cbrush_draw*>(calloc(brush_count, sizeof(cbrush_draw)));
+		// v1.18: most of the level's collision is not brushes but triangle groups ("partitions"), found through the
+		// box tree at +0x50/+0x58 (leaf = material + partition). Clip-material triangles are invisible walls too.
+		unsigned int tree_count = 0, vert_count = 0, tri_count = 0, part_count = 0;
+		unsigned long long tree_p = 0, verts_p = 0, idx_p = 0, parts_p = 0;
+		read_bytes(header + 0x50, &tree_count, 4); read_bytes(header + 0x58, &tree_p, 8);
+		read_bytes(header + 0xB0, &vert_count, 4); read_bytes(header + 0xB8, &verts_p, 8);
+		read_bytes(header + 0xC0, &tri_count, 4); read_bytes(header + 0xC8, &idx_p, 8);
+		read_bytes(header + 0xE8, &part_count, 4); read_bytes(header + 0xF0, &parts_p, 8);
+		log_line("brushes: triangle collision: %u tree boxes, %u corners, %u triangles, %u groups", tree_count, vert_count, tri_count, part_count);
+		unsigned char* tree = nullptr; float* tverts = nullptr; unsigned short* tidx = nullptr; unsigned char* parts = nullptr;
+		if (tree_count > 0 && tree_count < 4000000 && vert_count > 0 && vert_count < 8000000 && tri_count > 0 && tri_count < 8000000 &&
+			part_count > 0 && part_count < 4000000)
+		{
+			tree = copy_array<unsigned char>(static_cast<uintptr_t>(tree_p), tree_count, 32);
+			tverts = copy_array<float>(static_cast<uintptr_t>(verts_p), vert_count, 12);
+			tidx = copy_array<unsigned short>(static_cast<uintptr_t>(idx_p), tri_count, 6);
+			parts = copy_array<unsigned char>(static_cast<uintptr_t>(parts_p), part_count, 16);
+			if (!tree || !tverts || !tidx || !parts)
+			{
+				log_line("brushes: could not copy the triangle collision");
+				free(tree); free(tverts); free(tidx); free(parts);
+				tree = nullptr; tverts = nullptr; tidx = nullptr; parts = nullptr;
+			}
+		}
+		const unsigned int tri_room = tree ? tri_count : 0;
+		const unsigned int extra = tree ? tree_count : 0;
+
+		const int max_edges = static_cast<int>(brush_count) * 18 + 1024 + static_cast<int>(tri_room) * 3;
+		const int max_points = static_cast<int>(brush_count) * 30 + 1024 + static_cast<int>(tri_room) * 3;
+		cbrush_draw* out = static_cast<cbrush_draw*>(calloc(brush_count + extra, sizeof(cbrush_draw)));
 		vec3* edges = static_cast<vec3*>(malloc(sizeof(vec3) * 2 * static_cast<size_t>(max_edges)));
-		cbrush_face* faces = static_cast<cbrush_face*>(malloc(sizeof(cbrush_face) * (static_cast<size_t>(brush_count) * 8 + 1024)));
+		const int max_faces = static_cast<int>(brush_count) * 8 + 1024 + static_cast<int>(tri_room);
+		cbrush_face* faces = static_cast<cbrush_face*>(malloc(sizeof(cbrush_face) * static_cast<size_t>(max_faces)));
 		vec3* points = static_cast<vec3*>(malloc(sizeof(vec3) * static_cast<size_t>(max_points)));
-		const int max_faces = static_cast<int>(brush_count) * 8 + 1024;
 		if (!out || !edges || !faces || !points)
 		{
 			log_line("brushes: out of memory");
@@ -5970,6 +5997,116 @@ namespace
 		log_line("brushes: %d invisible walls, %d mantle, %d visible solid, %d skipped (%d edges, %d faces)", class_count[1], class_count[2],
 		         class_count[3], class_count[0], edge_total, face_total);
 
+		// triangle groups with a clip material
+		unsigned int total = brush_count;
+		int tri_walls = 0, tri_drawn = 0;
+		if (tree)
+		{
+			unsigned char* used = static_cast<unsigned char*>(calloc(part_count, 1));
+			for (unsigned int ti = 0; ti < tree_count && used; ++ti)
+			{
+				const unsigned char* node = tree + static_cast<size_t>(ti) * 32;
+				unsigned short mat = 0, child_count = 0;
+				unsigned int part = 0;
+				memcpy(&mat, node + 12, 2);
+				memcpy(&child_count, node + 14, 2);
+				memcpy(&part, node + 28, 4);
+				if (child_count != 0 || part >= part_count || mat >= material_count || used[part]) continue;
+				unsigned int mat_contents = 0;
+				memcpy(&mat_contents, materials + static_cast<size_t>(mat) * 16 + 12, 4);
+				if (!invisible[mat] || (mat_contents & 0x10001u) == 0 || strstr(mat_names[mat], "caulk")) continue;
+				used[part] = 1;
+				const unsigned char* pp = parts + static_cast<size_t>(part) * 16;
+				const int count = pp[0];
+				const unsigned int seg = pp[2];
+				int first = 0;
+				memcpy(&first, pp + 4, 4);
+				if (count <= 0 || first < 0 || static_cast<unsigned int>(first) + count > tri_count) continue;
+				if (face_total + count > max_faces || point_total + count * 3 > max_points || edge_total + count * 3 > max_edges) break;
+
+				cbrush_draw& d = out[total];
+				d.cls = 1;
+				d.contents = mat_contents;
+				d.lo[0] = d.lo[1] = d.lo[2] = 1.0e30f;
+				d.hi[0] = d.hi[1] = d.hi[2] = -1.0e30f;
+				d.first_face = face_total;
+				d.first_edge = edge_total;
+				vec3 tri_pts[256 * 3];
+				int good = 0;
+				for (int t = 0; t < count; ++t)
+				{
+					bool ok_tri = true;
+					for (int k = 0; k < 3; ++k)
+					{
+						const unsigned int vi = (seg << 16) + tidx[(static_cast<size_t>(first) + t) * 3 + k];
+						if (vi >= vert_count) { ok_tri = false; break; }
+						const float* v = tverts + static_cast<size_t>(vi) * 3;
+						tri_pts[good * 3 + k] = {v[0], v[1], v[2]};
+					}
+
+					if (!ok_tri) continue;
+					faces[face_total].first_point = point_total;
+					faces[face_total].point_count = 3;
+					for (int k = 0; k < 3; ++k)
+					{
+						const vec3& v = tri_pts[good * 3 + k];
+						points[point_total++] = v;
+						const float c[3] = {v.x, v.y, v.z};
+						for (int a = 0; a < 3; ++a) { if (c[a] < d.lo[a]) d.lo[a] = c[a]; if (c[a] > d.hi[a]) d.hi[a] = c[a]; }
+					}
+
+					++face_total;
+					++good;
+				}
+
+				// outline: triangle sides that no other triangle in the group shares
+				for (int t = 0; t < good; ++t)
+					for (int k = 0; k < 3; ++k)
+					{
+						const vec3& a = tri_pts[t * 3 + k];
+						const vec3& b = tri_pts[t * 3 + (k + 1) % 3];
+						bool shared = false;
+						for (int u = 0; u < good && !shared; ++u)
+						{
+							if (u == t) continue;
+							for (int m = 0; m < 3; ++m)
+							{
+								const vec3& c = tri_pts[u * 3 + m];
+								const vec3& e = tri_pts[u * 3 + (m + 1) % 3];
+								if ((std::fabs(c.x - b.x) + std::fabs(c.y - b.y) + std::fabs(c.z - b.z) < 0.5f &&
+									 std::fabs(e.x - a.x) + std::fabs(e.y - a.y) + std::fabs(e.z - a.z) < 0.5f) ||
+									(std::fabs(c.x - a.x) + std::fabs(c.y - a.y) + std::fabs(c.z - a.z) < 0.5f &&
+									 std::fabs(e.x - b.x) + std::fabs(e.y - b.y) + std::fabs(e.z - b.z) < 0.5f))
+								{
+									shared = true;
+									break;
+								}
+							}
+						}
+
+						if (!shared && edge_total < max_edges)
+						{
+							edges[edge_total * 2] = a;
+							edges[edge_total * 2 + 1] = b;
+							++edge_total;
+						}
+					}
+
+				d.face_count = face_total - d.first_face;
+				d.edge_count = edge_total - d.first_edge;
+				if (good == 0) { d.cls = 0; continue; }
+				if (mat < 4096) ++material_use[mat];
+				tri_drawn += good;
+				++tri_walls;
+				++total;
+			}
+
+			free(used);
+			free(tree); free(tverts); free(tidx); free(parts);
+		}
+
+		log_line("brushes: %d invisible triangle groups (%d triangles)", tri_walls, tri_drawn);
+
 		// save for the 3D map: invisible walls and mantle brushes as faces / edges
 		{
 			char name[128];
@@ -5986,7 +6123,7 @@ namespace
 				fprintf(f, "# class 1 = invisible wall, 2 = mantle, 3 = visible solid\n");
 				for (unsigned int m = 0; m < material_count && m < 4096; ++m)
 					if (material_use[m] > 0) fprintf(f, "# wall material %u %s used %d\n", m, mat_names[m], material_use[m]);
-				for (unsigned int bi = 0; bi < brush_count; ++bi)
+				for (unsigned int bi = 0; bi < total; ++bi)
 				{
 					const cbrush_draw& d = out[bi];
 					if (d.cls == 0) continue;
@@ -6025,7 +6162,7 @@ namespace
 		g_bfaces = faces;
 		g_bpoints = points;
 		g_bbrushes = out;
-		g_bbrush_count = static_cast<int>(brush_count);
+		g_bbrush_count = static_cast<int>(total);
 		last_header = header;
 	}
 
