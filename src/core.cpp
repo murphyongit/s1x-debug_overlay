@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.12 RECORDER"
+	#define ADDON_VERSION "1.13 RECORDER"
 	#else
-	#define ADDON_VERSION "1.12"
+	#define ADDON_VERSION "1.13"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -7612,12 +7612,8 @@ namespace
 		bool pageup_was_down = false;
 		bool command_tried = false;
 
-		// 100 ms per tick; stop after about 30 minutes.
-		#ifdef RECORDER_ONLY
+		// 100 ms per tick. v1.13: no 30-minute limit any more (it switched off Home/End position save/load mid-session).
 		for (int tick = 1; tick < 2000000000; ++tick)
-#else
-		for (int tick = 1; tick <= 18000; ++tick)
-#endif
 		{
 			Sleep(100);
 
