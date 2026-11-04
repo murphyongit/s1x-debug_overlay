@@ -63,7 +63,7 @@ for t in trig.values():
 for t in trig.values():
     if t['z'] < -5000 and any(k in (t['name'] + ' ' + t['flags']) for k in a.target):
         ax.add_patch(Rectangle((t['x'] - t['sx'] / 2, t['y'] - t['sy'] / 2), t['sx'], t['sy'], fill=True, alpha=0.35, edgecolor='#5aa9ff', facecolor='#5aa9ff', linewidth=2.5))
-        ax.text(t['x'], t['y'], (t['flags'].split(' ')[0] or t['name']) + ' (off until upstairs)', color='white', fontsize=9, ha='center', fontweight='bold')
+        ax.text(t['x'], t['y'], (t['flags'].split(' ')[0] or t['name']) + ' (switched on later)', color='white', fontsize=9, ha='center', fontweight='bold')
 
 cols = ['#5fd38d', '#ff9ff3', '#e9ebef', '#7fd6ff']
 for i, lg in enumerate(a.log):

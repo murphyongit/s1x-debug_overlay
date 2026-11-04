@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.14 RECORDER"
+	#define ADDON_VERSION "1.15 RECORDER"
 	#else
-	#define ADDON_VERSION "1.14"
+	#define ADDON_VERSION "1.15"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -871,13 +871,26 @@ namespace
 		return kColors[h.kind > 1 && h.kind < 7 ? h.kind - 2 : 4];
 	}
 
-	// v1.14: Seoul binocular-scene triggers, in the order the script needs them (0 = not one of them).
-	// Matched on x/y only: the window trigger is parked (moved away) until the upstairs one is touched.
+	// v1.14/v1.15: key triggers per mission, drawn thick yellow in every [ mode, with labels.
+	// Matched on x/y only (some are parked - moved far down - until a script switches them on).
+	extern char g_rec_map[64];
+	struct key_trig { const char* map; float x, y, lz; const char* text; };
+	static const key_trig kKeyTrigs[] = {
+		{"seoul", 16063.0f, 20176.0f, 1776.0f, "BINOC 1: ESCAPED SWARM"},
+		{"seoul", 15852.0f, 20461.0f, 1932.0f, "BINOC 2: UPSTAIRS"},
+		{"seoul", 15368.0f, 20700.0f, 1932.0f, "BINOC 3: WINDOW APPROACH"},
+		{"seoul", 15188.0f, 20202.0f, 1860.0f, "BINOC 4: WINDOW (STARTS SCENE)"},
+		{"recovery", -2783.0f, 3314.0f, 220.0f, "STAIRS DOWN - HIT EARLY (GIDEON STOPS WAITING)"},
+		{"recovery", -2218.0f, 3041.0f, 140.0f, "ILONA TRIGGER - GIDEON GOES TO RANGE DOOR"},
+		{"recovery", 380.0f, -2002.0f, 270.0f, "SIM 2: TRUCK TRIGGER"},
+		{"recovery", 579.0f, -1500.0f, 660.0f, "SIM 2 TEST: EARLY AMBUSH (TOUCH IN THE AIR)"},
+		{"recovery", 1973.0f, -2774.0f, 110.0f, "SIM 2: WARBIRD BOARDING SPOT"},
+	};
 	int binoc_index(const hit& h)
 	{
-		static const float P[4][2] = {{16063.0f, 20176.0f}, {15852.0f, 20461.0f}, {15368.0f, 20700.0f}, {15188.0f, 20202.0f}};
-		for (int i = 0; i < 4; ++i)
-			if (std::fabs(h.mid.x - P[i][0]) < 10.0f && std::fabs(h.mid.y - P[i][1]) < 10.0f) return i + 1;
+		const int n = static_cast<int>(sizeof(kKeyTrigs) / sizeof(kKeyTrigs[0]));
+		for (int i = 0; i < n; ++i)
+			if (strcmp(g_rec_map, kKeyTrigs[i].map) == 0 && std::fabs(h.mid.x - kKeyTrigs[i].x) < 10.0f && std::fabs(h.mid.y - kKeyTrigs[i].y) < 10.0f) return i + 1;
 		return 0;
 	}
 
@@ -2351,7 +2364,7 @@ namespace
 				const bool magenta = !leave && kind != 7 && special == 2;
 				const bool green = !leave && kind == 2 && special == 1;
 				// v1.14: the binocular-scene triggers stay visible in every [ mode (e.g. leave-area only)
-				const bool start_hl = strcmp(g_rec_map, "seoul") == 0 && binoc_index(h) > 0;
+				const bool start_hl = binoc_index(h) > 0;
 				const int mode = start_hl ? 0 : g_show_mode;
 				if ((mode == 1 && !green && !leave) || (mode == 2 && !pink && !leave) ||
 					(mode == 3 && !magenta && !leave) || (mode == 4 && !leave))
@@ -3469,28 +3482,19 @@ namespace
 			(void)gry;
 		}
 
-		// v1.14: labels on the four binocular-scene triggers
-		if (strcmp(g_rec_map, "seoul") == 0)
+		// v1.14/v1.15: labels on the key triggers of this mission
+		for (const key_trig& l : kKeyTrigs)
 		{
-			struct lbl { float x, y, z; const char* text; };
-			static const lbl L[] = {
-				{16063.0f, 20176.0f, 1626.0f + 150.0f, "BINOC 1: ESCAPED SWARM"},
-				{15852.0f, 20461.0f, 1792.0f + 140.0f, "BINOC 2: UPSTAIRS"},
-				{15368.0f, 20700.0f, 1792.0f + 140.0f, "BINOC 3: WINDOW APPROACH"},
-				{15188.0f, 20202.0f, 1770.0f + 90.0f, "BINOC 4: WINDOW (STARTS SCENE)"},
-			};
-			for (const lbl& l : L)
+			if (strcmp(g_rec_map, l.map) != 0) continue;
+			const vec3 c = to_camera({l.x, l.y, l.lz});
+			const float dx = l.x - origin[0], dy = l.y - origin[1];
+			if (c.z > 20.0f && dx * dx + dy * dy < 6000.0f * 6000.0f)
 			{
-				const vec3 c = to_camera({l.x, l.y, l.z});
-				const float dx = l.x - origin[0], dy = l.y - origin[1];
-				if (c.z > 20.0f && dx * dx + dy * dy < 6000.0f * 6000.0f)
-				{
-					float sx, sy;
-					to_screen(c, &sx, &sy);
-					const float col[4] = {1.0f, 0.85f, 0.0f, 1.0f};
-					const float sc = g_h >= 1200.0f ? 3.0f : 2.0f;
-					draw_text(sx - static_cast<float>(strlen(l.text)) * 3.0f * sc, sy - 10.0f * sc, l.text, sc, col);
-				}
+				float sx, sy;
+				to_screen(c, &sx, &sy);
+				const float col[4] = {1.0f, 0.85f, 0.0f, 1.0f};
+				const float sc = g_h >= 1200.0f ? 3.0f : 2.0f;
+				draw_text(sx - static_cast<float>(strlen(l.text)) * 3.0f * sc, sy - 10.0f * sc, l.text, sc, col);
 			}
 		}
 
