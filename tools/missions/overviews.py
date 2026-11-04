@@ -47,6 +47,15 @@ OVERVIEW = {
 }
 
 EXTRA = {
+"recovery": [("Leads to test (Nov 3)", [
+  ("1. Sim 2: touch the early-ambush trigger in the air (579, -1500; 254–636 units up, between the truck trigger and the truck)", "It sets training_s2_golf_course_vehicles, which normally fires 1 s after the 10 s POTUS-loading scene. Touching it first should start the three ambush waves during the truck drive-in and loading.", "Up to ~10–15 s. Untested: check that the truck scene and warbird still work."),
+  ("2. Sim 2 kill gates", "Wave 1 only needs to drop to 3 alive, wave 2 to 3 alive, then the vehicle group to 6 alive. Then the warbird runs on fixed timers (2 s + landing).", "A few seconds: don't chase the last enemies of a wave."),
+  ("3. Shooting range: press the console the instant it lights up", "The console turns on 1 s after Gideon's two lines (~10 s after you first switch to a gun). Your run: 7.9 s between it lighting up and your press.", "~5–8 s for you."),
+  ("4. Run ahead of Gideon after the arm repair", "After yellow door 01 Gideon walks to the exo-sparring spot and waits up to 6 s unless you've already hit the range 'stairs down' trigger (-2783, 3314). The range door only opens when Gideon reaches it.", "~3–5 s (WR follows Gideon, so this may beat it)."),
+  ("5. Arm repair: hold a movement key the whole time", "The 3 'move your arm' tests need 2.0, 2.5 and 3.0 s of movement input each, counted only while you're pressing.", "1–3 s if you hesitate now."),
+  ("6. Grenade tutorial / minigame", "Tutorial waits on your throws (threat 1 hit... threat 2 hits, EMP 3 hits, smart 1 hit). The console re-enables 4 s after the tutorial; minigame is fixed ~43 s.", "Execution only."),
+  ("Fixed, can't be cut", "Shooting range rounds (79 s), grenade minigame (43 s), Gideon's walk + 27 s elevator animation, elevator ride, warbird landing.", "—"),
+ ])],
 "seoul": [("Cutscene parts — what can be skipped", [
   ("Part 1 (plant bomb, ~8 s)", "Ends when its shortest actor's animation ends. In the skip, the stray 'landed' script fires exactly at the end of Part 1 — nothing we know stops Will earlier.", "Not skippable with what we know."),
   ("Part 2 (~27 s)", "Ends when Will's animation stops. The stray 'landed' script stops it on the frame Part 2 starts.", "Skipped once (run 215054), ~30 s saved."),
