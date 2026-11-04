@@ -77,6 +77,8 @@ def end_chains(ctx: MineContext) -> list[Finding]:
         if e.script_flag and e.classname.startswith("trigger"):
             trig_setters.setdefault(e.script_flag, []).append(e)
     for f in funcs:
+        if DEBUG_FUNC_RE.search(f.name):
+            continue
         idx = [i for i, l in enumerate(f.lines) if re.search(r"\bnextmission\b", l)]
         if not idx:
             continue
@@ -133,6 +135,8 @@ def end_chains(ctx: MineContext) -> list[Finding]:
     return out
 
 
+DEBUG_FUNC_RE = re.compile(r"^(debug|skipto|start_)|_debug|_skipto")
+
 TOUCH_WAIT_RE = re.compile(r'trigger_wait\w*\(|waittill\(\s*"trigger"|flag_wait\(\s*"[^"]*trig|'
                            r'istouching\(|_touch\w*\(')
 
@@ -145,7 +149,13 @@ def delayable_prompts(ctx: MineContext) -> list[Finding]:
     Scored higher when the function sets progress flags or notifies BEFORE the wait (the mission moves on
     while you are still free to move) and when a use-trigger starts it (a prompt you can press)."""
     out = []
+    switches = {}
+    for e in ctx.map_ents:
+        if e.classname.startswith("trigger") and e.flag_true:
+            switches.setdefault(e.flag_true, []).append(e)
     for f in _funcs(ctx):
+        if DEBUG_FUNC_RE.search(f.name):
+            continue
         idx = [i for i, l in enumerate(f.lines) if SETUP_WAIT_RE.search(l)]
         if not idx:
             continue
@@ -156,11 +166,14 @@ def delayable_prompts(ctx: MineContext) -> list[Finding]:
         prompt = any('waittill( "trigger"' in l or "trigger_wait" in l for l in before)
         link = next((l.strip() for l in f.lines[k:k + 40] if "playerlinkto" in l), "")
         score = 30 + 10 * min(len(pre_flags), 4) + (15 if prompt else 0) + (10 if link else 0)
+        turned_on = [{"flag": fl, "trigger_sets": e.script_flag or e.targetname or e.classname, "at": e.origin}
+                     for fl in pre_flags for e in switches.get(fl, [])]
         out.append(Finding(
             "delayable_prompts", "script_trigger",
             f"Delayable scene '{f.name}'" + (" (starts from a prompt)" if prompt else ""), float(score),
             evidence={"function": f"{f.name} ({f.file}:{f.start})", "flags_set_before_wait": pre_flags,
-                      "notifies_before_wait": pre_notify[:6], "snap_to_scene": link},
+                      "notifies_before_wait": pre_notify[:6], "snap_to_scene": link,
+                      "triggers_switched_on_before_wait": turned_on[:8]},
             test_plan="Melee, press the prompt, then keep the gun from lowering (stomp/jump spam); move away, "
                       "watch whether the flags above take effect while you're free, then let the gun come up."))
     return out
