@@ -82,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.22 RECORDER"
+	#define ADDON_VERSION "1.23 RECORDER"
 	#else
-	#define ADDON_VERSION "1.22"
+	#define ADDON_VERSION "1.23"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -2133,7 +2133,13 @@ namespace
 		int first_face, face_count;   // into g_bfaces
 		unsigned int contents;
 		unsigned char cls;
+		short model;   // v1.23: -1 = level, otherwise a brush model (its shape is stored relative to the object)
 	};
+
+	// v1.23: brush models (objects like hangar_reveal): which entity slot carries each one, and where it is now
+	constexpr int MAX_MODELS = 1024;
+	volatile int g_model_slot[MAX_MODELS];      // entity slot, -1 = not found
+	float g_model_local_mid[MAX_MODELS][3];
 
 	struct cbrush_face
 	{
@@ -2199,6 +2205,32 @@ namespace
 			return;
 		}
 
+		// where each brush model is right now (its entity's origin)
+		static float offs[MAX_MODELS][3];
+		static bool off_ok[MAX_MODELS];
+		static bool in_use[MAX_MODELS];
+		static int in_use_count = -1;
+		if (in_use_count != count)
+		{
+			for (int m = 0; m < MAX_MODELS; ++m) in_use[m] = false;
+			for (int i = 0; i < count; ++i) if (brushes[i].model >= 0 && brushes[i].model < MAX_MODELS) in_use[brushes[i].model] = true;
+			in_use_count = count;
+		}
+		for (int m = 0; m < MAX_MODELS; ++m)
+		{
+			off_ok[m] = false;
+			if (!in_use[m]) continue;
+			const int slot = g_model_slot[m];
+			if (slot < 0) continue;
+			float o[3];
+			if (read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride + OFF_ORIGIN, o, sizeof(o)) &&
+				std::fabs(o[0]) < 200000.0f && std::fabs(o[1]) < 200000.0f && std::fabs(o[2]) < 200000.0f)
+			{
+				offs[m][0] = o[0]; offs[m][1] = o[1]; offs[m][2] = o[2];
+				off_ok[m] = true;
+			}
+		}
+
 		const bool all = g_collision_mode == 2;
 		constexpr int KEEP = 700;
 		float best_dist[KEEP];
@@ -2213,8 +2245,15 @@ namespace
 				continue;
 			}
 
+			float sh[3] = {0.0f, 0.0f, 0.0f};
+			if (b.model >= 0)
+			{
+				if (b.model >= MAX_MODELS || !off_ok[b.model]) continue;
+				sh[0] = offs[b.model][0]; sh[1] = offs[b.model][1]; sh[2] = offs[b.model][2];
+			}
+
 			float d2 = 0.0f;
-			const float p[3] = {player.x, player.y, player.z};
+			const float p[3] = {player.x - sh[0], player.y - sh[1], player.z - sh[2]};
 			for (int k = 0; k < 3; ++k)
 			{
 				const float e = p[k] < b.lo[k] ? b.lo[k] - p[k] : (p[k] > b.hi[k] ? p[k] - b.hi[k] : 0.0f);
@@ -2249,23 +2288,44 @@ namespace
 		static const float wall_fill[4] = {0.7f, 0.2f, 1.0f, 0.13f};
 		static const float mantle_line[4] = {0.3f, 1.0f, 0.75f, 0.9f};
 		static const float solid_line[4] = {0.6f, 0.6f, 0.6f, 0.45f};
+		static const float model_line[4] = {1.0f, 0.55f, 0.1f, 1.0f};     // v1.23: brush models (orange)
+		static const float model_fill[4] = {1.0f, 0.5f, 0.05f, 0.13f};
 		g_thin_lines = true;
 		for (int n = kept - 1; n >= 0; --n)
 		{
 			const cbrush_draw& b = brushes[best_index[n]];
-			const float* line = b.cls == 1 ? wall_line : (b.cls == 2 ? mantle_line : solid_line);
+			const bool is_model = b.model >= 0;
+			const float* line = is_model ? model_line : (b.cls == 1 ? wall_line : (b.cls == 2 ? mantle_line : solid_line));
+			const float* fill = is_model ? model_fill : wall_fill;
+			float sh[3] = {0.0f, 0.0f, 0.0f};
+			if (is_model) { sh[0] = offs[b.model][0]; sh[1] = offs[b.model][1]; sh[2] = offs[b.model][2]; }
 			if (b.cls == 1)
 			{
 				for (int f = 0; f < b.face_count; ++f)
 				{
 					const cbrush_face& face = faces[b.first_face + f];
-					draw_poly_fill(points + face.first_point, face.point_count, wall_fill);
+					if (!is_model)
+					{
+						draw_poly_fill(points + face.first_point, face.point_count, fill);
+						continue;
+					}
+
+					vec3 moved[64];
+					const int pc = face.point_count < 64 ? face.point_count : 64;
+					for (int q = 0; q < pc; ++q)
+					{
+						const vec3& v = points[face.first_point + q];
+						moved[q] = {v.x + sh[0], v.y + sh[1], v.z + sh[2]};
+					}
+					draw_poly_fill(moved, pc, fill);
 				}
 			}
 
 			for (int e = 0; e < b.edge_count; ++e)
 			{
-				edge(edges[(b.first_edge + e) * 2], edges[(b.first_edge + e) * 2 + 1], line);
+				const vec3& a = edges[(b.first_edge + e) * 2];
+				const vec3& c = edges[(b.first_edge + e) * 2 + 1];
+				edge({a.x + sh[0], a.y + sh[1], a.z + sh[2]}, {c.x + sh[0], c.y + sh[1], c.z + sh[2]}, line);
 			}
 		}
 
@@ -5834,6 +5894,7 @@ namespace
 		for (unsigned int bi = 0; bi < brush_count; ++bi)
 		{
 			cbrush_draw& d = out[bi];
+			d.model = -1;
 			const float* bb = bounds + bi * 6;
 			for (int k = 0; k < 3; ++k)
 			{
@@ -6024,6 +6085,112 @@ namespace
 		unsigned int total = brush_count;
 		int tri_walls = 0, tri_drawn = 0, skip_range = 0, skip_verts = 0, verts_in = 0, verts_out = 0, searched = 0, shown_bases = 0;
 		long long last_base = -1;
+		// v1.23: which tree boxes belong to brush models (cmodels at +0x130 count, +0x138 list, 88 bytes each)
+		short* owner = tree ? static_cast<short*>(malloc(sizeof(short) * tree_count)) : nullptr;
+		int model_count_found = 0, model_leaves = 0;
+		if (owner)
+		{
+			for (unsigned int q = 0; q < tree_count; ++q) owner[q] = -1;
+			unsigned int cm_count = 0;
+			unsigned long long cm_p = 0;
+			read_bytes(header + 0x130, &cm_count, 4);
+			read_bytes(header + 0x138, &cm_p, 8);
+			unsigned char* cms = (cm_count > 1 && cm_count < MAX_MODELS) ? copy_array<unsigned char>(static_cast<uintptr_t>(cm_p), cm_count, 88) : nullptr;
+			unsigned long long info0 = 0;
+			if (cms) memcpy(&info0, cms + 0x20, 8);
+			log_line("brushes: %u brush models (list %llX, first info %llX, expected %llX)", cm_count, cm_p, info0, static_cast<unsigned long long>(header + 0x10));
+			for (int m = 0; m < MAX_MODELS; ++m) g_model_slot[m] = -1;
+			for (unsigned int m = 1; cms && m < cm_count; ++m)
+			{
+				const unsigned char* cm = cms + static_cast<size_t>(m) * 88;
+				float mid[3], half[3];
+				memcpy(mid, cm, 12); memcpy(half, cm + 12, 12);
+				g_model_local_mid[m][0] = mid[0]; g_model_local_mid[m][1] = mid[1]; g_model_local_mid[m][2] = mid[2];
+				// try two layouts for the leaf's first box / box count
+				for (int layout = 0; layout < 2; ++layout)
+				{
+					unsigned int first = 0, cnt = 0;
+					if (layout == 0) { memcpy(&first, cm + 0x28, 4); memcpy(&cnt, cm + 0x2C, 4); }
+					else { unsigned short a = 0, b2 = 0; memcpy(&a, cm + 0x28, 2); memcpy(&b2, cm + 0x2A, 2); first = a; cnt = b2; }
+					if (cnt == 0 || cnt > 4096 || first >= tree_count || first + cnt > tree_count) continue;
+					// walk the boxes, collect leaves, check they sit inside the model's own box
+					static unsigned int stack[65536];
+					int sp = 0, inside = 0, outside = 0;
+					for (unsigned int r = 0; r < cnt && sp < 65536; ++r) stack[sp++] = first + r;
+					static unsigned int found[65536];
+					int nf = 0;
+					while (sp > 0 && nf < 65536)
+					{
+						const unsigned int ni = stack[--sp];
+						if (ni >= tree_count) { ++outside; continue; }
+						const unsigned char* nd = tree + static_cast<size_t>(ni) * 32;
+						unsigned short cc = 0; unsigned int u = 0;
+						memcpy(&cc, nd + 14, 2); memcpy(&u, nd + 28, 4);
+						if (cc == 0) { found[nf++] = ni; continue; }
+						for (unsigned int c = 0; c < cc && sp < 65536; ++c) stack[sp++] = u + c;
+					}
+					for (int q = 0; q < nf; ++q)
+					{
+						float nm[3], nh[3];
+						memcpy(nm, tree + static_cast<size_t>(found[q]) * 32, 12);
+						memcpy(nh, tree + static_cast<size_t>(found[q]) * 32 + 16, 12);
+						bool in = true;
+						for (int k = 0; k < 3; ++k) if (nm[k] - nh[k] < mid[k] - half[k] - 8.0f || nm[k] + nh[k] > mid[k] + half[k] + 8.0f) in = false;
+						if (in) ++inside; else ++outside;
+					}
+					if (nf == 0 || inside < nf * 8 / 10) continue;
+					for (int q = 0; q < nf; ++q) owner[found[q]] = static_cast<short>(m);
+					model_leaves += nf;
+					++model_count_found;
+					break;
+				}
+			}
+
+			// match each model to its entity: same size, and entity box centre = entity origin + model's own centre
+			int matched = 0;
+			struct ent_box { int slot; float wb[6]; float o[3]; };
+			ent_box* ents = static_cast<ent_box*>(malloc(sizeof(ent_box) * MAX_ENTITIES));
+			int ne = 0;
+			for (int slot = 0; ents && slot < MAX_ENTITIES; ++slot)
+			{
+				unsigned char eb[0x1C0];
+				if (!read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride, eb, sizeof(eb))) break;
+				unsigned short cid = 0;
+				memcpy(&cid, eb + OFF_CLASSNAME, 2);
+				if (cid == 0) continue;
+				ents[ne].slot = slot;
+				memcpy(ents[ne].wb, eb + OFF_BOUNDS, 24);
+				memcpy(ents[ne].o, eb + OFF_ORIGIN, 12);
+				++ne;
+			}
+			for (unsigned int m = 1; cms && ents && m < cm_count; ++m)
+			{
+				const unsigned char* cm = cms + static_cast<size_t>(m) * 88;
+				float mid[3], half[3];
+				memcpy(mid, cm, 12); memcpy(half, cm + 12, 12);
+				for (int e = 0; e < ne; ++e)
+				{
+					const int slot = ents[e].slot;
+					const float* wb = ents[e].wb;
+					const float* o = ents[e].o;
+					bool same = true;
+					for (int k = 0; k < 3 && same; ++k)
+						if (std::fabs(wb[3 + k] - half[k]) > 2.5f || std::fabs(wb[k] - (o[k] + mid[k])) > 2.5f) same = false;
+					if (!same) continue;
+					bool taken = false;
+					for (unsigned int q = 1; q < m; ++q) if (g_model_slot[q] == slot) taken = true;
+					if (taken) continue;
+					g_model_slot[m] = slot;
+					++matched;
+					break;
+				}
+			}
+
+			log_line("brushes: %d brush models have triangle collision (%d boxes), %d matched to objects in the level", model_count_found, model_leaves, matched);
+			free(ents);
+			free(cms);
+		}
+
 		if (tree)
 		{
 			unsigned char* used = static_cast<unsigned char*>(calloc(part_count, 1));
@@ -6038,7 +6205,9 @@ namespace
 				if (child_count != 0 || part >= part_count || mat >= material_count || used[part]) continue;
 				unsigned int mat_contents = 0;
 				memcpy(&mat_contents, materials + static_cast<size_t>(mat) * 16 + 12, 4);
-				if (!invisible[mat] || (mat_contents & 0x10001u) == 0 || strstr(mat_names[mat], "caulk")) continue;
+				const short mdl = owner ? owner[ti] : static_cast<short>(-1);
+				if ((mat_contents & 0x10001u) == 0) continue;
+				if (mdl < 0 && (!invisible[mat] || strstr(mat_names[mat], "caulk"))) continue;   // level: only invisible walls; brush models: everything solid
 				used[part] = 1;
 				const unsigned char* pp = parts + static_cast<size_t>(part) * 16;
 				const int count = pp[0];
@@ -6050,6 +6219,7 @@ namespace
 
 				cbrush_draw& d = out[total];
 				d.cls = 1;
+				d.model = mdl;
 				d.contents = mat_contents;
 				d.lo[0] = d.lo[1] = d.lo[2] = 1.0e30f;
 				d.hi[0] = d.hi[1] = d.hi[2] = -1.0e30f;
@@ -6168,6 +6338,7 @@ namespace
 
 			free(used);
 			free(tree); free(tverts); free(tidx); free(parts);
+			free(owner);
 		}
 
 		log_line("brushes: %d invisible triangle groups (%d triangles); skipped %d (range) %d (corners); corners inside their box %d, outside %d; %d found by search",
@@ -6186,7 +6357,7 @@ namespace
 			if (fopen_s(&f, path, "w") == 0 && f)
 			{
 				fprintf(f, "# collision brushes (tool version %s). B class contents lo hi; F x y z ... (face corners); E x y z x y z\n", ADDON_VERSION);
-				fprintf(f, "# class 1 = invisible wall, 2 = mantle, 3 = visible solid\n");
+				fprintf(f, "# class 1 = invisible wall, 2 = mantle, 3 = visible solid, 4 = brush model (object) collision, world position at save time\n");
 				for (unsigned int m = 0; m < material_count && m < 4096; ++m)
 					if (material_use[m] > 0) fprintf(f, "# wall material %u %s used %d\n", m, mat_names[m], material_use[m]);
 				for (unsigned int m = 0; m < material_count; ++m)
@@ -6200,7 +6371,14 @@ namespace
 				{
 					const cbrush_draw& d = out[bi];
 					if (d.cls == 0) continue;
-					fprintf(f, "B %d %08X %.1f %.1f %.1f %.1f %.1f %.1f\n", d.cls, d.contents, d.lo[0], d.lo[1], d.lo[2], d.hi[0], d.hi[1], d.hi[2]);
+					float sh[3] = {0.0f, 0.0f, 0.0f};
+					if (d.model >= 0)
+					{
+						const int slot = g_model_slot[d.model];
+						if (slot < 0 || !read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride + OFF_ORIGIN, sh, sizeof(sh))) continue;
+					}
+					fprintf(f, "B %d %08X %.1f %.1f %.1f %.1f %.1f %.1f%s\n", d.model >= 0 ? 4 : d.cls, d.contents, d.lo[0] + sh[0], d.lo[1] + sh[1], d.lo[2] + sh[2],
+					        d.hi[0] + sh[0], d.hi[1] + sh[1], d.hi[2] + sh[2], d.model >= 0 ? " model" : "");
 					if (d.cls == 1)
 					{
 						for (int fi = 0; fi < d.face_count; ++fi)
@@ -6208,7 +6386,7 @@ namespace
 							const cbrush_face& face = faces[d.first_face + fi];
 							fprintf(f, "F");
 							for (int i = 0; i < face.point_count; ++i)
-								fprintf(f, " %.1f %.1f %.1f", points[face.first_point + i].x, points[face.first_point + i].y, points[face.first_point + i].z);
+								fprintf(f, " %.1f %.1f %.1f", points[face.first_point + i].x + sh[0], points[face.first_point + i].y + sh[1], points[face.first_point + i].z + sh[2]);
 							fprintf(f, "\n");
 						}
 					}
