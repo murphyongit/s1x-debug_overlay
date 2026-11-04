@@ -159,12 +159,37 @@ recorded runs. Where both sources exist, they agree.
   `"clean_windows": {"<log file>": [[t0, t1], ...]}` limits scoring to the parts of a run without noclip
   or teleports.
 
+**Exo moves** (`sim/exo.py`) are fitted to recordings, because their tuning lives in game data rather
+than dvars:
+
+- **Boost jump:** vertical speed is set to about 539 − 0.048 × the speed before.
+- **Hover:** a sawtooth. Vertical speed drops to −65, rises at 70 u/s², and resets every 0.59 s, so you
+  sink about 44 u/s on average. Air control is normal while hovering.
+- **Air dash:** about 580 u/s for 0.32 s, then 240.
+
+Each move is fitted on half of the recordings and tested on the other half:
+
+```
+python -m glitchlab.cli exocheck --config config.json --map seoul
+```
+
+Turn the moves on per mission with `Params.for_mission(map)`. Atlas has dash only.
+
+**Noclip and other non-physics movement** is removed before anything is measured (`sim/clean.py`). The
+recorder doesn't log noclip, so it is recognised by how it moves:
+
+- flying along the view line with no gravity
+- steady climbing, or fast steady sinking
+- 3x run speed for longer than a dash
+
+Teleports, reloads, pauses and scripted scenes are removed too.
+
 Not modelled yet:
 
 - sliding
 - mantling
 - ladders
-- exo dash, boost jump and overdrive
+- overdrive
 - knockback
 - swimming
 

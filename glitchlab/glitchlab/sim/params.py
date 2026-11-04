@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 
+from .exo import ExoParams
+
 
 @dataclass
 class Params:
@@ -37,11 +39,22 @@ class Params:
     fall_damage_min: float = 200.0    # exe bg_fallDamageMinHeight
     fall_damage_max: float = 350.0    # exe bg_fallDamageMaxHeight
     frame_ms: int = 4                 # simulated client frame (game clock in logs ticks in 1 ms steps)
+    # exo moves, per mission: Atlas has the air dash but no boost jump or hover; Induction has all three
+    boost_enabled: bool = False
+    hover_enabled: bool = False
+    dash_enabled: bool = False
+    exo: ExoParams = field(default_factory=ExoParams)   # fitted to Induction recordings, see exo.py
     notes: dict = field(default_factory=dict)
 
     @property
     def jump_speed(self) -> float:
         return (2.0 * self.gravity * self.jump_height) ** 0.5
+
+    @classmethod
+    def for_mission(cls, map_name: str) -> "Params":
+        if map_name == "recovery":
+            return cls(dash_enabled=True)
+        return cls(boost_enabled=True, hover_enabled=True, dash_enabled=True)
 
     def as_dict(self) -> dict:
         d = asdict(self)

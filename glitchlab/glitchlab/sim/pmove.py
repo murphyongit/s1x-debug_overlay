@@ -34,6 +34,9 @@ class Cmd:
     sprint: bool = False
     stance: int = STAND
     msec: int = 4
+    boost: bool = False        # exo: jump button in the air (a fresh press boosts, once per time in the air)
+    hover: bool = False        # exo: held to hover
+    dash: tuple | None = None  # exo: (forward, right) keys held when the dash is pressed, this frame only
 
 
 @dataclass
@@ -48,10 +51,16 @@ class State:
     fall_start_z: float | None = None          # highest point since leaving the ground
     time_ms: int = 0
     events: list = field(default_factory=list)  # (time_ms, kind, data)
+    boost_used: bool = False
+    boost_held: bool = False
+    hover_phase: float | None = None           # seconds into the current hover cycle, None = not hovering
+    dash_left: float = 0.0
+    dash_dir: np.ndarray | None = None
 
     def copy(self) -> "State":
         return replace(self, origin=self.origin.copy(), velocity=self.velocity.copy(),
                        ground_normal=None if self.ground_normal is None else self.ground_normal.copy(),
+                       dash_dir=None if self.dash_dir is None else self.dash_dir.copy(),
                        events=[])
 
     @property
@@ -142,7 +151,7 @@ class Mover:
         v = st.velocity.copy()
         end_v = v.copy()
         if gravity:
-            end_v[2] -= P.gravity * dt
+            end_v[2] += getattr(self, "_gz", -P.gravity) * dt
             v[2] = (v[2] + end_v[2]) * 0.5
             if st.ground_normal is not None:
                 v = clip_velocity(v, st.ground_normal, P.overclip)
@@ -262,10 +271,56 @@ class Mover:
             return
         self.step_slide_move(st, dt, gravity=False)
 
+    def _exo_air(self, st: State, cmd: Cmd, dt: float, fwd, right):
+        """Boost jump, hover and air dash (models fitted to recordings, see exo.py). Sets self._gz."""
+        E = self.P.exo
+        P = self.P
+        if P.boost_enabled and cmd.boost and not st.boost_held and not st.boost_used:
+            st.velocity[2] = E.boost_base + E.boost_carry * st.velocity[2]
+            st.boost_used = True
+            st.events.append((st.time_ms, "boost", st.origin.round(1).tolist()))
+        st.boost_held = cmd.boost
+        if P.dash_enabled and cmd.dash is not None and st.dash_left <= 0:
+            f, r = cmd.dash
+            d = fwd * f + right * r
+            if np.linalg.norm(d) < 1e-9:
+                d = fwd.copy()
+            st.dash_dir = d / np.linalg.norm(d)
+            st.dash_left = E.dash_time
+            st.events.append((st.time_ms, "dash", st.origin.round(1).tolist()))
+        vz = st.velocity[2]
+        if P.hover_enabled and cmd.hover:
+            if st.hover_phase is None:
+                if vz <= E.hover_floor and vz + E.hover_catch * dt < E.hover_floor:
+                    self._gz = E.hover_catch            # pulled up out of a fast fall
+                elif vz <= E.hover_floor or (vz < 0 and vz - self.P.gravity * dt <= E.hover_floor):
+                    st.velocity[2] = E.hover_floor
+                    st.hover_phase = 0.0
+                    self._gz = E.hover_rise
+            else:
+                st.hover_phase += dt
+                if st.hover_phase >= E.hover_period:
+                    st.hover_phase -= E.hover_period
+                    st.velocity[2] = E.hover_floor
+                self._gz = E.hover_rise
+        else:
+            st.hover_phase = None
+
     def air_move(self, st: State, cmd: Cmd, dt: float):
         P = self.P
         _friction(st, dt, P)
         fwd, right = _axes(cmd.yaw)
+        self._gz = -P.gravity
+        if P.boost_enabled or P.hover_enabled or P.dash_enabled:
+            self._exo_air(st, cmd, dt, fwd, right)
+        if st.dash_left > 0 and st.dash_dir is not None:
+            st.dash_left -= dt
+            sp = P.exo.dash_speed if st.dash_left > 0 else P.exo.dash_end
+            st.velocity[0], st.velocity[1] = st.dash_dir[0] * sp, st.dash_dir[1] * sp
+            if st.ground_normal is not None:
+                st.velocity = clip_velocity(st.velocity, st.ground_normal, P.overclip)
+            self.step_slide_move(st, dt, gravity=True)
+            return
         wishvel = fwd * cmd.forward + right * cmd.right
         wl = np.linalg.norm(wishvel)
         if wl > 1e-9:
@@ -317,6 +372,9 @@ class Mover:
             st.events.append((st.time_ms, "land", round(fell, 1)))
             st.fall_start_z = None
             st.jumped = False
+            st.boost_used = False
+            st.hover_phase = None
+            st.dash_left = 0.0
         st.time_ms += cmd.msec
         return st
 

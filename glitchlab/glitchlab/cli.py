@@ -188,9 +188,54 @@ def cmd_simcheck(cfg, map_name, out: Path, variants: bool = False) -> dict:
     return res
 
 
+def cmd_exocheck(cfg, map_name, out: Path) -> dict:
+    """Fits and tests the exo-move models (boost jump, hover, air dash) on this map's recordings."""
+    from .sim import clean as C
+    from .sim import exo as X
+    sd = Path(cfg["game_dir"]) / "speedrun_data"
+    logs = [D.load_run_log(p) for p in sorted(sd.glob(f"{map_name}_*.txt"))]
+    labels: dict[str, int] = {}
+    for lg in logs:
+        S = [s for s in lg.samples if s.game_ms is not None]
+        for k, v in C.summary(S).items():
+            labels[k] = labels.get(k, 0) + v
+    res = X.check(logs)
+    tot = sum(labels.values()) or 1
+    lines = [f"# Exo move check: {map_name}", "",
+             f"{len(logs)} recordings. Fitted on half the files, errors measured on the other half.", "",
+             "## What was left out before measuring", "",
+             *(f"- {k}: {v} intervals ({100 * v / tot:.0f}%)" for k, v in sorted(labels.items(), key=lambda kv: -kv[1])),
+             "", "noclip = flying along the view with no gravity, steady climbing or fast steady sinking, or 3x run",
+             "speed for 0.7 s+, plus a second either side. gap = reloads/pauses; teleport = position jumps.", ""]
+    if "boost" in res:
+        b = res["boost"]
+        lines += ["## Boost jump", "",
+                  f"Vertical speed is set to {b['fit']['base']} {b['fit']['carry']:+} x (vertical speed before).",
+                  f"Tested on {b['test']} boosts: error {b['test_rms']} u/s (a fixed value would be off by "
+                  f"{b['test_rms_constant']}).", f"That's about {b['fit']['base'] ** 2 / 1600:.0f} units of extra "
+                  "height from the moment of the boost.", ""]
+    if "hover" in res:
+        h = res["hover"]
+        lines += ["## Hover", "",
+                  f"Sawtooth: vertical speed drops to {h['fit']['floor']}, rises {h['fit']['rise']} u/s per second, "
+                  f"and drops back every {h['fit']['period']} s. Average sink {h['average_sink']} u/s.",
+                  f"Tested on {h['test']} hovers: error {h['test_rms_median']} u/s per sample (a steady sink would be "
+                  f"off by {h['test_rms_if_constant_sink']}). Sideways control while hovering is normal air control.", ""]
+    if "dash" in res:
+        d = res["dash"]
+        lines += ["## Air dash", "",
+                  f"Sideways speed held at {d['fit']['speed']} for {d['fit']['time']} s, then 240.",
+                  f"Tested on {d['test']} dashes: distance error median {d['test_distance_error_median']}, "
+                  f"90% {d['test_distance_error_p90']} units. Recordings are 10 per second, so the dash's exact shape "
+                  "inside 0.3 s is a best fit, not exact.", ""]
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines))
+    return res
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="glitchlab")
-    ap.add_argument("command", choices=["mine", "import", "report", "scripts", "simcheck"])
+    ap.add_argument("command", choices=["mine", "import", "report", "scripts", "simcheck", "exocheck"])
     ap.add_argument("--config", default="config.json")
     ap.add_argument("--map", help="internal map name, e.g. recovery (Atlas), seoul (Induction)")
     ap.add_argument("--all", action="store_true", help="scripts: run the script miners for every mission")
@@ -212,6 +257,11 @@ def main(argv=None):
         return
     if not a.map:
         ap.error("--map is required")
+    if a.command == "exocheck":
+        cmd_exocheck(cfg, a.map, Path(a.out or f"reports/{a.map}_exo_check.md"))
+        print("exo check written")
+        store.close()
+        return
     if a.command == "simcheck":
         cmd_simcheck(cfg, a.map, Path(a.out or f"reports/{a.map}_sim_check.md"), variants=a.variants)
         print("simulator check written")
