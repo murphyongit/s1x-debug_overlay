@@ -31,17 +31,18 @@ OVERVIEW = {
   ("Fail rules", "player_left_map boxes = instant fail. player_leaving_map boxes = warning text only. player_left_squad = fail.", "—", "Some fail boxes are only active in parts of the level."),
  ]},
 "recovery": {
- "source": "Decompiled scripts (github.com/mjkzy/s1-gsc-dump, maps/recovery*.gsc) and the trigger list in recorder log recovery_20261029_215647.txt. Not tested in-game yet.",
+ "source": "Decompiled scripts (maps/recovery*.gsc), the WR video (10:27.016 by-route notes from you) and your first full run log recovery_20261103_212912.txt (Nov 3). Times: seconds between script events in your log; WR times read off the video (about ±5 s).",
  "rows": [
-  ("Funeral", "funeral_start trigger → eulogy cutscene (fixed) → use the casket (trig_coffin) → walk up to Irons (player_proximity_irons box) → card → funeral_complete.", "None (all scripted animations).", "Mostly fixed cutscene time. Player gates: casket prompt and the Irons proximity box — test how early each can be triggered."),
-  ("Training sim 1 — start", "Kill gates: groups training_s1_start and training_s1_enemies_start must be cleared before breach prep.", "Joker anim_reach to the threat-grenade spot.", "Combat speed on the first two groups gates everything after."),
-  ("Training sim 1 — living room / breach", "Joker scene, flash_enemies cleared → breach set up → player breach trigger.", "Joker anim_reach to breach approach and patio door.", "President dying = fail."),
-  ("Training sim 1 — drones / patio", "Drone wave must die → patio waves (counts down to 1, then cleared).", "Joker patio door anim_reach.", "Several 'kill down to N' gates: kill order matters."),
-  ("Training sim 1 — hide / golf / end", "Hide from patrols → golf course → end ambush counts (≤4, ≤5) → use the ending trigger at the jeep.", "—", "Fail boxes around the golf course (see Fail rules)."),
-  ("Tour", "Jeep ride (scripted), exo arm repair (3 attempts), firing range, grenade / augmented-reality range.", "Gideon anim_reach at ~6 spots (ready room, range stairs x3, exo demo, grenade range).", "Most Will-type risk in this mission: Gideon must arrive before each scene."),
-  ("Training sim 2", "Sniper counts 5→3→1→0 → living room, hallway, bedrooms cleared → breach → patio counts → golf course vehicle counts → ending trigger.", "Gideon patio door anim_reach (in/out).", "Same structure as sim 1."),
-  ("Outro", "flag outro_start → 2 s fade → nextmission.", "—", ""),
-  ("Fail rules", "training_player_left_encounter box = fail; training_out_of_bounds_warning = warning; jeep board warn/fail boxes; president death = fail.", "—", "Script exception: leaving the encounter does NOT fail while flag_player_using_drone is set (you're flying the drone). Worth testing."),
+  ("Funeral", "Fixed cutscene + casket/Irons prompts.", "None.", "Unskippable; trimmed from the WR video."),
+  ("Training sim 1 (Camp David)", "WR: jump onto the house ~0:25, out of map into the grass (glowing white gun), follow the map edge (invisible trees further in), blind jump ~1:15 to the base, land in-map.", "Skips almost all of sim 1's kill gates and the jeep ride.", "Your log: many tries, landed in the base about 3.5 min after the first attempt. Missing the blind jump is the main time risk."),
+  ("Exo arm repair", "Fixed scene: 3 'move your arm' tests. Your run: 55 s from sitting down to done.", "Technicians are scripted, nothing to wait on.", "Only the walk to the desk is yours (your run: 12 s from the hangar door)."),
+  ("Walk to the shooting range", "Doors between areas open / next area loads only when you AND Gideon stand in the same box (tff_ally_check).", "Gideon's walking pace sets this part — that's why the WR follows him.", "Your run: 70 s from repair done to range start; WR about 55 s."),
+  ("Shooting range", "3 rounds on fixed script timers; score doesn't matter (WR gets 'Poor').", "—", "Fixed 79 s once started. Only gain: start it sooner."),
+  ("Grenade range", "Tutorial waits on your actions (throw threat grenade, hit targets), then you start the minigame yourself; minigame is fixed timers (~43 s).", "Gideon leaves 6 s before the minigame ends (gideon_early_exit_grenade_range).", "Your run: tutorial 30 s, then 68 s before you started the minigame (WR about 5–10 s). Biggest single loss in your run."),
+  ("Armory / elevator", "Room trigger only switches on after the grenade range is complete. Gideon walks there (~22 s from leaving the range), then plays a fixed 27 s animation and presses the button part-way.", "Gideon anim_reach + fixed animation = the doors.", "Your run: 47 s from range complete to the button, same as the WR (~45 s). Almost certainly can't be cut without moving Gideon."),
+  ("Elevator ride → sim 2", "7 s + 8 s scripted ride, then sim 2 starts.", "—", "Fixed."),
+  ("Training sim 2 → truck → warbird", "WR: go left of the map, left of a tree ~7:13 to dodge a fail box, truck arrives ~7:21, POTUS leaves, kill the spawned enemies down to the trucks, warbird lands, board it.", "Kill gates (counts) decide when the warbird comes.", "Your run: 94 s from elevator to rescue complete, then 18 s to the outro."),
+  ("Fail rules", "training_player_left_encounter box = fail; training_out_of_bounds_warning = warning; jeep board warn/fail boxes; president death = fail.", "—", "Leaving the encounter does NOT fail while flag_player_using_drone is set."),
  ]},
 }
 
