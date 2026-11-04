@@ -82,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.19 RECORDER"
+	#define ADDON_VERSION "1.20 RECORDER"
 	#else
-	#define ADDON_VERSION "1.19"
+	#define ADDON_VERSION "1.20"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -6032,7 +6032,7 @@ namespace
 
 		// triangle groups with a clip material
 		unsigned int total = brush_count;
-		int tri_walls = 0, tri_drawn = 0;
+		int tri_walls = 0, tri_drawn = 0, skip_range = 0, skip_verts = 0, verts_in = 0, verts_out = 0;
 		if (tree)
 		{
 			unsigned char* used = static_cast<unsigned char*>(calloc(part_count, 1));
@@ -6054,7 +6054,7 @@ namespace
 				const unsigned int seg = pp[2];
 				int first = 0;
 				memcpy(&first, pp + 4, 4);
-				if (count <= 0 || first < 0 || static_cast<unsigned int>(first) + count > tri_count) continue;
+				if (count <= 0 || first < 0 || static_cast<unsigned int>(first) + count > tri_count) { ++skip_range; continue; }
 				if (face_total + count > max_faces || point_total + count * 3 > max_points || edge_total + count * 3 > max_edges) break;
 
 				cbrush_draw& d = out[total];
@@ -6075,6 +6075,9 @@ namespace
 						if (vi >= vert_count) { ok_tri = false; break; }
 						const float* v = tverts + static_cast<size_t>(vi) * 3;
 						tri_pts[good * 3 + k] = {v[0], v[1], v[2]};
+						float nm[3], nh[3];
+						memcpy(nm, node, 12); memcpy(nh, node + 16, 12);
+						if (std::fabs(v[0] - nm[0]) <= nh[0] + 2.0f && std::fabs(v[1] - nm[1]) <= nh[1] + 2.0f && std::fabs(v[2] - nm[2]) <= nh[2] + 2.0f) ++verts_in; else ++verts_out;
 					}
 
 					if (!ok_tri) continue;
@@ -6127,7 +6130,7 @@ namespace
 
 				d.face_count = face_total - d.first_face;
 				d.edge_count = edge_total - d.first_edge;
-				if (good == 0) { d.cls = 0; continue; }
+				if (good == 0) { d.cls = 0; ++skip_verts; continue; }
 				if (mat < 4096) ++material_use[mat];
 				tri_drawn += good;
 				++tri_walls;
@@ -6138,7 +6141,8 @@ namespace
 			free(tree); free(tverts); free(tidx); free(parts);
 		}
 
-		log_line("brushes: %d invisible triangle groups (%d triangles)", tri_walls, tri_drawn);
+		log_line("brushes: %d invisible triangle groups (%d triangles); skipped %d (range) %d (corners); corners inside their box %d, outside %d",
+		         tri_walls, tri_drawn, skip_range, skip_verts, verts_in, verts_out);
 
 		// save for the 3D map: invisible walls and mantle brushes as faces / edges
 		{
@@ -6208,6 +6212,9 @@ namespace
 
 
 	// v1.19: ' key - writes every collision piece (brushes and triangle groups, any material) near the player
+	unsigned int g_dbg_tri_count = 0, g_dbg_vert_count = 0;
+	unsigned long long g_dbg_idx_p = 0, g_dbg_verts_p = 0;
+
 	bool enum_clipmap_safe()
 	{
 		g_found_count = 0;
@@ -6238,6 +6245,8 @@ namespace
 		read_bytes(header + 0xA0, &bounds_p, 8); read_bytes(header + 0xA8, &contents_p, 8);
 		read_bytes(header + 0x50, &tree_count, 4); read_bytes(header + 0x58, &tree_p, 8);
 		read_bytes(header + 0xE8, &part_count, 4); read_bytes(header + 0xF0, &parts_p, 8);
+		read_bytes(header + 0xB0, &g_dbg_vert_count, 4); read_bytes(header + 0xB8, &g_dbg_verts_p, 8);
+		read_bytes(header + 0xC0, &g_dbg_tri_count, 4); read_bytes(header + 0xC8, &g_dbg_idx_p, 8);
 		if (brush_count > 400000) brush_count &= 0xFFFF;
 		if (material_count == 0 || material_count > 20000) return;
 
@@ -6309,13 +6318,48 @@ namespace
 			unsigned int part = 0;
 			memcpy(mid, node, 12); memcpy(&mat, node + 12, 2); memcpy(&child_count, node + 14, 2); memcpy(half, node + 16, 12); memcpy(&part, node + 28, 4);
 			if (child_count != 0) continue;
+			static unsigned int last_parts[64]; static int lp = 0;
+			bool again = false;
+			for (int q = 0; q < 64; ++q) if (last_parts[q] == part + 1) again = true;
+			if (again) continue;
 			if (std::fabs(at.x - mid[0]) - half[0] > R || std::fabs(at.y - mid[1]) - half[1] > R || std::fabs(at.z - mid[2]) - half[2] > R) continue;
 			unsigned char tris = 0;
 			if (part < part_count) read_bytes(static_cast<uintptr_t>(parts_p) + part * 16ull, &tris, 1);
+			last_parts[lp] = part + 1; lp = (lp + 1) % 64;
 			char name[64]; unsigned int mc = 0;
 			mat_name(mat, name, &mc);
 			fprintf(f, "TRIS group %u  %d triangles  material %s contents %08X  lo %.0f %.0f %.0f  hi %.0f %.0f %.0f\n", part, tris, name, mc,
 			        mid[0] - half[0], mid[1] - half[1], mid[2] - half[2], mid[0] + half[0], mid[1] + half[1], mid[2] + half[2]);
+			// v1.20 diagnostics: raw group header and its first triangles, for close-by groups
+			if (part < part_count && std::fabs(at.x - mid[0]) - half[0] < 80.0f && std::fabs(at.y - mid[1]) - half[1] < 80.0f &&
+				std::fabs(at.z - mid[2]) - half[2] < 80.0f && !(mc & 0x800u))
+			{
+				unsigned char pr[16] = {};
+				read_bytes(static_cast<uintptr_t>(parts_p) + part * 16ull, pr, 16);
+				fprintf(f, "   raw:");
+				for (int i = 0; i < 16; ++i) fprintf(f, " %02X", pr[i]);
+				int first = 0; memcpy(&first, pr + 4, 4);
+				fprintf(f, "  (tri count %u, vert count %u, index ptr %llX, vert ptr %llX)\n", g_dbg_tri_count, g_dbg_vert_count, g_dbg_idx_p, g_dbg_verts_p);
+				for (int t = 0; t < tris && t < 3; ++t)
+				{
+					unsigned short id[3] = {};
+					read_bytes(static_cast<uintptr_t>(g_dbg_idx_p) + (static_cast<unsigned long long>(first) + t) * 6ull, id, 6);
+					fprintf(f, "   tri %d idx %u %u %u :", t, id[0], id[1], id[2]);
+					for (int k = 0; k < 3; ++k)
+					{
+						for (unsigned int sg = 0; sg < 4; ++sg)
+						{
+							float v[3] = {};
+							const unsigned long long vi = sg * 65536ull + id[k];
+							if (vi >= g_dbg_vert_count) break;
+							read_bytes(static_cast<uintptr_t>(g_dbg_verts_p) + vi * 12ull, v, 12);
+							fprintf(f, " [s%u %.0f %.0f %.0f]", sg, v[0], v[1], v[2]);
+						}
+						fprintf(f, " |");
+					}
+					fprintf(f, "\n");
+				}
+			}
 			++nt;
 		}
 		free(tree);
