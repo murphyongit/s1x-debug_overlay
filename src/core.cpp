@@ -81,9 +81,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.13 RECORDER"
+	#define ADDON_VERSION "1.14 RECORDER"
 	#else
-	#define ADDON_VERSION "1.13"
+	#define ADDON_VERSION "1.14"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -871,28 +871,26 @@ namespace
 		return kColors[h.kind > 1 && h.kind < 7 ? h.kind - 2 : 4];
 	}
 
+	// v1.14: Seoul binocular-scene triggers, in the order the script needs them (0 = not one of them).
+	// Matched on x/y only: the window trigger is parked (moved away) until the upstairs one is touched.
+	int binoc_index(const hit& h)
+	{
+		static const float P[4][2] = {{16063.0f, 20176.0f}, {15852.0f, 20461.0f}, {15368.0f, 20700.0f}, {15188.0f, 20202.0f}};
+		for (int i = 0; i < 4; ++i)
+			if (std::fabs(h.mid.x - P[i][0]) < 10.0f && std::fabs(h.mid.y - P[i][1]) < 10.0f) return i + 1;
+		return 0;
+	}
+
 	void draw_box(const hit& h)
 	{
 		const float* color = color_for(h);
 		g_line_override = h.flag == 1 ? 6.0f : 0.0f;
-		// v0.95: Seoul start - make the two Will/Cormack start triggers easy to spot
+		// v1.14: the four triggers the binocular scene needs, drawn bright and thick (visible in every [ mode)
+		if (binoc_index(h) > 0)
 		{
-			static float hl[4] = {1.0f, 0.5f, 0.0f, 1.0f};
-			static const float cyan[4] = {0.0f, 1.0f, 1.0f, 1.0f};
-			const bool will_box = std::fabs(h.mid.x - 35456.0f) < 10.0f && std::fabs(h.mid.y - 9764.0f) < 10.0f && std::fabs(h.mid.z - 4368.0f) < 10.0f;
-			const bool corm_box = std::fabs(h.mid.x - 35500.0f) < 10.0f && std::fabs(h.mid.y - 9976.0f) < 10.0f && std::fabs(h.mid.z - 4344.0f) < 10.0f;
-			if (will_box)
-			{
-				const bool blink = std::fmod(now_seconds(), 0.5) < 0.25;
-				hl[0] = 1.0f; hl[1] = blink ? 0.55f : 0.1f; hl[2] = blink ? 0.0f : 0.6f;
-				if (!h.inside) color = hl;
-				g_line_override = 6.0f;
-			}
-			else if (corm_box)
-			{
-				if (!h.inside) color = cyan;
-				g_line_override = 4.0f;
-			}
+			static const float yel[4] = {1.0f, 0.85f, 0.0f, 1.0f};
+			if (!h.inside) color = yel;
+			g_line_override = 6.0f;
 		}
 
 		vec3 c[8];
@@ -2352,9 +2350,8 @@ namespace
 				const bool pink = kind == 7 && barrier;
 				const bool magenta = !leave && kind != 7 && special == 2;
 				const bool green = !leave && kind == 2 && special == 1;
-				// v0.96: the two Seoul start triggers stay visible in every [ mode (e.g. leave-area only)
-				const bool start_hl = (std::fabs(h.mid.x - 35456.0f) < 10.0f && std::fabs(h.mid.y - 9764.0f) < 10.0f && std::fabs(h.mid.z - 4368.0f) < 10.0f) ||
-					(std::fabs(h.mid.x - 35500.0f) < 10.0f && std::fabs(h.mid.y - 9976.0f) < 10.0f && std::fabs(h.mid.z - 4344.0f) < 10.0f);
+				// v1.14: the binocular-scene triggers stay visible in every [ mode (e.g. leave-area only)
+				const bool start_hl = strcmp(g_rec_map, "seoul") == 0 && binoc_index(h) > 0;
 				const int mode = start_hl ? 0 : g_show_mode;
 				if ((mode == 1 && !green && !leave) || (mode == 2 && !pink && !leave) ||
 					(mode == 3 && !magenta && !leave) || (mode == 4 && !leave))
@@ -3432,40 +3429,6 @@ namespace
 			draw_box(hits[i]);
 		}
 
-		// v0.98: Will's destination (yellow cross + line) and a warning when he stops short of it
-		if (strcmp(g_rec_map, "seoul") == 0 && g_wg_time > 0.0 && now_seconds() - g_wg_time < 1.0 && now_seconds() - g_bbt_time < 45.0)
-		{
-			const vec3 gp = {g_wg_goal[0], g_wg_goal[1], g_wg_goal[2]};
-			const vec3 wp = {g_wg_pos[0], g_wg_pos[1], g_wg_pos[2] + 40.0f};
-			const float yel[4] = {1.0f, 0.9f, 0.1f, 1.0f};
-			if (std::fabs(gp.x) > 1.0f)
-			{
-				g_thin_lines = true;
-				edge({gp.x - 25.0f, gp.y, gp.z + 2.0f}, {gp.x + 25.0f, gp.y, gp.z + 2.0f}, yel);
-				edge({gp.x, gp.y - 25.0f, gp.z + 2.0f}, {gp.x, gp.y + 25.0f, gp.z + 2.0f}, yel);
-				edge({gp.x, gp.y, gp.z}, {gp.x, gp.y, gp.z + 80.0f}, yel);
-				edge(wp, {gp.x, gp.y, gp.z + 40.0f}, yel);
-				g_thin_lines = false;
-				const vec3 c = to_camera({gp.x, gp.y, gp.z + 90.0f});
-				if (c.z > 20.0f)
-				{
-					float sx, sy;
-					to_screen(c, &sx, &sy);
-					draw_text(sx - 9.0f * 6.0f, sy, "WILL GOAL", 2.0f, yel);
-				}
-				const float dx = g_wg_pos[0] - gp.x, dy = g_wg_pos[1] - gp.y;
-				const float dist = std::sqrt(dx * dx + dy * dy);
-				if (dist > 8.0f && dist < 300.0f && now_seconds() - g_wg_still_since > 1.5)
-				{
-					char buf[64];
-					snprintf(buf, sizeof(buf), "WILL STUCK %d UNITS FROM HIS GOAL", static_cast<int>(dist));
-					const float sc = g_h >= 1200.0f ? 4.0f : 3.0f;
-					const float org[4] = {1.0f, 0.6f, 0.1f, 1.0f};
-					draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.21f, buf, sc, org);
-				}
-			}
-		}
-
 		// v1.02: finale plant timing. If the camp dialogue starts right after the binoculars (S), Cormack's wave
 		// comes ~17.3 s after S and pulls Will away. Planting BEFORE the wave = soft lock (wave lands mid-plant);
 		// planting AFTER the wave = part 2 skipped (seoul_20261029_215054).
@@ -3477,10 +3440,7 @@ namespace
 			const float grn[4] = {0.2f, 1.0f, 0.2f, 1.0f};
 			const float gry[4] = {0.85f, 0.85f, 0.85f, 1.0f};
 			char buf[96];
-			const bool setup = g_f2_time >= g_s_time - 0.5 && g_f2_time - g_s_time < 6.0;
-			// v1.10: the Oct 29 skip also needed Will to have MISSED his opening jump (stuck at the start).
-			// A wave alone (Will did his jump) gives a normal finale - but planting before the wave still soft-locks.
-			const bool froze = g_enter2_time < g_bbt_time || g_enter2_time > g_s_time - 1.0;
+			const bool setup = g_f2_time >= g_s_time - 0.5 && g_f2_time - g_s_time < 6.0;   // camp wave still to come
 			const float org[4] = {1.0f, 0.55f, 0.1f, 1.0f};
 			if (g_will_camp_time > g_s_time)
 			{
@@ -3491,84 +3451,45 @@ namespace
 			}
 			else if (setup && g_wave_time < g_s_time)
 			{
+				// v1.14: soft-lock guard only (planting just before Cormack's wave locks the game)
 				const double eta = (g_f2_time + 16.8) - now2;
-				snprintf(buf, sizeof(buf), froze ? "SKIP SETUP - DO NOT PLANT YET  %.1f" : "WAVE COMING - DO NOT PLANT YET  %.1f", eta > 0.0 ? eta : 0.0);
-				draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.36f, buf, sc, froze ? red : org);
+				snprintf(buf, sizeof(buf), "WAVE COMING - DO NOT PLANT YET  %.1f", eta > 0.0 ? eta : 0.0);
+				draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.36f, buf, sc, org);
 			}
 			else if (setup && g_wave_time >= g_s_time && now2 - g_wave_time < 2.5)
 			{
 				const float yel[4] = {1.0f, 0.85f, 0.1f, 1.0f};
-				snprintf(buf, sizeof(buf), "WAVE - GET READY  %.1f", 2.5 - (now2 - g_wave_time));
+				snprintf(buf, sizeof(buf), "WAVE - WAIT  %.1f", 2.5 - (now2 - g_wave_time));
 				draw_text(g_w * 0.5f - static_cast<float>(strlen(buf)) * 3.0f * sc, g_h * 0.36f, buf, sc, yel);
 			}
-			else if (setup && g_wave_time >= g_s_time)
+			else if (setup && g_wave_time >= g_s_time && now2 - g_wave_time < 6.0)
 			{
-				if (froze)
-					draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.36f, "PLANT NOW - SKIP", sc, grn);
-				else
-					draw_text(g_w * 0.5f - 30.0f * 3.0f * sc, g_h * 0.36f, "PLANT NOW - NO SKIP (WILL DID HIS JUMP)", sc, gry);
+				draw_text(g_w * 0.5f - 9.0f * 3.0f * sc, g_h * 0.36f, "PLANT NOW", sc, grn);
 			}
-			else if (!setup)
-			{
-				draw_text(g_w * 0.5f - 24.0f * 3.0f * sc, g_h * 0.36f, "NO SKIP THIS RUN - NORMAL FINALE", sc, gry);
-			}
+			(void)gry;
 		}
 
-		// v1.00: Cormack still in the doorway after 10.5 s = likely Will/Cormack jam (what preceded Will freezing)
-		if (strcmp(g_rec_map, "seoul") == 0 && g_wc_time > 0.0 && now_seconds() - g_wc_time < 1.0)
-		{
-			const double since = now_seconds() - g_bbt_time;
-			const float dx = g_wc_pos[0] - 35440.0f, dy = g_wc_pos[1] - 9810.0f;
-			static bool logged = false;
-			static double logged_bbt = 0.0;
-			if (since > 10.5 && since < 20.0 && dx * dx + dy * dy < 120.0f * 120.0f && std::fabs(g_wc_pos[2] - 4344.0f) < 60.0f)
-			{
-				const float sc = g_h >= 1200.0f ? 4.0f : 3.0f;
-				const float cy[4] = {0.3f, 0.9f, 1.0f, 1.0f};
-				draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.25f, "CORMACK LATE IN DOORWAY", sc, cy);
-				if (!logged || logged_bbt != g_bbt_time) { logged = true; logged_bbt = g_bbt_time; log_line("Cormack still in the doorway %.1f s after start", since); }
-			}
-		}
-
-		// v1.11: a first-fight soldier standing on Will's doorway spot when Will gets there is what froze him
-		if (strcmp(g_rec_map, "seoul") == 0 && g_blocker_time > g_bbt_time && now_seconds() - g_blocker_time < 1.0)
-		{
-			const float sc = g_h >= 1200.0f ? 4.0f : 3.0f;
-			const float mg[4] = {1.0f, 0.3f, 1.0f, 1.0f};
-			draw_text(g_w * 0.5f - 15.0f * 3.0f * sc, g_h * 0.21f + 14.0f * sc, "SOLDIER ON WILLS SPOT", sc, mg);
-		}
-
-		// v0.95: big labels on the two start triggers
+		// v1.14: labels on the four binocular-scene triggers
 		if (strcmp(g_rec_map, "seoul") == 0)
 		{
-			struct lbl { float x, y, z; const char* text; float r, g, b; };
+			struct lbl { float x, y, z; const char* text; };
 			static const lbl L[] = {
-				{35456.0f, 9764.0f, 4368.0f + 70.0f, "JUMP OVER THIS (WILL BOX)", 1.0f, 0.55f, 0.0f},
-				{35500.0f, 9976.0f, 4344.0f + 80.0f, "TOUCH THIS (CORMACK GO)", 0.0f, 1.0f, 1.0f},
-				{35571.0f, 9392.0f, 4422.0f + 40.0f, "TEST: WAIT HERE TILL 17 S", 1.0f, 0.3f, 1.0f},
-				{35571.0f, 9392.0f, 4057.0f + 40.0f, "TEST: THEN DROP HERE", 1.0f, 0.3f, 1.0f},
+				{16063.0f, 20176.0f, 1626.0f + 150.0f, "BINOC 1: ESCAPED SWARM"},
+				{15852.0f, 20461.0f, 1792.0f + 140.0f, "BINOC 2: UPSTAIRS"},
+				{15368.0f, 20700.0f, 1792.0f + 140.0f, "BINOC 3: WINDOW APPROACH"},
+				{15188.0f, 20202.0f, 1770.0f + 90.0f, "BINOC 4: WINDOW (STARTS SCENE)"},
 			};
 			for (const lbl& l : L)
 			{
 				const vec3 c = to_camera({l.x, l.y, l.z});
 				const float dx = l.x - origin[0], dy = l.y - origin[1];
-				if (c.z > 20.0f && dx * dx + dy * dy < 3000.0f * 3000.0f)
+				if (c.z > 20.0f && dx * dx + dy * dy < 6000.0f * 6000.0f)
 				{
 					float sx, sy;
 					to_screen(c, &sx, &sy);
-					const float col[4] = {l.r, l.g, l.b, 1.0f};
+					const float col[4] = {1.0f, 0.85f, 0.0f, 1.0f};
 					const float sc = g_h >= 1200.0f ? 3.0f : 2.0f;
 					draw_text(sx - static_cast<float>(strlen(l.text)) * 3.0f * sc, sy - 10.0f * sc, l.text, sc, col);
-				}
-				if (l.r == 1.0f && l.g == 0.3f)
-				{
-					const float mg[4] = {1.0f, 0.3f, 1.0f, 1.0f};
-					const float bz = l.z - 40.0f;
-					g_thin_lines = true;
-					edge({l.x - 30.0f, l.y, bz}, {l.x + 30.0f, l.y, bz}, mg);
-					edge({l.x, l.y - 30.0f, bz}, {l.x, l.y + 30.0f, bz}, mg);
-					edge({l.x, l.y, bz}, {l.x, l.y, bz + 70.0f}, mg);
-					g_thin_lines = false;
 				}
 			}
 		}
@@ -3850,21 +3771,6 @@ namespace
 			const float red[4] = {1.0f, 0.1f, 0.1f, 1.0f};
 			const float grn[4] = {0.2f, 1.0f, 0.2f, 1.0f};
 			const float gry[4] = {0.8f, 0.8f, 0.8f, 1.0f};
-			// v0.91: Will's opening jump status (short-lived messages)
-			{
-				const double tnow = now_seconds();
-				const double shown = tnow - g_will_msg_time;
-				const float yel[4] = {1.0f, 0.8f, 0.2f, 1.0f};
-				if (g_will_msg == 1 && shown < 3.0)
-					draw_text(g_w * 0.5f - 9.0f * 3.0f * sc, g_h * 0.16f, "WILL JUMPED NORMALLY", sc, gry);
-				else if (g_will_msg == 2 && shown < 5.0)
-					draw_text(g_w * 0.5f - 18.0f * 3.0f * sc, g_h * 0.16f, "WILL MISSED HIS JUMP - KEEP THIS RUN", sc, yel);
-				else if (g_will_msg == 3 && shown < 5.0)
-					draw_text(g_w * 0.5f - 19.0f * 3.0f * sc, g_h * 0.16f, "WILL SNAPPED BACK TO BALCONY - SKIP LOST", sc, red);
-				else if (g_will_msg == 4 && shown < 6.0)
-					draw_text(g_w * 0.5f - 21.0f * 3.0f * sc, g_h * 0.16f, "WILL ON BALCONY - WAIT FOR THE PLANT SIGNAL", sc, grn);
-			}
-
 			// v1.03: race check from what actually happened (replaces the v0.88 box countdown, which was unreliable).
 			// Good: Cormack's "allies to camp" signal (T) fires at the moment Will is warped to the van (after the turret).
 			// Bad: T fired earlier (Cormack reached his door spot on his own) -> Will is sent back to the camp at the end.
