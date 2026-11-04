@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+#include <cctype>
 
 #include <d3d11.h>
 #include <dxgi1_2.h>
@@ -81,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.16 RECORDER"
+	#define ADDON_VERSION "1.17 RECORDER"
 	#else
-	#define ADDON_VERSION "1.16"
+	#define ADDON_VERSION "1.17"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -510,7 +511,7 @@ namespace
 
 	constexpr float EYE_HEIGHT = 60.0f;
 	constexpr int MAX_BOXES = 96;
-	constexpr int MAX_VERTS = 60000;
+	constexpr int MAX_VERTS = 150000;
 
 	using find_var_t = void* (*)(const char*);
 
@@ -2118,6 +2119,157 @@ namespace
 		g_thin_lines = false;
 	}
 
+
+	// ---- v1.17: the level's real collision brushes (Delete key, modes 1 and 2) ----------------------
+	// Every brush is a closed convex shape. We work out its corners and faces once, then draw the ones near
+	// the player. Class 1 = invisible wall (blocks the player but every face is a clip/caulk material),
+	// class 2 = mantle helper, class 3 = ordinary visible solid brush.
+	struct cbrush_draw
+	{
+		float lo[3], hi[3];
+		int first_edge, edge_count;   // into g_bedges (pairs of points)
+		int first_face, face_count;   // into g_bfaces
+		unsigned int contents;
+		unsigned char cls;
+	};
+
+	struct cbrush_face
+	{
+		int first_point, point_count;   // into g_bpoints
+	};
+
+	cbrush_draw* volatile g_bbrushes = nullptr;
+	volatile int g_bbrush_count = 0;
+	vec3* volatile g_bedges = nullptr;
+	cbrush_face* volatile g_bfaces = nullptr;
+	vec3* volatile g_bpoints = nullptr;
+	volatile int g_collision_mode = 0;   // Delete: 0 off, 1 invisible walls, 2 invisible walls + all solid brushes, 3 old leaf boxes
+
+	void draw_poly_fill(const vec3* pts, const int n, const float* color)
+	{
+		if (n < 3 || n > 64)
+		{
+			return;
+		}
+
+		// camera space, then trim against the near plane
+		vec3 in[64];
+		vec3 out[130];
+		for (int i = 0; i < n; ++i) in[i] = to_camera(pts[i]);
+		const float near_plane = 4.0f;
+		int m = 0;
+		for (int i = 0; i < n; ++i)
+		{
+			const vec3& a = in[i];
+			const vec3& b = in[(i + 1) % n];
+			const bool ina = a.z >= near_plane;
+			const bool inb = b.z >= near_plane;
+			if (ina) out[m++] = a;
+			if (ina != inb)
+			{
+				const float t = (near_plane - a.z) / (b.z - a.z);
+				out[m++] = {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, near_plane};
+			}
+		}
+
+		if (m < 3)
+		{
+			return;
+		}
+
+		float sx[130], sy[130];
+		for (int i = 0; i < m; ++i) to_screen(out[i], &sx[i], &sy[i]);
+		for (int i = 1; i + 1 < m; ++i)
+		{
+			add_quad(sx[0], sy[0], sx[i], sy[i], sx[i + 1], sy[i + 1], sx[i + 1], sy[i + 1], color);
+		}
+	}
+
+	void draw_collision_brushes(const vec3& player)
+	{
+		cbrush_draw* brushes = g_bbrushes;
+		const int count = g_bbrush_count;
+		vec3* edges = g_bedges;
+		cbrush_face* faces = g_bfaces;
+		vec3* points = g_bpoints;
+		if (!brushes || count <= 0 || !edges || !faces || !points)
+		{
+			return;
+		}
+
+		const bool all = g_collision_mode == 2;
+		constexpr int KEEP = 400;
+		float best_dist[KEEP];
+		int best_index[KEEP];
+		int kept = 0;
+		const float max_distance = kCollisionRanges[g_collision_range] * 1.5f;
+		for (int i = 0; i < count; ++i)
+		{
+			const cbrush_draw& b = brushes[i];
+			if (b.cls == 0 || (b.cls == 3 && !all))
+			{
+				continue;
+			}
+
+			float d2 = 0.0f;
+			const float p[3] = {player.x, player.y, player.z};
+			for (int k = 0; k < 3; ++k)
+			{
+				const float e = p[k] < b.lo[k] ? b.lo[k] - p[k] : (p[k] > b.hi[k] ? p[k] - b.hi[k] : 0.0f);
+				d2 += e * e;
+			}
+
+			if (d2 > max_distance * max_distance)
+			{
+				continue;
+			}
+
+			if (b.cls == 3) d2 += 1.0e4f;   // invisible walls first when the list is full
+			if (kept >= KEEP && d2 >= best_dist[KEEP - 1])
+			{
+				continue;
+			}
+
+			int position = kept < KEEP ? kept : KEEP - 1;
+			if (kept < KEEP) ++kept;
+			while (position > 0 && best_dist[position - 1] > d2)
+			{
+				best_dist[position] = best_dist[position - 1];
+				best_index[position] = best_index[position - 1];
+				--position;
+			}
+
+			best_dist[position] = d2;
+			best_index[position] = i;
+		}
+
+		static const float wall_line[4] = {0.75f, 0.35f, 1.0f, 1.0f};
+		static const float wall_fill[4] = {0.7f, 0.2f, 1.0f, 0.13f};
+		static const float mantle_line[4] = {0.3f, 1.0f, 0.75f, 0.9f};
+		static const float solid_line[4] = {0.6f, 0.6f, 0.6f, 0.45f};
+		g_thin_lines = true;
+		for (int n = kept - 1; n >= 0; --n)
+		{
+			const cbrush_draw& b = brushes[best_index[n]];
+			const float* line = b.cls == 1 ? wall_line : (b.cls == 2 ? mantle_line : solid_line);
+			if (b.cls == 1)
+			{
+				for (int f = 0; f < b.face_count; ++f)
+				{
+					const cbrush_face& face = faces[b.first_face + f];
+					draw_poly_fill(points + face.first_point, face.point_count, wall_fill);
+				}
+			}
+
+			for (int e = 0; e < b.edge_count; ++e)
+			{
+				edge(edges[(b.first_edge + e) * 2], edges[(b.first_edge + e) * 2 + 1], line);
+			}
+		}
+
+		g_thin_lines = false;
+	}
+
 	// 1 = ignore, 2.. = a kind of trigger. Looked up once and remembered for a while.
 	unsigned char classify(const unsigned short id)
 	{
@@ -3152,9 +3304,11 @@ namespace
 
 		if (delete_key)
 		{
-			g_collision_on = !g_collision_on;
-			g_collision_refresh = g_collision_on;
-			log_line("Delete: level collision blocks %s", g_collision_on ? "ON" : "OFF");
+			g_collision_mode = (g_collision_mode + 1) % 4;
+			g_collision_on = g_collision_mode == 3;
+			g_collision_refresh = g_collision_mode != 0;
+			static const char* const kModes[] = {"OFF", "INVISIBLE WALLS", "INVISIBLE WALLS + ALL SOLID BRUSHES", "OLD COLLISION BLOCKS"};
+			log_line("Delete: collision view %s", kModes[g_collision_mode]);
 		}
 
 		if (key_pressed(VK_OEM_4, &was_lbracket))
@@ -3864,6 +4018,11 @@ namespace
 			}
 		}
 
+		if (g_collision_mode == 1 || g_collision_mode == 2)
+		{
+			draw_collision_brushes({origin[0], origin[1], origin[2] + 30.0f - (eye_height == 0.0f ? EYE_HEIGHT : 0.0f)});
+		}
+
 		if (g_collision_on)
 		{
 			draw_collision_blocks({origin[0], origin[1], origin[2] + 30.0f - (eye_height == 0.0f ? EYE_HEIGHT : 0.0f)});
@@ -3881,7 +4040,7 @@ namespace
 			static const char* const kHelp[] = {
 				"F8 overlay on/off", "F7 distance", "F6 line thickness", "F5 field of view style", "F3 camera source",
 				"F2 labels", "F11 script events", "F4 event filter", "Home brush models", "[ show all/green/pink/magenta/leave-area", "] leave-area boxes on/off", "F9 save data files",
-				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete level collision blocks", "PageDown collision range", "PageUp save collision data", "\\ route guide lines (Seoul)", "; speedometer / strafe helper", "End this help (or console: overlay_help)"};
+				"Num5 ghost replay (ghost.txt + route.txt)", "Num6 pause  Num7/8 speed  Num9 restart", "Num0 whole path  Num+/- jump 10s", "Num/ ghost only (hide triggers)", "Num. ghost follows my game clock", "Delete collision: off / invisible walls / + all solid / old blocks", "PageDown collision range", "PageUp save collision data", "\\ route guide lines (Seoul)", "; speedometer / strafe helper", "End this help (or console: overlay_help)"};
 			const float scale = g_h >= 1200.0f ? 1.5f : 1.0f;
 			const float line = 10.0f * scale + 2.0f;
 			const float top = g_h - 14.0f - line * static_cast<float>(sizeof(kHelp) / sizeof(kHelp[0]));
@@ -5486,6 +5645,388 @@ namespace
 				log_line("collision: saved %lld blocks to %s", written, path);
 			}
 		}
+	}
+
+
+	// v1.17: reads the level's collision brushes (clipMap: +0x10 planes, +0x20 materials, +0x70 sides,
+	// +0x90 brush count, +0x98 brushes, +0xA0 bounds, +0xA8 contents) and works out each brush's shape.
+	bool material_is_invisible(const char* name)
+	{
+		char low[96];
+		size_t i = 0;
+		for (; name[i] && i + 1 < sizeof(low); ++i) low[i] = static_cast<char>(tolower(static_cast<unsigned char>(name[i])));
+		low[i] = 0;
+		return strstr(low, "clip") || strstr(low, "caulk") || strstr(low, "nodraw") || strstr(low, "mantle") || strstr(low, "skip") ||
+			strstr(low, "hint") || strstr(low, "trigger") || strstr(low, "physics") || strstr(low, "invisible");
+	}
+
+	template <typename T>
+	T* copy_array(const uintptr_t address, const size_t count, const size_t stride)
+	{
+		if (address < 0x10000 || count == 0 || count > 8000000)
+		{
+			return nullptr;
+		}
+
+		const size_t bytes = count * stride;
+		unsigned char* out = static_cast<unsigned char*>(malloc(bytes));
+		if (!out)
+		{
+			return nullptr;
+		}
+
+		for (size_t done = 0; done < bytes; done += 65536)
+		{
+			const size_t n = bytes - done < 65536 ? bytes - done : 65536;
+			if (!read_bytes(address + done, out + done, n))
+			{
+				free(out);
+				return nullptr;
+			}
+		}
+
+		return reinterpret_cast<T*>(out);
+	}
+
+	void refresh_brushes()
+	{
+		g_found_count = 0;
+		using enum_t = void (*)(int, void (*)(void*, void*), void*, bool);
+		bool ok = true;
+		__try
+		{
+			reinterpret_cast<enum_t>(SP_DB_ENUM_XASSETS)(ASSET_TYPE_CLIPMAP_INDEX, &found_asset_callback, nullptr, false);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			ok = false;
+		}
+
+		if (!ok || g_found_count == 0)
+		{
+			log_line("brushes: no level collision data found");
+			return;
+		}
+
+		static uintptr_t last_header = 0;
+		const uintptr_t header = reinterpret_cast<uintptr_t>(g_found_assets[0]);
+		if (header == last_header && g_bbrushes)
+		{
+			return;
+		}
+
+		unsigned int plane_count = 0, material_count = 0, side_count = 0, brush_count = 0;
+		unsigned long long planes_p = 0, materials_p = 0, sides_p = 0, brushes_p = 0, bounds_p = 0, contents_p = 0;
+		if (!read_bytes(header + 0x10, &plane_count, 4) || !read_bytes(header + 0x18, &planes_p, 8) ||
+			!read_bytes(header + 0x20, &material_count, 4) || !read_bytes(header + 0x28, &materials_p, 8) ||
+			!read_bytes(header + 0x70, &side_count, 4) || !read_bytes(header + 0x78, &sides_p, 8) ||
+			!read_bytes(header + 0x90, &brush_count, 4) || !read_bytes(header + 0x98, &brushes_p, 8) ||
+			!read_bytes(header + 0xA0, &bounds_p, 8) || !read_bytes(header + 0xA8, &contents_p, 8))
+		{
+			log_line("brushes: could not read the collision header");
+			return;
+		}
+
+		if (brush_count > 400000) brush_count &= 0xFFFF;
+		log_line("brushes: %u planes, %u materials, %u sides, %u brushes", plane_count, material_count, side_count, brush_count);
+		if (plane_count == 0 || plane_count > 4000000 || material_count == 0 || material_count > 20000 || side_count > 8000000 ||
+			brush_count == 0)
+		{
+			log_line("brushes: numbers look wrong, giving up");
+			return;
+		}
+
+		float* planes = copy_array<float>(static_cast<uintptr_t>(planes_p), plane_count, 20);
+		unsigned char* materials = copy_array<unsigned char>(static_cast<uintptr_t>(materials_p), material_count, 16);
+		unsigned char* sides = copy_array<unsigned char>(static_cast<uintptr_t>(sides_p), side_count ? side_count : 1, 8);
+		unsigned char* brushes = copy_array<unsigned char>(static_cast<uintptr_t>(brushes_p), brush_count, 48);
+		float* bounds = copy_array<float>(static_cast<uintptr_t>(bounds_p), brush_count, 24);
+		unsigned int* contents = copy_array<unsigned int>(static_cast<uintptr_t>(contents_p), brush_count, 4);
+		bool* invisible = static_cast<bool*>(calloc(material_count, 1));
+		char (*mat_names)[64] = static_cast<char (*)[64]>(calloc(material_count, 64));
+		if (!planes || !materials || !brushes || !bounds || !contents || !invisible || !mat_names || (side_count && !sides))
+		{
+			log_line("brushes: could not copy the collision arrays");
+			free(planes); free(materials); free(sides); free(brushes); free(bounds); free(contents); free(invisible); free(mat_names);
+			return;
+		}
+
+		for (unsigned int m = 0; m < material_count; ++m)
+		{
+			unsigned long long name_p = 0;
+			memcpy(&name_p, materials + m * 16, 8);
+			if (!safe_copy_string(reinterpret_cast<const char*>(name_p), mat_names[m], 64))
+			{
+				strcpy_s(mat_names[m], 64, "?");
+			}
+
+			invisible[m] = material_is_invisible(mat_names[m]);
+		}
+
+		const int max_edges = static_cast<int>(brush_count) * 18 + 1024;
+		const int max_points = static_cast<int>(brush_count) * 30 + 1024;
+		cbrush_draw* out = static_cast<cbrush_draw*>(calloc(brush_count, sizeof(cbrush_draw)));
+		vec3* edges = static_cast<vec3*>(malloc(sizeof(vec3) * 2 * static_cast<size_t>(max_edges)));
+		cbrush_face* faces = static_cast<cbrush_face*>(malloc(sizeof(cbrush_face) * (static_cast<size_t>(brush_count) * 8 + 1024)));
+		vec3* points = static_cast<vec3*>(malloc(sizeof(vec3) * static_cast<size_t>(max_points)));
+		const int max_faces = static_cast<int>(brush_count) * 8 + 1024;
+		if (!out || !edges || !faces || !points)
+		{
+			log_line("brushes: out of memory");
+			free(planes); free(materials); free(sides); free(brushes); free(bounds); free(contents); free(invisible); free(mat_names);
+			free(out); free(edges); free(faces); free(points);
+			return;
+		}
+
+		int edge_total = 0, face_total = 0, point_total = 0;
+		int class_count[4] = {};
+		int material_use[4096] = {};
+		for (unsigned int bi = 0; bi < brush_count; ++bi)
+		{
+			cbrush_draw& d = out[bi];
+			const float* bb = bounds + bi * 6;
+			for (int k = 0; k < 3; ++k)
+			{
+				d.lo[k] = bb[k] - bb[3 + k];
+				d.hi[k] = bb[k] + bb[3 + k];
+			}
+
+			d.contents = contents[bi];
+			const unsigned char* br = brushes + static_cast<size_t>(bi) * 48;
+			unsigned short numsides = 0;
+			unsigned long long side_ptr = 0;
+			short axial[6];
+			memcpy(&numsides, br, 2);
+			memcpy(&side_ptr, br + 8, 8);
+			memcpy(axial, br + 24, 12);
+			if (!(bb[3] >= 0.0f && bb[4] >= 0.0f && bb[5] >= 0.0f && bb[3] < 1.0e5f && bb[4] < 1.0e5f && bb[5] < 1.0e5f &&
+				std::fabs(bb[0]) < 1.0e6f && std::fabs(bb[1]) < 1.0e6f && std::fabs(bb[2]) < 1.0e6f))
+			{
+				continue;
+			}
+
+			// half-spaces n.x <= dist : 6 axial first, then the extra sides
+			float pn[64][3];
+			float pd[64];
+			int pm[64];
+			int np = 0;
+			for (int k = 0; k < 3; ++k)
+			{
+				pn[np][0] = pn[np][1] = pn[np][2] = 0.0f; pn[np][k] = -1.0f; pd[np] = -d.lo[k]; pm[np] = axial[k]; ++np;
+				pn[np][0] = pn[np][1] = pn[np][2] = 0.0f; pn[np][k] = 1.0f; pd[np] = d.hi[k]; pm[np] = axial[3 + k]; ++np;
+			}
+
+			long long first_side = -1;
+			if (numsides > 0 && side_count > 0 && side_ptr >= sides_p)
+			{
+				first_side = static_cast<long long>((side_ptr - sides_p) / 8);
+			}
+
+			for (int s = 0; s < numsides && np < 64 && first_side >= 0 && first_side + s < static_cast<long long>(side_count); ++s)
+			{
+				unsigned int plane_index = 0;
+				unsigned short mat = 0;
+				memcpy(&plane_index, sides + (first_side + s) * 8, 4);
+				memcpy(&mat, sides + (first_side + s) * 8 + 4, 2);
+				if (plane_index >= plane_count)
+				{
+					continue;
+				}
+
+				const float* pl = planes + static_cast<size_t>(plane_index) * 5;
+				pn[np][0] = pl[0]; pn[np][1] = pl[1]; pn[np][2] = pl[2]; pd[np] = pl[3]; pm[np] = mat; ++np;
+			}
+
+			// class from materials and contents
+			bool all_invisible = true, any_mantle = false;
+			for (int p = 0; p < np; ++p)
+			{
+				if (pm[p] < 0 || pm[p] >= static_cast<int>(material_count)) continue;
+				if (!invisible[pm[p]]) all_invisible = false;
+				char low[64];
+				size_t c = 0;
+				for (; mat_names[pm[p]][c] && c + 1 < sizeof(low); ++c) low[c] = static_cast<char>(tolower(static_cast<unsigned char>(mat_names[pm[p]][c])));
+				low[c] = 0;
+				if (strstr(low, "mantle")) any_mantle = true;
+			}
+
+			const bool blocks_player = (d.contents & 0x10001u) != 0;
+			d.cls = any_mantle ? 2 : (blocks_player ? (all_invisible ? 1 : 3) : 0);
+			++class_count[d.cls];
+			if (d.cls == 1)
+			{
+				for (int p = 0; p < np; ++p)
+					if (pm[p] >= 0 && pm[p] < 4096) ++material_use[pm[p]];
+			}
+
+			if (d.cls == 0)
+			{
+				continue;
+			}
+
+			// corners: every three planes that meet at a point inside all the others
+			vec3 verts[256];
+			unsigned long long on[256];
+			int nv = 0;
+			for (int a = 0; a < np && nv < 256; ++a)
+			for (int b = a + 1; b < np && nv < 256; ++b)
+			for (int c = b + 1; c < np && nv < 256; ++c)
+			{
+				const float* n1 = pn[a]; const float* n2 = pn[b]; const float* n3 = pn[c];
+				const float cx23[3] = {n2[1] * n3[2] - n2[2] * n3[1], n2[2] * n3[0] - n2[0] * n3[2], n2[0] * n3[1] - n2[1] * n3[0]};
+				const float det = n1[0] * cx23[0] + n1[1] * cx23[1] + n1[2] * cx23[2];
+				if (std::fabs(det) < 1.0e-5f) continue;
+				const float cx31[3] = {n3[1] * n1[2] - n3[2] * n1[1], n3[2] * n1[0] - n3[0] * n1[2], n3[0] * n1[1] - n3[1] * n1[0]};
+				const float cx12[3] = {n1[1] * n2[2] - n1[2] * n2[1], n1[2] * n2[0] - n1[0] * n2[2], n1[0] * n2[1] - n1[1] * n2[0]};
+				vec3 v;
+				v.x = (pd[a] * cx23[0] + pd[b] * cx31[0] + pd[c] * cx12[0]) / det;
+				v.y = (pd[a] * cx23[1] + pd[b] * cx31[1] + pd[c] * cx12[1]) / det;
+				v.z = (pd[a] * cx23[2] + pd[b] * cx31[2] + pd[c] * cx12[2]) / det;
+				bool inside = true;
+				unsigned long long mask = 0;
+				for (int p = 0; p < np; ++p)
+				{
+					const float s = pn[p][0] * v.x + pn[p][1] * v.y + pn[p][2] * v.z - pd[p];
+					if (s > 0.1f) { inside = false; break; }
+					if (s > -0.1f) mask |= 1ull << p;
+				}
+
+				if (!inside) continue;
+				int same = -1;
+				for (int q = 0; q < nv; ++q)
+				{
+					if (std::fabs(verts[q].x - v.x) < 0.2f && std::fabs(verts[q].y - v.y) < 0.2f && std::fabs(verts[q].z - v.z) < 0.2f) { same = q; break; }
+				}
+
+				if (same >= 0) { on[same] |= mask; continue; }
+				verts[nv] = v;
+				on[nv] = mask;
+				++nv;
+			}
+
+			if (nv < 4)
+			{
+				d.cls = 0;
+				continue;
+			}
+
+			// edges: two corners that share two faces
+			d.first_edge = edge_total;
+			for (int i = 0; i < nv; ++i)
+			for (int j = i + 1; j < nv; ++j)
+			{
+				const unsigned long long shared = on[i] & on[j];
+				if ((shared & (shared - 1)) == 0) continue;   // fewer than two
+				if (edge_total >= max_edges) break;
+				edges[edge_total * 2] = verts[i];
+				edges[edge_total * 2 + 1] = verts[j];
+				++edge_total;
+			}
+
+			d.edge_count = edge_total - d.first_edge;
+
+			// faces (only kept for invisible walls, used for the see-through fill and the saved file)
+			d.first_face = face_total;
+			if (d.cls == 1)
+			{
+				for (int p = 0; p < np && face_total < max_faces; ++p)
+				{
+					int idx[64];
+					int k = 0;
+					float cx = 0, cy = 0, cz = 0;
+					for (int i = 0; i < nv && k < 64; ++i)
+						if (on[i] & (1ull << p)) { idx[k++] = i; cx += verts[i].x; cy += verts[i].y; cz += verts[i].z; }
+					if (k < 3 || point_total + k > max_points) continue;
+					cx /= k; cy /= k; cz /= k;
+					// sort the corners around the face centre
+					const float* n = pn[p];
+					float ux, uy, uz;
+					if (std::fabs(n[2]) < 0.9f) { ux = -n[1]; uy = n[0]; uz = 0.0f; } else { ux = 0.0f; uy = -n[2]; uz = n[1]; }
+					const float vx = n[1] * uz - n[2] * uy, vy = n[2] * ux - n[0] * uz, vz = n[0] * uy - n[1] * ux;
+					float ang[64];
+					for (int i = 0; i < k; ++i)
+					{
+						const float dx = verts[idx[i]].x - cx, dy = verts[idx[i]].y - cy, dz = verts[idx[i]].z - cz;
+						ang[i] = std::atan2(dx * vx + dy * vy + dz * vz, dx * ux + dy * uy + dz * uz);
+					}
+
+					for (int i = 1; i < k; ++i)
+						for (int j = i; j > 0 && ang[j - 1] > ang[j]; --j)
+						{
+							const float ta = ang[j]; ang[j] = ang[j - 1]; ang[j - 1] = ta;
+							const int ti = idx[j]; idx[j] = idx[j - 1]; idx[j - 1] = ti;
+						}
+
+					faces[face_total].first_point = point_total;
+					faces[face_total].point_count = k;
+					for (int i = 0; i < k; ++i) points[point_total++] = verts[idx[i]];
+					++face_total;
+				}
+			}
+
+			d.face_count = face_total - d.first_face;
+		}
+
+		log_line("brushes: %d invisible walls, %d mantle, %d visible solid, %d skipped (%d edges, %d faces)", class_count[1], class_count[2],
+		         class_count[3], class_count[0], edge_total, face_total);
+
+		// save for the 3D map: invisible walls and mantle brushes as faces / edges
+		{
+			char name[128];
+			snprintf(name, sizeof(name), "brushes_%s.txt", g_rec_map[0] ? g_rec_map : "map");
+			const char* old_sub = g_subdir;
+			g_subdir = "speedrun_data\\";
+			char path[MAX_PATH];
+			make_path(path, name);
+			g_subdir = old_sub;
+			FILE* f = nullptr;
+			if (fopen_s(&f, path, "w") == 0 && f)
+			{
+				fprintf(f, "# collision brushes (tool version %s). B class contents lo hi; F x y z ... (face corners); E x y z x y z\n", ADDON_VERSION);
+				fprintf(f, "# class 1 = invisible wall, 2 = mantle, 3 = visible solid\n");
+				for (unsigned int m = 0; m < material_count && m < 4096; ++m)
+					if (material_use[m] > 0) fprintf(f, "# wall material %u %s used %d\n", m, mat_names[m], material_use[m]);
+				for (unsigned int bi = 0; bi < brush_count; ++bi)
+				{
+					const cbrush_draw& d = out[bi];
+					if (d.cls == 0) continue;
+					fprintf(f, "B %d %08X %.1f %.1f %.1f %.1f %.1f %.1f\n", d.cls, d.contents, d.lo[0], d.lo[1], d.lo[2], d.hi[0], d.hi[1], d.hi[2]);
+					if (d.cls == 1)
+					{
+						for (int fi = 0; fi < d.face_count; ++fi)
+						{
+							const cbrush_face& face = faces[d.first_face + fi];
+							fprintf(f, "F");
+							for (int i = 0; i < face.point_count; ++i)
+								fprintf(f, " %.1f %.1f %.1f", points[face.first_point + i].x, points[face.first_point + i].y, points[face.first_point + i].z);
+							fprintf(f, "\n");
+						}
+					}
+					else if (d.cls == 2)
+					{
+						for (int e = 0; e < d.edge_count; ++e)
+						{
+							const vec3& a = edges[(d.first_edge + e) * 2];
+							const vec3& b = edges[(d.first_edge + e) * 2 + 1];
+							fprintf(f, "E %.1f %.1f %.1f %.1f %.1f %.1f\n", a.x, a.y, a.z, b.x, b.y, b.z);
+						}
+					}
+				}
+
+				fclose(f);
+				log_line("brushes: saved to %s", path);
+			}
+		}
+
+		free(planes); free(materials); free(sides); free(brushes); free(bounds); free(contents); free(invisible); free(mat_names);
+		// publish (old arrays are not freed - the picture thread may still be reading them)
+		g_bbrush_count = 0;
+		g_bedges = edges;
+		g_bfaces = faces;
+		g_bpoints = points;
+		g_bbrushes = out;
+		g_bbrush_count = static_cast<int>(brush_count);
+		last_header = header;
 	}
 
 	// Console command: overlay_help
@@ -7649,6 +8190,12 @@ namespace
 			{
 				g_collision_refresh = false;
 				refresh_collision();
+			}
+
+			if ((g_collision_mode == 1 || g_collision_mode == 2) && (g_collision_refresh || tick % 150 == 0))
+			{
+				g_collision_refresh = false;
+				refresh_brushes();
 			}
 
 			const bool pageup_down = (GetAsyncKeyState(VK_PRIOR) & 0x8000) != 0;
