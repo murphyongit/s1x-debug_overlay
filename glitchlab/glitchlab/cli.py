@@ -126,7 +126,7 @@ def cmd_import(cfg, map_name, store: Store) -> int:
     return n
 
 
-def cmd_simcheck(cfg, map_name, out: Path, variants: bool = True) -> dict:
+def cmd_simcheck(cfg, map_name, out: Path, variants: bool = False) -> dict:
     """Checks the movement simulator against this map's recorded runs and writes a report."""
     from dataclasses import replace
     from .sim import validate as V
@@ -143,7 +143,7 @@ def cmd_simcheck(cfg, map_name, out: Path, variants: bool = True) -> dict:
     P = Params()
     from .sim.reach import fly
     res = {"jump_arcs": V.fit_jump_arcs(logs), "steady_speeds": V.steady_speeds(logs),
-           "dash": V.dash_profile(logs),
+           "dash": V.dash_profile(logs), "air_gain": V.air_gain_check(logs),
            "params": P.as_dict(), "runs": [lg.path.name for lg in logs]}
     var = {"game values": P}
     if variants:
@@ -160,6 +160,14 @@ def cmd_simcheck(cfg, map_name, out: Path, variants: bool = True) -> dict:
              f"(middle half {res['jump_arcs'].get('gravity_iqr')}); jump apex {res['jump_arcs'].get('apex_median')}",
              *(f"- Steady {k}: {v['median']} u/s ({v['samples']} samples)" for k, v in res["steady_speeds"].items()),
              f"- Air dashes: {res['dash']}",
+             "", "## Air control: fastest observed speed gain vs the simulator's limit", "",
+             "Gains in u/s per second, over 0.2 s of one jump arc. The game's air accel is 1.0; the top of what",
+             "players manage should sit at that limit, not above it.", "",
+             "| speed | windows | observed 98% | observed max | limit, air accel 0.5 | 1.0 (game) | 2.0 |",
+             "|---|---|---|---|---|---|---|",
+             *(f"| {r['speed']} | {r['windows']} | {r['observed_p98']} | {r['observed_max']} | "
+               f"{r['limit_by_air_accel'][0.5]} | {r['limit_by_air_accel'][1.0]} | {r['limit_by_air_accel'][2.0]} |"
+               for r in res["air_gain"]),
              "", "## Jump distances (simulated, open air, flat takeoff)", "",
              "| takeoff speed | land at | straight (hold W) | strafing (A/D + mouse) | speed on landing (strafing) |",
              "|---|---|---|---|---|",
@@ -186,6 +194,8 @@ def main(argv=None):
     ap.add_argument("--config", default="config.json")
     ap.add_argument("--map", help="internal map name, e.g. recovery (Atlas), seoul (Induction)")
     ap.add_argument("--all", action="store_true", help="scripts: run the script miners for every mission")
+    ap.add_argument("--variants", action="store_true",
+                    help="simcheck: also replay with deliberately wrong physics for comparison (slow)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -203,7 +213,7 @@ def main(argv=None):
     if not a.map:
         ap.error("--map is required")
     if a.command == "simcheck":
-        cmd_simcheck(cfg, a.map, Path(a.out or f"reports/{a.map}_sim_check.md"))
+        cmd_simcheck(cfg, a.map, Path(a.out or f"reports/{a.map}_sim_check.md"), variants=a.variants)
         print("simulator check written")
         store.close()
         return

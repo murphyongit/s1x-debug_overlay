@@ -135,15 +135,27 @@ recorded runs. Where both sources exist, they agree.
   - `BrushWorld.from_full_collision`: the real map, from the overlay's full collision dump
 - `sim/pmove.py` contains `Mover.step(state, Cmd(...))`, which runs one frame.
   `Cmd(forward, right, yaw, jump, sprint, stance, msec)` is one frame of input, with moves from -127 to 127.
+- `sim/reach.py`: `fly(takeoff_speed, drop, strafe=True)` gives how far a jump or fall carries you, with
+  perfect A/D-and-mouse strafing or with straight W.
 - `sim/validate.py` checks the simulator against your recordings:
 
   ```
   python -m glitchlab.cli simcheck --config config.json --map recovery
   ```
 
-  The recorder doesn't save key presses. So for each 0.1 s, the check tries every keyboard combination
-  and keeps the one that lands closest to the next recorded spot. It runs this with the game's constants
-  and with deliberately wrong ones, so you can see which fits better. In the config,
+  The report covers:
+
+  - constants fitted from the recordings: gravity, jump apex, and run, sprint and crouch speeds
+  - an **air-control check**: the fastest speed gain players actually reached while strafing in the air,
+    next to the simulator's limit for different air-control strengths
+  - air-dash speeds (measured; dashes aren't simulated yet)
+  - a jump-distance table
+  - a replay
+
+  For the replay: the recorder doesn't save key presses. So for each 0.1 s, the check tries every keyboard combination
+  and keeps the one that lands closest to the next recorded spot. `--variants` also replays with
+  deliberately wrong constants. The replay can't tell close values apart well, because the key search
+  covers small differences. The air-control check is the sharper test. In the config,
   `"clean_windows": {"<log file>": [[t0, t1], ...]}` limits scoring to the parts of a run without noclip
   or teleports.
 

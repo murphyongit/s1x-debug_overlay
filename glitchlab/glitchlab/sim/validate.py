@@ -305,3 +305,51 @@ def dash_profile(logs: list[RunLog]) -> dict:
     return {"dashes": len(a), "speed_before_median": round(float(np.median(pre))),
             "peak_median": round(float(np.median(peak))), "speed_after_median": round(float(np.median(a))),
             "share_ending_at_235_245": round(float(np.mean((a > 235) & (a < 245))), 2)}
+
+
+# ------------------------------------------------------------------ 5. air control: observed speed gain vs the limit
+def air_gain_check(logs: list[RunLog], accels=(0.5, 1.0, 2.0)) -> list[dict]:
+    """How fast players gained sideways speed in the air (0.2 s windows on one jump arc, no dashes), next to
+    the most the simulator allows with perfect strafing for different air-control strengths.
+
+    Strafe jumpers push right up against the true limit, so the top of the observed gains should sit just at
+    the correct value and never clearly above it."""
+    from .reach import fly
+    obs = []
+    for lg in logs:
+        S = [s for s in lg.samples if s.game_ms is not None]
+        burst = _burst_mask(S)
+        for i in range(2, len(S) - 2):
+            p, a, b, c = S[i - 1], S[i], S[i + 1], S[i + 2]
+            if burst[i] or burst[i + 1] or any(unmodelled(x) for x in (p, a, b, c)):
+                continue
+            d0, d1, d2 = ((y.game_ms - x.game_ms) / 1000 for x, y in ((p, a), (a, b), (b, c)))
+            if not all(0.07 < d < 0.13 for d in (d0, d1, d2)):
+                continue
+            a1 = ((b.z - a.z) / d1 - (a.z - p.z) / d0) / ((d0 + d1) / 2)
+            a2 = ((c.z - b.z) / d2 - (b.z - a.z) / d1) / ((d1 + d2) / 2)
+            if not (-900 < a1 < -700 and -900 < a2 < -700):
+                continue
+            v0 = math.hypot(a.x - p.x, a.y - p.y) / d0
+            v2 = math.hypot(c.x - b.x, c.y - b.y) / d2
+            if v0 < 200:
+                continue
+            T = (c.game_ms + b.game_ms) / 2000 - (p.game_ms + a.game_ms) / 2000
+            obs.append((v0, (v2 - v0) / T))
+    if not obs:
+        return []
+    o = np.array(obs)
+    rows = []
+    for lo, hi in ((200, 260), (260, 320), (320, 380), (380, 450)):
+        m = (o[:, 0] >= lo) & (o[:, 0] < hi)
+        if m.sum() < 5:
+            continue
+        g = o[m, 1]
+        mid = (lo + hi) / 2
+        lim = {}
+        for acc in accels:
+            r = fly(mid, 1e6, jump=False, strafe=True, P=replace(Params(), air_accel=acc), max_seconds=0.2)
+            lim[acc] = round((r["end_speed"] - mid) / 0.2)
+        rows.append({"speed": f"{lo}-{hi}", "windows": int(m.sum()), "observed_p98": round(float(np.percentile(g, 98))),
+                     "observed_max": round(float(g.max())), "limit_by_air_accel": lim})
+    return rows
