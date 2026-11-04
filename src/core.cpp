@@ -82,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.23 RECORDER"
+	#define ADDON_VERSION "1.24 RECORDER"
 	#else
-	#define ADDON_VERSION "1.23"
+	#define ADDON_VERSION "1.24"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5888,6 +5888,32 @@ namespace
 			return;
 		}
 
+		// v1.24: full collision dump for route planning (every solid brush face and every collision triangle, world positions)
+		FILE* dump = nullptr;
+		{
+			char name[128];
+			snprintf(name, sizeof(name), "collision_full_%s.bin", g_rec_map[0] ? g_rec_map : "map");
+			const char* old_sub = g_subdir;
+			g_subdir = "speedrun_data\\";
+			char path[MAX_PATH];
+			make_path(path, name);
+			g_subdir = old_sub;
+			if (fopen_s(&dump, path, "wb") != 0) dump = nullptr;
+			if (dump)
+			{
+				fwrite("AWCOL1\0\0", 1, 8, dump);
+				fwrite(&material_count, 4, 1, dump);
+				for (unsigned int m = 0; m < material_count; ++m)
+				{
+					unsigned int sf = 0, mc = 0;
+					memcpy(&sf, materials + m * 16 + 8, 4);
+					memcpy(&mc, materials + m * 16 + 12, 4);
+					fwrite(&mc, 4, 1, dump); fwrite(&sf, 4, 1, dump); fwrite(mat_names[m], 1, 64, dump);
+				}
+			}
+		}
+		int dump_brushes = 0, dump_tris = 0;
+
 		int edge_total = 0, face_total = 0, point_total = 0;
 		int class_count[4] = {};
 		int material_use[4096] = {};
@@ -6035,6 +6061,52 @@ namespace
 			}
 
 			d.edge_count = edge_total - d.first_edge;
+
+			if (dump)
+			{
+				// record: 'B', contents, face count, then per face: material, corner count, corners
+				int faces_here = 0;
+				for (int p = 0; p < np; ++p)
+				{
+					int k = 0;
+					for (int i = 0; i < nv; ++i) if (on[i] & (1ull << p)) ++k;
+					if (k >= 3) ++faces_here;
+				}
+				const unsigned char tag = 'B';
+				const unsigned short nf = static_cast<unsigned short>(faces_here);
+				fwrite(&tag, 1, 1, dump); fwrite(&d.contents, 4, 1, dump); fwrite(&nf, 2, 1, dump);
+				for (int p = 0; p < np; ++p)
+				{
+					int idx[64];
+					int k = 0;
+					float cx = 0, cy = 0, cz = 0;
+					for (int i = 0; i < nv && k < 64; ++i)
+						if (on[i] & (1ull << p)) { idx[k++] = i; cx += verts[i].x; cy += verts[i].y; cz += verts[i].z; }
+					if (k < 3) continue;
+					cx /= k; cy /= k; cz /= k;
+					const float* n = pn[p];
+					float ux, uy, uz;
+					if (std::fabs(n[2]) < 0.9f) { ux = -n[1]; uy = n[0]; uz = 0.0f; } else { ux = 0.0f; uy = -n[2]; uz = n[1]; }
+					const float vx = n[1] * uz - n[2] * uy, vy = n[2] * ux - n[0] * uz, vz = n[0] * uy - n[1] * ux;
+					float ang[64];
+					for (int i = 0; i < k; ++i)
+					{
+						const float dx = verts[idx[i]].x - cx, dy = verts[idx[i]].y - cy, dz = verts[idx[i]].z - cz;
+						ang[i] = std::atan2(dx * vx + dy * vy + dz * vz, dx * ux + dy * uy + dz * uz);
+					}
+					for (int i = 1; i < k; ++i)
+						for (int j = i; j > 0 && ang[j - 1] > ang[j]; --j)
+						{
+							const float ta = ang[j]; ang[j] = ang[j - 1]; ang[j - 1] = ta;
+							const int ti = idx[j]; idx[j] = idx[j - 1]; idx[j - 1] = ti;
+						}
+					const unsigned short mat16 = static_cast<unsigned short>(pm[p] < 0 ? 0xFFFF : pm[p]);
+					const unsigned char kc = static_cast<unsigned char>(k);
+					fwrite(&mat16, 2, 1, dump); fwrite(&kc, 1, 1, dump);
+					for (int i = 0; i < k; ++i) fwrite(&verts[idx[i]], 12, 1, dump);
+				}
+				++dump_brushes;
+			}
 
 			// faces (only kept for invisible walls, used for the see-through fill and the saved file)
 			d.first_face = face_total;
@@ -6194,7 +6266,8 @@ namespace
 		if (tree)
 		{
 			unsigned char* used = static_cast<unsigned char*>(calloc(part_count, 1));
-			for (unsigned int ti = 0; ti < tree_count && used; ++ti)
+			unsigned char* dumped = static_cast<unsigned char*>(calloc(part_count, 1));
+			for (unsigned int ti = 0; ti < tree_count && used && dumped; ++ti)
 			{
 				const unsigned char* node = tree + static_cast<size_t>(ti) * 32;
 				unsigned short mat = 0, child_count = 0;
@@ -6207,6 +6280,57 @@ namespace
 				memcpy(&mat_contents, materials + static_cast<size_t>(mat) * 16 + 12, 4);
 				const short mdl = owner ? owner[ti] : static_cast<short>(-1);
 				if ((mat_contents & 0x10001u) == 0) continue;
+				if (dump && !dumped[part])
+				{
+					dumped[part] = 1;
+					const unsigned char* dp = parts + static_cast<size_t>(part) * 16;
+					const int dcount = dp[0];
+					int dfirst = 0;
+					memcpy(&dfirst, dp + 4, 4);
+					float nm1[3], nh1[3];
+					memcpy(nm1, node, 12); memcpy(nh1, node + 16, 12);
+					const unsigned short* dgi = tidx + static_cast<size_t>(dfirst) * 3;
+					long long dbase = -1;
+					if (dcount > 0 && dfirst >= 0 && static_cast<unsigned int>(dfirst) + dcount <= tri_count)
+					{
+						const long long cand[2] = {static_cast<long long>(dp[2]) << 10, static_cast<long long>(dp[2]) << 16};
+						for (int ci = 0; ci < 2 && dbase < 0; ++ci)
+						{
+							bool okb = true;
+							for (int q = 0; q < dcount * 3 && okb; ++q)
+							{
+								const unsigned long long vi = static_cast<unsigned long long>(cand[ci]) + dgi[q];
+								if (vi >= vert_count) { okb = false; break; }
+								const float* v = tverts + vi * 3;
+								if (!(std::fabs(v[0] - nm1[0]) <= nh1[0] + 2.0f && std::fabs(v[1] - nm1[1]) <= nh1[1] + 2.0f && std::fabs(v[2] - nm1[2]) <= nh1[2] + 2.0f)) okb = false;
+							}
+							if (okb) dbase = cand[ci];
+						}
+					}
+					float sh[3] = {0.0f, 0.0f, 0.0f};
+					bool place = true;
+					if (mdl >= 0)
+					{
+						const int slot = g_model_slot[mdl];
+						place = slot >= 0 && read_bytes(SP_G_ENTITIES + static_cast<uintptr_t>(slot) * g_stride + OFF_ORIGIN, sh, sizeof(sh));
+					}
+					if (dbase >= 0 && place)
+					{
+						for (int t = 0; t < dcount; ++t)
+						{
+							const unsigned char tag = 'T';
+							const short m16 = mdl;
+							fwrite(&tag, 1, 1, dump); fwrite(&mat, 2, 1, dump); fwrite(&mat_contents, 4, 1, dump); fwrite(&m16, 2, 1, dump);
+							for (int k = 0; k < 3; ++k)
+							{
+								const float* v = tverts + (static_cast<unsigned long long>(dbase) + dgi[t * 3 + k]) * 3;
+								const float w[3] = {v[0] + sh[0], v[1] + sh[1], v[2] + sh[2]};
+								fwrite(w, 12, 1, dump);
+							}
+							++dump_tris;
+						}
+					}
+				}
 				if (mdl < 0 && (!invisible[mat] || strstr(mat_names[mat], "caulk"))) continue;   // level: only invisible walls; brush models: everything solid
 				used[part] = 1;
 				const unsigned char* pp = parts + static_cast<size_t>(part) * 16;
@@ -6337,8 +6461,46 @@ namespace
 			}
 
 			free(used);
+			free(dumped);
 			free(tree); free(tverts); free(tidx); free(parts);
 			free(owner);
+		}
+
+		if (dump)
+		{
+			const unsigned char tag = 'E';
+			fwrite(&tag, 1, 1, dump);
+			fclose(dump);
+			log_line("brushes: full collision saved for route planning (%d brushes, %d triangles)", dump_brushes, dump_tris);
+			// movement settings that matter for route planning
+			char name[128];
+			snprintf(name, sizeof(name), "movement_%s.txt", g_rec_map[0] ? g_rec_map : "map");
+			const char* old_sub = g_subdir;
+			g_subdir = "speedrun_data\\";
+			char path[MAX_PATH];
+			make_path(path, name);
+			g_subdir = old_sub;
+			FILE* mf = nullptr;
+			if (fopen_s(&mf, path, "w") == 0 && mf)
+			{
+				static const char* const kNames[] = {"g_speed", "g_gravity", "jump_height", "jump_stepSize", "jump_slowdownEnable", "jump_ladderPushVel",
+					"player_sprintSpeedScale", "player_sprintUnlimited", "player_sprintTime", "player_backSpeedScale", "player_strafeSpeedScale",
+					"bg_fallDamageMinHeight", "bg_fallDamageMaxHeight", "player_view_pitch_up", "player_view_pitch_down", "g_friction", "g_stopspeed",
+					"player_moveThreshhold", "jump_spreadAdd", "player_meleeRange", "mantle_enable", "mantle_check_range", "mantle_check_radius",
+					"mantle_check_angle", "mantle_view_yawcap", "player_standingViewHeight", "player_crouchViewHeight", "player_proneViewHeight",
+					"g_maxHeightForUpwardJump", "player_slideTime", "player_sustainAmmo", "bg_ladder_yawcap"};
+				for (const char* nm : kNames)
+				{
+					float v = 0.0f;
+					if (read_dvar_float(nm, &v))
+					{
+						int iv = 0; memcpy(&iv, &v, 4);
+						fprintf(mf, "%s float %g int %d\n", nm, v, iv);
+					}
+					else fprintf(mf, "%s missing\n", nm);
+				}
+				fclose(mf);
+			}
 		}
 
 		log_line("brushes: %d invisible triangle groups (%d triangles); skipped %d (range) %d (corners); corners inside their box %d, outside %d; %d found by search",
