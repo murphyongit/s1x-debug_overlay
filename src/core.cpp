@@ -82,9 +82,9 @@ namespace
 	constexpr size_t CLIENT_DUMP_SIZE = 0x1000;
 
 	#ifdef RECORDER_ONLY
-	#define ADDON_VERSION "1.21 RECORDER"
+	#define ADDON_VERSION "1.22 RECORDER"
 	#else
-	#define ADDON_VERSION "1.21"
+	#define ADDON_VERSION "1.22"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5687,7 +5687,8 @@ namespace
 		for (; name[i] && i + 1 < sizeof(low); ++i) low[i] = static_cast<char>(tolower(static_cast<unsigned char>(name[i])));
 		low[i] = 0;
 		return strstr(low, "clip") || strstr(low, "caulk") || strstr(low, "nodraw") || strstr(low, "mantle") || strstr(low, "skip") ||
-			strstr(low, "hint") || strstr(low, "trigger") || strstr(low, "physics") || strstr(low, "invisible");
+			strstr(low, "hint") || strstr(low, "trigger") || strstr(low, "physics") || strstr(low, "invisible") ||
+			strstr(low, "vista_treeline") || strstr(low, "cinematic_3d");   // v1.22: background tree cards and the hologram stage block you too
 	}
 
 	template <typename T>
@@ -6073,7 +6074,8 @@ namespace
 					return true;
 				};
 				long long base = -1;
-				if (fits(static_cast<unsigned long long>(seg) << 16)) base = static_cast<long long>(seg) << 16;
+				if (fits(static_cast<unsigned long long>(seg) << 10)) base = static_cast<long long>(seg) << 10;   // v1.22: corners start at byte*1024
+				else if (fits(static_cast<unsigned long long>(seg) << 16)) base = static_cast<long long>(seg) << 16;
 				else if (last_base >= 0 && fits(static_cast<unsigned long long>(last_base))) base = last_base;
 				else
 				{
@@ -6087,7 +6089,7 @@ namespace
 				}
 
 				if (base >= 0) last_base = base;
-				if (base >= 0 && base != (static_cast<long long>(seg) << 16) && shown_bases < 12)
+				if (base >= 0 && base != (static_cast<long long>(seg) << 10) && shown_bases < 12)
 				{
 					++shown_bases;
 					log_line("brushes: group %u header %02X %02X %02X %02X first %d -> corners start at %lld (seg byte %u)", part, pp[0], pp[1], pp[2], pp[3], first, base, seg);
