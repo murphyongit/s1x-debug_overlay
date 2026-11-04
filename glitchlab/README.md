@@ -117,6 +117,47 @@ python -m pytest -q              # or, without pytest:
 python tests/run_without_pytest.py
 ```
 
+## Movement simulator (`glitchlab/sim`)
+
+The simulator steps one player through the game's movement code, one client frame at a time:
+
+- ground check
+- jump
+- walk or air move
+- slide and step against the collision world
+
+Every constant is either read from the SP exe (the address is noted in `sim/params.py`) or measured from
+recorded runs. Where both sources exist, they agree.
+
+- `sim/world.py` contains the collision worlds:
+  - `FlatWorld`: one floor
+  - `BrushWorld.boxes`: hand-made boxes
+  - `BrushWorld.from_full_collision`: the real map, from the overlay's full collision dump
+- `sim/pmove.py` contains `Mover.step(state, Cmd(...))`, which runs one frame.
+  `Cmd(forward, right, yaw, jump, sprint, stance, msec)` is one frame of input, with moves from -127 to 127.
+- `sim/validate.py` checks the simulator against your recordings:
+
+  ```
+  python -m glitchlab.cli simcheck --config config.json --map recovery
+  ```
+
+  The recorder doesn't save key presses. So for each 0.1 s, the check tries every keyboard combination
+  and keeps the one that lands closest to the next recorded spot. It runs this with the game's constants
+  and with deliberately wrong ones, so you can see which fits better. In the config,
+  `"clean_windows": {"<log file>": [[t0, t1], ...]}` limits scoring to the parts of a run without noclip
+  or teleports.
+
+Not modelled yet:
+
+- sliding
+- mantling
+- ladders
+- exo dash, boost jump and overdrive
+- knockback
+- swimming
+
+The check skips those moments, using the movement flags and speed bursts in the recordings.
+
 ## Planned phases
 
 1. **Lab module.** A separate in-game DLL that only loads when `lab.ini` exists. It would teleport the

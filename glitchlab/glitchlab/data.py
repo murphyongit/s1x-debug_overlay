@@ -227,6 +227,8 @@ class FullCollision:
     brush_count: int
     # triangles: (material index, contents, model index or -1, 3 corners)
     triangles: list[tuple[int, int, int, tuple[tuple[float, float, float], ...]]]
+    # one entry per brush: (contents, index of its first face in brush_faces, number of faces)
+    brushes: list[tuple[int, int, int]] = field(default_factory=list)
 
 
 def load_collision_full(path: str | Path) -> FullCollision:
@@ -243,7 +245,7 @@ def load_collision_full(path: str | Path) -> FullCollision:
         name = data[off + 8: off + 72].split(b"\0", 1)[0].decode("ascii", "replace")
         mats.append(Material(i, name, contents, sflags))
         off += 72
-    faces, tris, brushes = [], [], 0
+    faces, tris, brushes, ranges = [], [], 0, []
     while off < len(data):
         tag = data[off]
         off += 1
@@ -253,6 +255,7 @@ def load_collision_full(path: str | Path) -> FullCollision:
             contents, nf = struct.unpack_from("<IH", data, off)
             off += 6
             brushes += 1
+            ranges.append((contents, len(faces), nf))
             for _ in range(nf):
                 mat, k = struct.unpack_from("<HB", data, off)
                 off += 3
@@ -267,7 +270,7 @@ def load_collision_full(path: str | Path) -> FullCollision:
             tris.append((mat, contents, model, pts))
         else:
             raise ValueError(f"{path}: unknown record tag {tag!r} at byte {off - 1}")
-    return FullCollision(mats, faces, brushes, tris)
+    return FullCollision(mats, faces, brushes, tris, ranges)
 
 
 def load_movement(path: str | Path) -> dict[str, float]:
