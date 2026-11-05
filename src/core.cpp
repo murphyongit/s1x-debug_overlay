@@ -84,7 +84,7 @@ namespace
 	#ifdef RECORDER_ONLY
 	#define ADDON_VERSION "1.26 RECORDER"
 	#else
-	#define ADDON_VERSION "1.26"
+	#define ADDON_VERSION "1.27"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -1642,9 +1642,189 @@ namespace
 		}
 	}
 
+
+	// ------------------------------------------------------------------ v1.27: lab mode (glitchlab experiments)
+	// OFF unless the file speedrun_data\lab\lab.ini exists. Then the overlay reads speedrun_data\lab\queue.txt,
+	// one experiment per line:   id x y z vx vy vz seconds [stop_z]
+	// For each one it moves the player to x y z, sets the velocity, and writes every game frame to
+	// speedrun_data\lab\result_<id>.txt ("ms x y z vx vy vz pm_flags") until 'seconds' of game time pass or
+	// the player drops below stop_z. Finished ids are added to lab\done.txt. Nothing else changes.
+	struct lab_exp
+	{
+		char id[64];
+		float pos[3];
+		float vel[3];
+		float seconds;
+		float stop_z;
+	};
+	volatile LONG g_lab_on = 0;
+	volatile LONG g_lab_state = 0;      // 0 idle, 1 start requested (main thread), 2 running (game thread)
+	lab_exp g_lab_cur = {};
+	unsigned int g_lab_start_ms = 0, g_lab_last_ms = 0;
+	FILE* g_lab_out = nullptr;
+
+	void lab_path(char* out, const char* name)
+	{
+		strcpy_s(out, MAX_PATH, g_dir);
+		strcat_s(out, MAX_PATH, "speedrun_data\\lab\\");
+		strcat_s(out, MAX_PATH, name);
+	}
+
+	void lab_mark_done(const char* id, const char* why)
+	{
+		char path[MAX_PATH];
+		lab_path(path, "done.txt");
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "a") == 0 && f)
+		{
+			fprintf(f, "%s %s\n", id, why);
+			fclose(f);
+		}
+	}
+
+	// main thread, about once a second
+	void lab_poll()
+	{
+		char path[MAX_PATH];
+		lab_path(path, "lab.ini");
+		const bool on = GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+		if (on != (g_lab_on != 0))
+		{
+			InterlockedExchange(&g_lab_on, on ? 1 : 0);
+			log_line("lab mode %s", on ? "ON (speedrun_data\\lab\\lab.ini found)" : "off");
+		}
+		if (!on || g_lab_state != 0)
+		{
+			return;
+		}
+		// ids already done
+		static char done[16384];
+		done[0] = 0;
+		lab_path(path, "done.txt");
+		FILE* f = nullptr;
+		if (fopen_s(&f, path, "r") == 0 && f)
+		{
+			char line[256];
+			size_t used = 0;
+			while (fgets(line, sizeof(line), f))
+			{
+				char id[64] = {};
+				if (sscanf_s(line, "%63s", id, static_cast<unsigned>(sizeof(id))) == 1 && used + strlen(id) + 3 < sizeof(done))
+				{
+					strcat_s(done, sizeof(done), " ");
+					strcat_s(done, sizeof(done), id);
+					strcat_s(done, sizeof(done), " ");
+					used = strlen(done);
+				}
+			}
+			fclose(f);
+		}
+		lab_path(path, "queue.txt");
+		if (fopen_s(&f, path, "r") != 0 || !f)
+		{
+			return;
+		}
+		char line[512];
+		while (fgets(line, sizeof(line), f))
+		{
+			lab_exp e = {};
+			e.stop_z = -1.0e9f;
+			const int n = sscanf_s(line, "%63s %f %f %f %f %f %f %f %f", e.id, static_cast<unsigned>(sizeof(e.id)),
+			                       &e.pos[0], &e.pos[1], &e.pos[2], &e.vel[0], &e.vel[1], &e.vel[2], &e.seconds, &e.stop_z);
+			if (n < 8 || e.id[0] == '#')
+			{
+				continue;
+			}
+			char key[70];
+			snprintf(key, sizeof(key), " %s ", e.id);
+			if (strstr(done, key))
+			{
+				continue;
+			}
+			g_lab_cur = e;
+			InterlockedExchange(&g_lab_state, 1);
+			break;
+		}
+		fclose(f);
+	}
+
+	// game thread (called from the notify hook, many times a frame)
+	void lab_tick()
+	{
+		if (g_lab_on == 0 || g_lab_state == 0)
+		{
+			return;
+		}
+		__try
+		{
+			unsigned long long client = 0;
+			if (!read_bytes(player_entity() + OFF_CLIENT, &client, sizeof(client)) || client < 0x140000000ull || client > 0x7FFFFFFE0000ull)
+			{
+				return;
+			}
+			float* org = reinterpret_cast<float*>(static_cast<uintptr_t>(client) + OFF_CAM_ORIGIN);
+			float* vel = org + 3;
+			const unsigned int ms = *reinterpret_cast<unsigned int*>(static_cast<uintptr_t>(client) + 0x4C);
+			const unsigned int flags = *reinterpret_cast<unsigned int*>(static_cast<uintptr_t>(client) + 0x54);
+			if (g_lab_state == 1)
+			{
+				org[0] = g_lab_cur.pos[0]; org[1] = g_lab_cur.pos[1]; org[2] = g_lab_cur.pos[2];
+				float* ent = reinterpret_cast<float*>(player_entity() + OFF_ORIGIN);
+				ent[0] = org[0]; ent[1] = org[1]; ent[2] = org[2];
+				vel[0] = g_lab_cur.vel[0]; vel[1] = g_lab_cur.vel[1]; vel[2] = g_lab_cur.vel[2];
+				char name[96], path[MAX_PATH];
+				snprintf(name, sizeof(name), "result_%s.txt", g_lab_cur.id);
+				lab_path(path, name);
+				if (g_lab_out) { fclose(g_lab_out); g_lab_out = nullptr; }
+				fopen_s(&g_lab_out, path, "w");
+				if (g_lab_out)
+				{
+					fprintf(g_lab_out, "# lab %s map %s tool %s start %.2f %.2f %.2f vel %.2f %.2f %.2f seconds %.2f stop_z %.1f\n",
+					        g_lab_cur.id, g_rec_map, ADDON_VERSION, org[0], org[1], org[2], vel[0], vel[1], vel[2],
+					        g_lab_cur.seconds, g_lab_cur.stop_z);
+				}
+				g_lab_start_ms = ms;
+				g_lab_last_ms = ms;
+				InterlockedExchange(&g_lab_state, 2);
+				return;
+			}
+			if (ms == g_lab_last_ms)
+			{
+				return;
+			}
+			if (ms < g_lab_start_ms)    // checkpoint reload or restart during the test
+			{
+				if (g_lab_out) { fprintf(g_lab_out, "END clock_reset\n"); fclose(g_lab_out); g_lab_out = nullptr; }
+				lab_mark_done(g_lab_cur.id, "clock_reset");
+				InterlockedExchange(&g_lab_state, 0);
+				return;
+			}
+			g_lab_last_ms = ms;
+			if (g_lab_out)
+			{
+				fprintf(g_lab_out, "%u %.2f %.2f %.2f %.2f %.2f %.2f %X\n", ms - g_lab_start_ms, org[0], org[1], org[2],
+				        vel[0], vel[1], vel[2], flags);
+			}
+			const bool timeout = (ms - g_lab_start_ms) >= static_cast<unsigned int>(g_lab_cur.seconds * 1000.0f);
+			const bool below = org[2] < g_lab_cur.stop_z;
+			if (timeout || below)
+			{
+				if (g_lab_out) { fprintf(g_lab_out, "END %s\n", below ? "stop_z" : "time"); fclose(g_lab_out); g_lab_out = nullptr; }
+				lab_mark_done(g_lab_cur.id, below ? "stop_z" : "time");
+				// stop the player so a fall doesn't carry on into anything
+				vel[0] = vel[1] = vel[2] = 0.0f;
+				InterlockedExchange(&g_lab_state, 0);
+			}
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+		}
+	}
+
 	void hooked_notify(const unsigned int entity, const unsigned int string_id, const unsigned int count)
 	{
 		dev_do_requests();
+		lab_tick();
 		__try
 		{
 			if (string_id != 0 && string_id < 0x100000)
@@ -8934,6 +9114,11 @@ namespace
 			{
 				g_collision_refresh = false;
 				refresh_collision();
+			}
+
+			if (tick % 10 == 0)
+			{
+				lab_poll();
 			}
 
 			// v1.25: every new mission, save everything about the map automatically (full collision, invisible walls,
