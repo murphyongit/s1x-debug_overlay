@@ -84,7 +84,7 @@ namespace
 	#ifdef RECORDER_ONLY
 	#define ADDON_VERSION "1.26 RECORDER"
 	#else
-	#define ADDON_VERSION "1.27"
+	#define ADDON_VERSION "1.28"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -1662,6 +1662,12 @@ namespace
 	lab_exp g_lab_cur = {};
 	unsigned int g_lab_start_ms = 0, g_lab_last_ms = 0;
 	FILE* g_lab_out = nullptr;
+	// v1.28: wait for the player to be settled (alive, clock running steadily) before each test, and retry a
+	// test that a death/respawn/checkpoint load interrupted instead of marking it done
+	unsigned int g_lab_seen_ms = 0, g_lab_steady_since = 0;
+	float g_lab_prev[3] = {};
+	float g_lab_prev_rec[3] = {};
+	bool g_lab_have_prev = false;
 
 	void lab_path(char* out, const char* name)
 	{
@@ -1766,8 +1772,24 @@ namespace
 			float* vel = org + 3;
 			const unsigned int ms = *reinterpret_cast<unsigned int*>(static_cast<uintptr_t>(client) + 0x4C);
 			const unsigned int flags = *reinterpret_cast<unsigned int*>(static_cast<uintptr_t>(client) + 0x54);
+			// steadiness: the game clock moves forward in small steps and the player isn't being moved around
+			if (ms != g_lab_seen_ms)
+			{
+				const float dx = org[0] - g_lab_prev[0], dy = org[1] - g_lab_prev[1], dz = org[2] - g_lab_prev[2];
+				const bool jumpy = dx * dx + dy * dy + dz * dz > 300.0f * 300.0f;
+				if (ms < g_lab_seen_ms || ms > g_lab_seen_ms + 500 || (jumpy && g_lab_state != 2))
+				{
+					g_lab_steady_since = ms;
+				}
+				g_lab_seen_ms = ms;
+				g_lab_prev[0] = org[0]; g_lab_prev[1] = org[1]; g_lab_prev[2] = org[2];
+			}
 			if (g_lab_state == 1)
 			{
+				if (ms - g_lab_steady_since < 3000)
+				{
+					return;      // wait 3 s of steady game time (after loading, dying, respawning)
+				}
 				org[0] = g_lab_cur.pos[0]; org[1] = g_lab_cur.pos[1]; org[2] = g_lab_cur.pos[2];
 				float* ent = reinterpret_cast<float*>(player_entity() + OFF_ORIGIN);
 				ent[0] = org[0]; ent[1] = org[1]; ent[2] = org[2];
@@ -1785,6 +1807,8 @@ namespace
 				}
 				g_lab_start_ms = ms;
 				g_lab_last_ms = ms;
+				g_lab_prev_rec[0] = org[0]; g_lab_prev_rec[1] = org[1]; g_lab_prev_rec[2] = org[2];
+				g_lab_have_prev = true;
 				InterlockedExchange(&g_lab_state, 2);
 				return;
 			}
@@ -1792,14 +1816,20 @@ namespace
 			{
 				return;
 			}
-			if (ms < g_lab_start_ms)    // checkpoint reload or restart during the test
+			const float jx = org[0] - g_lab_prev_rec[0], jy = org[1] - g_lab_prev_rec[1], jz = org[2] - g_lab_prev_rec[2];
+			const bool moved_away = g_lab_have_prev && (jx * jx + jy * jy + jz * jz) > 1500.0f * 1500.0f &&
+			                        (ms - g_lab_last_ms) < 200;
+			if (ms < g_lab_start_ms || moved_away)    // death/respawn, checkpoint load or restart during the test
 			{
-				if (g_lab_out) { fprintf(g_lab_out, "END clock_reset\n"); fclose(g_lab_out); g_lab_out = nullptr; }
-				lab_mark_done(g_lab_cur.id, "clock_reset");
-				InterlockedExchange(&g_lab_state, 0);
+				if (g_lab_out) { fprintf(g_lab_out, "END interrupted_retry\n"); fclose(g_lab_out); g_lab_out = nullptr; }
+				g_lab_steady_since = ms;
+				g_lab_have_prev = false;
+				InterlockedExchange(&g_lab_state, 1);      // not marked done: run it again once things settle
 				return;
 			}
 			g_lab_last_ms = ms;
+			g_lab_prev_rec[0] = org[0]; g_lab_prev_rec[1] = org[1]; g_lab_prev_rec[2] = org[2];
+			g_lab_have_prev = true;
 			if (g_lab_out)
 			{
 				fprintf(g_lab_out, "%u %.2f %.2f %.2f %.2f %.2f %.2f %X\n", ms - g_lab_start_ms, org[0], org[1], org[2],
