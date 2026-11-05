@@ -84,7 +84,7 @@ namespace
 	#ifdef RECORDER_ONLY
 	#define ADDON_VERSION "1.26 RECORDER"
 	#else
-	#define ADDON_VERSION "1.29"
+	#define ADDON_VERSION "1.30"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -6038,11 +6038,15 @@ namespace
 		}
 
 		static uintptr_t last_header = 0;
+		static char last_map[64] = {};
 		const uintptr_t header = reinterpret_cast<uintptr_t>(g_found_assets[0]);
-		if (header == last_header && g_bbrushes)
+		// v1.30: the clip map lives at the same address for every mission, so also check the map name -
+		// before this, only the first mission after starting the game got its full collision saved
+		if (header == last_header && g_bbrushes && strcmp(last_map, g_rec_map) == 0)
 		{
 			return;
 		}
+		strcpy_s(last_map, sizeof(last_map), g_rec_map);
 
 		unsigned int plane_count = 0, material_count = 0, side_count = 0, brush_count = 0;
 		unsigned long long planes_p = 0, materials_p = 0, sides_p = 0, brushes_p = 0, bounds_p = 0, contents_p = 0;
