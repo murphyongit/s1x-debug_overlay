@@ -84,7 +84,7 @@ namespace
 	#ifdef RECORDER_ONLY
 	#define ADDON_VERSION "1.26 RECORDER"
 	#else
-	#define ADDON_VERSION "1.28"
+	#define ADDON_VERSION "1.29"
 	#endif
 	constexpr int MAX_TABLES = 6;
 
@@ -5732,6 +5732,8 @@ namespace
 				}
 
 				fclose(f);
+				// v1.29: keep a copy per mission (map_ents_0.txt is overwritten by the next mission)
+				if (a == 0 && g_rec_map[0]) { char keep[MAX_PATH]; snprintf(keep, sizeof(keep), "%sspeedrun_data\\map_ents_%s.txt", g_dir, g_rec_map); char kd[MAX_PATH]; snprintf(kd, sizeof(kd), "%sspeedrun_data", g_dir); CreateDirectoryA(kd, nullptr); CopyFileA(path, keep, FALSE); }
 				parse_map_ents(text, length);
 				rebuild_slot_flags();
 				free(text);
